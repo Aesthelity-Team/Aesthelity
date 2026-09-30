@@ -2,6 +2,14 @@
 
 This checklist converts the Milestone 2 plan into a GitHub operating setup.
 
+## Branch naming quick reference
+
+Use the pattern:
+
+```text
+issue-number-short-description
+```
+
 ## Organization and repository
 
 - Organization: create or confirm the team organization name.

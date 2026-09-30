@@ -5,9 +5,18 @@ CECS 491B Senior Project II - Section 05
 
 Aesthelity is an iOS application that helps users understand skincare products, identify potential ingredient interactions, and build routines tailored to their skin concerns and past reactions.
 
+## Branch naming quick reference
+
+Use the pattern `issue-number-short-description` for development branches.
+
+Example: `15-welcome-first-use`
+
+- `15` = the GitHub issue number
+- `welcome-first-use` = a short description of the work
+
 ## Project status
 
-The team is currently executing Sprint 1. The Sprint 1 goal is to launch the iOS app with a five-tab shell, support optional skin-profile setup, display sample AM/PM routines, and show a mocked explanatory analysis finding.
+Our team is currently executing Sprint 1. The Sprint 1 goal is to launch the iOS app with a five-tab shell, support optional skin-profile setup, display sample AM/PM routines, and show a mocked explanatory analysis finding.
 
 **Sprint window:** September 30, 2026 - October 14, 2026  
 **Sprint review/demo:** Wednesday, October 14, 2026  
