@@ -29,13 +29,15 @@ Core product areas
     Ingredient compatibility and plain-language analysis
     Product library, label scanning, journal, and Explore features
 
-Sprint 1 scope
-Issue 	Story 	Owner 	Points
-#12 	Build curated demo product set 	Belle Lopez 	5
-#14 	Normalize ingredient names 	Gaurav Pandey 	3
-#15 	Welcome and first-use entry 	Mia Carter 	3
-#16 	Optional sample skin profile 	Najih Sherif 	3
-#17 	Five-tab app shell 	Liza Grande 	3
+| GitHub Issue | Story ID | Story | Owner | Points |
+|---:|---|---|---|---:|
+| #1 | DATA-01 | Build curated demo product set | Belle Lopez | 5 |
+| #2 | DATA-02 | Normalize ingredient names | Gaurav Pandey | 3 |
+| #3 | ON-01 | Welcome and first-use entry | Mia Carter | 3 |
+| #4 | PF-01 | Optional sample skin profile | Najih Sherif | 3 |
+| #5 | UI-01 | Five-tab app shell | Liza Grande | 3 |
+| #10 | RT-01 | View sample AM/PM routines | Mia and Liza | 5 |
+| #11 | AN-01 | Inspect mocked explanatory analysis finding | Belle and Gaurav | 5 |
 
 The original planning document lists a 27-point Sprint 1 roadmap target, while the explicitly committed stories total 17 points. The team should confirm whether the remaining roadmap stories are planned, stretch work, or intentionally excluded from the commitment before the demo.
 Semester roadmap
