@@ -1,0 +1,18 @@
+# Reviewers are requested automatically for changes to these paths.
+# Later rules take precedence over earlier ones.
+
+# Docs
+*.md                                            @Belleairr @miacarter04
+
+# CI and repository configuration
+/.github/                                       @NerdNek
+
+# App shell and features
+/Aesthelity/Aesthelity/App/                     @lizagrande
+/Aesthelity/Aesthelity/Features/                @lizagrande @miacarter04 @najihsherif
+
+# Ingredient data and normalization
+/Aesthelity/Aesthelity/Models/Ingredient.swift  @NerdNek @Belleairr
+/Aesthelity/Aesthelity/Services/Ingredient*     @NerdNek @Belleairr
+/Aesthelity/Aesthelity/Resources/SampleData/    @Belleairr @NerdNek
+/Aesthelity/Aesthelity/Tests/AesthelityTests/Ingredient*  @NerdNek @Belleairr
