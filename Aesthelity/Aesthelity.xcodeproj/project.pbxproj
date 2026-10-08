@@ -34,6 +34,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/IngredientLabelParserTests.swift,
+				Tests/AesthelityTests/IngredientNormalizerTests.swift,
 				Tests/AesthelityUITests/AesthelityUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
@@ -43,6 +45,8 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/IngredientLabelParserTests.swift,
+				Tests/AesthelityTests/IngredientNormalizerTests.swift,
 			);
 			target = 6E315A8B3076EC59002817B4 /* AesthelityTests */;
 		};

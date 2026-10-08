@@ -1,0 +1,69 @@
+{
+  "version": 2,
+  "ingredients": [
+    { "id": "water", "name": "Water", "aliases": ["Aqua", "Eau", "Aqua/Water/Eau", "Water/Aqua/Eau", "Purified Water", "Deionized Water"], "classes": ["solvent"] },
+    { "id": "glycerin", "name": "Glycerin", "aliases": ["Glycerine", "Glycerol"], "classes": ["humectant"] },
+    { "id": "butylene-glycol", "name": "Butylene Glycol", "aliases": ["1,3-Butylene Glycol"], "classes": ["humectant", "solvent"] },
+    { "id": "hyaluronic-acid", "name": "Hyaluronic Acid", "aliases": ["Hyaluronan"], "classes": ["humectant"] },
+    { "id": "sodium-hyaluronate", "name": "Sodium Hyaluronate", "aliases": [], "classes": ["humectant"] },
+    { "id": "niacinamide", "name": "Niacinamide", "aliases": ["Nicotinamide"], "classes": ["vitamin-b3"] },
+    { "id": "panthenol", "name": "Panthenol", "aliases": ["D-Panthenol", "Dexpanthenol", "Provitamin B5"], "classes": ["humectant"] },
+    { "id": "ceramide-np", "name": "Ceramide NP", "aliases": ["Ceramide 3"], "classes": ["ceramide"] },
+    { "id": "ascorbic-acid", "name": "Ascorbic Acid", "aliases": ["L-Ascorbic Acid"], "classes": ["vitamin-c", "antioxidant"] },
+    { "id": "sodium-ascorbyl-phosphate", "name": "Sodium Ascorbyl Phosphate", "aliases": [], "classes": ["vitamin-c", "antioxidant"] },
+    { "id": "magnesium-ascorbyl-phosphate", "name": "Magnesium Ascorbyl Phosphate", "aliases": [], "classes": ["vitamin-c", "antioxidant"] },
+    { "id": "ascorbyl-glucoside", "name": "Ascorbyl Glucoside", "aliases": [], "classes": ["vitamin-c", "antioxidant"] },
+    { "id": "tocopherol", "name": "Tocopherol", "aliases": ["Alpha-Tocopherol", "D-Alpha-Tocopherol"], "classes": ["vitamin-e", "antioxidant"] },
+    { "id": "tocopheryl-acetate", "name": "Tocopheryl Acetate", "aliases": ["Vitamin E Acetate", "DL-Alpha-Tocopheryl Acetate"], "classes": ["vitamin-e"] },
+    { "id": "retinol", "name": "Retinol", "aliases": [], "classes": ["retinoid"] },
+    { "id": "retinal", "name": "Retinal", "aliases": ["Retinaldehyde"], "classes": ["retinoid"] },
+    { "id": "retinyl-palmitate", "name": "Retinyl Palmitate", "aliases": ["Vitamin A Palmitate"], "classes": ["retinoid"] },
+    { "id": "glycolic-acid", "name": "Glycolic Acid", "aliases": ["Hydroxyacetic Acid"], "classes": ["aha", "exfoliant"] },
+    { "id": "lactic-acid", "name": "Lactic Acid", "aliases": ["2-Hydroxypropanoic Acid"], "classes": ["aha", "exfoliant"] },
+    { "id": "mandelic-acid", "name": "Mandelic Acid", "aliases": [], "classes": ["aha", "exfoliant"] },
+    { "id": "salicylic-acid", "name": "Salicylic Acid", "aliases": ["2-Hydroxybenzoic Acid", "Beta Hydroxy Acid"], "classes": ["bha", "exfoliant"] },
+    { "id": "azelaic-acid", "name": "Azelaic Acid", "aliases": [], "classes": ["acne-treatment"] },
+    { "id": "benzoyl-peroxide", "name": "Benzoyl Peroxide", "aliases": ["BPO"], "classes": ["acne-treatment", "oxidizing-agent"] },
+    { "id": "fragrance", "name": "Fragrance", "aliases": ["Parfum", "Perfume"], "classes": ["fragrance"] },
+    { "id": "linalool", "name": "Linalool", "aliases": [], "classes": ["fragrance", "fragrance-allergen"] },
+    { "id": "limonene", "name": "Limonene", "aliases": ["D-Limonene"], "classes": ["fragrance", "fragrance-allergen"] },
+    { "id": "alcohol-denat", "name": "Alcohol Denat.", "aliases": ["Denatured Alcohol", "SD Alcohol", "SD Alcohol 40", "SD Alcohol 40-B"], "classes": ["drying-alcohol", "solvent"] },
+    { "id": "phenoxyethanol", "name": "Phenoxyethanol", "aliases": [], "classes": ["preservative"] },
+    { "id": "butylated-hydroxyanisole", "name": "Butylated Hydroxyanisole", "aliases": [], "classes": ["antioxidant", "preservative"] },
+    { "id": "dimethicone", "name": "Dimethicone", "aliases": ["Polydimethylsiloxane"], "classes": ["silicone"] },
+    { "id": "zinc-oxide", "name": "Zinc Oxide", "aliases": ["CI 77947"], "classes": ["uv-filter"] },
+    { "id": "titanium-dioxide", "name": "Titanium Dioxide", "aliases": ["CI 77891"], "classes": ["uv-filter"] }
+  ],
+  "ambiguousTerms": [
+    {
+      "terms": ["Vitamin C", "Vit C"],
+      "candidateIDs": ["ascorbic-acid", "sodium-ascorbyl-phosphate", "magnesium-ascorbyl-phosphate", "ascorbyl-glucoside"],
+      "note": "Vitamin C is sold as ascorbic acid and several derivatives that behave differently."
+    },
+    {
+      "terms": ["Vitamin E", "Vit E"],
+      "candidateIDs": ["tocopherol", "tocopheryl-acetate"],
+      "note": "Vitamin E may be the pure form or its acetate ester."
+    },
+    {
+      "terms": ["Vitamin A", "Vit A"],
+      "candidateIDs": ["retinol", "retinal", "retinyl-palmitate"],
+      "note": "Vitamin A covers retinoids of very different strength."
+    },
+    {
+      "terms": ["Retinoid", "Retinoids"],
+      "candidateIDs": ["retinol", "retinal", "retinyl-palmitate"],
+      "note": "Retinoid is a family name, not a single ingredient."
+    },
+    {
+      "terms": ["AHA", "AHAs", "Alpha Hydroxy Acid", "Alpha Hydroxy Acids"],
+      "candidateIDs": ["glycolic-acid", "lactic-acid", "mandelic-acid"],
+      "note": "AHA is a family of exfoliating acids."
+    },
+    {
+      "terms": ["BHA"],
+      "candidateIDs": ["salicylic-acid", "butylated-hydroxyanisole"],
+      "note": "BHA can mean beta hydroxy acid (salicylic acid) or the preservative butylated hydroxyanisole."
+    }
+  ]
+}
