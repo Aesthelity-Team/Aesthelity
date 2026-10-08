@@ -13,7 +13,6 @@ xcuserdata/
 *.xcscmblueprint
 *.xccheckout
 .build/
-Package.resolved
 
 # Swift Package Manager
 .swiftpm/
@@ -26,6 +25,16 @@ fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
 
 # macOS
 .DS_Store

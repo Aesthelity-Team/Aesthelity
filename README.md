@@ -9,6 +9,8 @@ CECS 491B Senior Project II - Section 05
 
 **iOS Skincare App · Research-Driven Design · CSULB Senior Project**
 
+[![iOS CI](https://github.com/Aesthelity-Team/Aesthelity/actions/workflows/ios-ci.yml/badge.svg?branch=main)](https://github.com/Aesthelity-Team/Aesthelity/actions/workflows/ios-ci.yml)
+
 [Explore the Prototype](https://www.figma.com/proto/ywIYImESR8acfQFFtR4RV1/Aesthelity-Scrollable-Prototype---Fresh-Start?node-id=82-55&starting-point-node-id=82%3A55) · [View the Design File](https://www.figma.com/design/ywIYImESR8acfQFFtR4RV1/Aesthelity-Scrollable-Prototype---Fresh-Start?node-id=0-1) · [Development Roadmap](#development-roadmap)
 
 </div>
@@ -146,9 +148,32 @@ Sprint commitments and completed work should be maintained in GitHub Issues and 
 
 ## Getting Started
 
-A verified installation and run guide is not yet included. Repository-specific commands, required versions, configuration names, and test instructions should be documented when the runnable application and services are available.
+### Requirements
 
-The planned development environment includes a Mac with Xcode for the iOS app, a Python environment for the analysis service, and access to the team's Firebase project.
+- A Mac with Xcode 27 or later. The app targets iOS 18.2.
+- An iPhone simulator. List the installed ones with `xcrun simctl list devices available`.
+
+### Run the app
+
+Open `Aesthelity/Aesthelity.xcodeproj` in Xcode, choose the **Aesthelity** scheme and an iPhone simulator, and press **⌘R**.
+
+### Run the tests
+
+In Xcode, press **⌘U**. From the terminal, run this in the folder that contains `Aesthelity.xcodeproj`, replacing the simulator name with one you have:
+
+```bash
+xcodebuild test \
+  -project Aesthelity.xcodeproj \
+  -scheme Aesthelity \
+  -destination 'platform=iOS Simulator,name=iPhone 17' \
+  -only-testing:AesthelityTests
+```
+
+Add `-only-testing:AesthelityTests/IngredientNormalizerTests` to run a single test suite. [iOS CI](.github/workflows/ios-ci.yml) builds the app and runs the unit tests on every pull request.
+
+### Planned services
+
+The analysis service will run in a Python environment, and the app will use the team's Firebase project. Setup steps will be added here when those services are available.
 
 Keep private credentials, service-account files, and analysis-provider API keys out of version control. Provider secrets should remain in the backend environment rather than being embedded in the iOS app. Use synthetic or de-identified data for shared examples.
 
