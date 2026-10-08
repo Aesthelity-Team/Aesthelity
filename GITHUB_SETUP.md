@@ -51,7 +51,7 @@ Create these labels before importing the issues:
 
 Create these five issues and add each to the Project's Sprint 1 view.
 
-### #12 - Build curated demo product set
+### #1 - Build curated demo product set (DATA-01)
 
 - **Owner:** Belle Lopez
 - **Module:** Data & Catalog
@@ -74,7 +74,7 @@ Acceptance criteria:
 - Given a product has a scenario classification, when it is inspected, then normal, caution, allergen, and unknown cases are represented.
 - Given a product record is stored, when its metadata is inspected, then source URL, verification date, provenance, and coverage information are present.
 
-### #14 - Normalize ingredient names
+### #2 - Normalize ingredient names (DATA-02)
 
 - **Owner:** Gaurav Pandey
 - **Module:** Data & Catalog
@@ -97,7 +97,7 @@ Acceptance criteria:
 - Given an unmatched or uncertain value, when analysis runs, then it is not silently treated as safe.
 - Given an ambiguous input, when normalization completes, then the input and warning are recorded.
 
-### #15 - Welcome and first-use entry (ON-01)
+### #3 - Welcome and first-use entry (ON-01)
 
 - **Owner:** Mia Carter
 - **Module:** Onboarding
@@ -120,7 +120,7 @@ Acceptance criteria:
 - Given the welcome screen is displayed, when Get Started is tapped, then setup opens.
 - Given Get Started is tapped repeatedly, when navigation completes, then only one setup view is presented.
 
-### #16 - Optional sample skin profile (PF-01)
+### #4 - Optional sample skin profile (PF-01)
 
 - **Owner:** Najih Sherif
 - **Module:** Skin Profile
@@ -143,7 +143,7 @@ Acceptance criteria:
 - Given the user skips setup, when setup completes, then the profile is marked explicitly incomplete.
 - Given invalid free text, when the user submits it, then an inline error is shown and the entered value is retained.
 
-### #17 - Five-tab app shell (UI-01)
+### #5 - Five-tab app shell (UI-01)
 
 - **Owner:** Liza Grande
 - **Module:** Navigation
