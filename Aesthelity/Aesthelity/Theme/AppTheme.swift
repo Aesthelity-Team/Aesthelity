@@ -73,6 +73,10 @@ public enum AppTheme {
         public static let gradientMiddle = Color(hex: "#F0A8BA")
         public static let gradientEnd = Color(hex: "#7C83BC")
         public static let analysisLink = Color(hex: "#FFCC99")
+        
+        // Confidence Card Gradient Background
+        public static let confidenceGradientStart = Color(hex: "#FFF2E6")
+        public static let confidenceGradientEnd = Color(hex: "#FCE4EC")
     }
     
     // MARK: - Colors
@@ -251,6 +255,8 @@ public extension Color {
     static let semanticInkAccent = AppTheme.Semantic.inkAccent
     static let semanticInkInverse = AppTheme.Semantic.inkInverse
     static let semanticLineHairline = AppTheme.Semantic.lineHairline
+    static let semanticConfidenceGradientStart = AppTheme.Semantic.confidenceGradientStart
+    static let semanticConfidenceGradientEnd = AppTheme.Semantic.confidenceGradientEnd
 }
 
 // MARK: - Font Convenience Extensions

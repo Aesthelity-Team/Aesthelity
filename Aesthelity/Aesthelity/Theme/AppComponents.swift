@@ -236,3 +236,134 @@ public struct AnalysisFindingCard: View {
         }
     }
 }
+
+// MARK: - ConfidenceCard (Routine Compatibility Card)
+
+/// A card component conforming to the Aesthelity design specifications displaying
+/// the user's routine confidence score and AM/PM routine breakdown.
+public struct ConfidenceCard: View {
+    public let score: Int
+    public let title: String
+    public let subtitle: String
+    public let amSteps: Int
+    public let pmSteps: Int
+    public let amBadgeText: String?
+    public let pmBadgeText: String?
+    public let onTap: (() -> Void)?
+    
+    public init(
+        score: Int = 82,
+        title: String = "CONFIDENCE SCORE",
+        subtitle: String = "Routine compatibility",
+        amSteps: Int = 4,
+        pmSteps: Int = 5,
+        amBadgeText: String? = nil,
+        pmBadgeText: String? = nil,
+        onTap: (() -> Void)? = nil
+    ) {
+        self.score = score
+        self.title = title
+        self.subtitle = subtitle
+        self.amSteps = amSteps
+        self.pmSteps = pmSteps
+        self.amBadgeText = amBadgeText
+        self.pmBadgeText = pmBadgeText
+        self.onTap = onTap
+    }
+    
+    public var body: some View {
+        Button(action: {
+            onTap?()
+        }) {
+            cardBody
+        }
+        .buttonStyle(.plain)
+        .disabled(onTap == nil)
+    }
+    
+    private var cardBody: some View {
+        HStack(alignment: .center) {
+            // Left Column: Title, Percentage Score, and Subtitle
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                    .font(.system(size: 12, weight: .medium))
+                    .tracking(0.5)
+                    .foregroundStyle(AppTheme.Semantic.inkPrimary)
+                
+                Text("\(score)%")
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundStyle(AppTheme.Semantic.inkPrimary)
+                
+                Text(subtitle)
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+            }
+            .frame(maxWidth: 160, alignment: .leading)
+            
+            Spacer()
+            
+            // Right Column: AM / PM Step Count Badges
+            VStack(spacing: 8) {
+                Text(amBadgeText ?? "AM: \(amSteps) steps")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.Semantic.inkInverse)
+                    .frame(width: 110, height: 26)
+                    .background(AppTheme.Semantic.inkAccent)
+                    .clipShape(Capsule())
+                
+                Text(pmBadgeText ?? "PM: \(pmSteps) steps")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(AppTheme.Semantic.inkInverse)
+                    .frame(width: 110, height: 26)
+                    .background(AppTheme.Semantic.inkBrand)
+                    .clipShape(Capsule())
+            }
+            .frame(width: 110)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 21)
+        .frame(maxWidth: .infinity)
+        .background(
+            ZStack {
+                LinearGradient(
+                    colors: [
+                        AppTheme.Semantic.confidenceGradientStart,
+                        AppTheme.Semantic.confidenceGradientEnd
+                    ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                Circle()
+                    .fill(AppTheme.Semantic.surfaceAccent.opacity(0.12))
+                    .frame(width: 140, height: 140)
+                    .offset(x: 100, y: -20)
+                Circle()
+                    .fill(AppTheme.Semantic.gradientStart.opacity(0.2))
+                    .frame(width: 120, height: 120)
+                    .offset(x: -80, y: 30)
+            }
+        )
+        .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.cardLarge, style: .continuous))
+    }
+}
+
+// MARK: - Previews
+
+#Preview("Confidence Card") {
+    VStack(alignment: .leading, spacing: 0) {
+        ConfidenceCard(
+            score: 82,
+            title: "CONFIDENCE SCORE",
+            subtitle: "Routine compatibility",
+            amSteps: 4,
+            pmSteps: 5
+        )
+        .padding(.horizontal, 24)
+        .padding(.top, 40)
+        
+        Spacer()
+    }
+    .padding(0)
+    .frame(width: 390, height: 844, alignment: .topLeading)
+    .background(AppTheme.Semantic.surfaceBase)
+}

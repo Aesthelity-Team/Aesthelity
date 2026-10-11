@@ -37,4 +37,32 @@ struct AesthelityTests {
         let cardColor = Color(hex: "#F5F5F5")
         #expect(cardColor != nil)
     }
+    
+    @Test func confidenceCardTokens() throws {
+        #expect(AppTheme.Radius.cardLarge == 20)
+        #expect(AppTheme.Semantic.confidenceGradientStart != nil)
+        #expect(AppTheme.Semantic.confidenceGradientEnd != nil)
+        
+        let card = ConfidenceCard(
+            score: 85,
+            title: "CONFIDENCE SCORE",
+            subtitle: "Routine compatibility",
+            amSteps: 3,
+            pmSteps: 4
+        )
+        #expect(card.score == 85)
+        #expect(card.amSteps == 3)
+        #expect(card.pmSteps == 4)
+    }
+    
+    @Test func confidenceScoreViewInitialization() throws {
+        let view = ConfidenceScoreView(
+            score: 82,
+            amStepsCount: 4,
+            pmStepsCount: 5
+        )
+        #expect(view.score == 82)
+        #expect(view.amStepsCount == 4)
+        #expect(view.pmStepsCount == 5)
+    }
 }

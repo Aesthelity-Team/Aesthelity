@@ -209,68 +209,14 @@ struct ContentView: View {
     
     // MARK: - 4. Confidence Score Card
     private var confidenceScoreCard: some View {
-        HStack(alignment: .center) {
-            // Left Column
-            VStack(alignment: .leading, spacing: 4) {
-                Text("CONFIDENCE SCORE")
-                    .font(.system(size: 12, weight: .medium))
-                    .tracking(0.5)
-                    .foregroundStyle(Constants.semanticInkPrimary)
-                
-                Text("82%")
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundStyle(Constants.semanticInkPrimary)
-                
-                Text("Routine compatibility")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Constants.semanticInkSecondary)
-            }
-            .frame(maxWidth: 160, alignment: .leading)
-            
-            Spacer()
-            
-            // Right Badges
-            VStack(spacing: 8) {
-                Text("AM: 4 steps")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Constants.semanticInkInverse)
-                    .frame(width: 110, height: 26)
-                    .background(Constants.semanticInkAccent)
-                    .clipShape(Capsule())
-                
-                Text("PM: 5 steps")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Constants.semanticInkInverse)
-                    .frame(width: 110, height: 26)
-                    .background(Constants.semanticInkBrand)
-                    .clipShape(Capsule())
-            }
-            .frame(width: 110)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 21)
-        .frame(maxWidth: .infinity)
-        .background(
-            ZStack {
-                LinearGradient(
-                    colors: [
-                        Constants.confidenceGradientStart,
-                        Constants.confidenceGradientEnd
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                Circle()
-                    .fill(Constants.semanticSurfaceAccent.opacity(0.12))
-                    .frame(width: 140, height: 140)
-                    .offset(x: 100, y: -20)
-                Circle()
-                    .fill(Constants.gradientStart.opacity(0.2))
-                    .frame(width: 120, height: 120)
-                    .offset(x: -80, y: 30)
+        ConfidenceCard(
+            score: 82,
+            amSteps: amSteps.count,
+            pmSteps: pmSteps.count,
+            onTap: {
+                showAnalysisSheet = true
             }
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
     }
     
     // MARK: - 5. Today's Routine Card (Gradient)
@@ -714,50 +660,14 @@ struct ContentView: View {
     
     // MARK: - Sheets
     private var analysisDetailSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Routine Analysis")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(Constants.semanticInkPrimary)
-                
-                Text("Compatibility Score: 82%")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Constants.semanticInkAccent)
-                
-                Text("Your morning routine is well-balanced for skin barrier protection and antioxidant delivery.")
-                    .font(.system(size: 15, weight: .regular))
-                    .foregroundStyle(Constants.semanticInkSecondary)
-                
-                Divider()
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Key Synergies:")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Constants.semanticInkPrimary)
-                    
-                    Text("• Vitamin C pairs with SPF 46 to enhance UV defense.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Constants.semanticInkSecondary)
-                    
-                    Text("• Daily Moisturizer locks in hydration before sun protection.")
-                        .font(.system(size: 14))
-                        .foregroundStyle(Constants.semanticInkSecondary)
-                }
-                
-                Spacer()
+        ConfidenceScoreView(
+            score: 82,
+            amStepsCount: amSteps.count,
+            pmStepsCount: pmSteps.count,
+            onDismiss: {
+                showAnalysisSheet = false
             }
-            .padding(24)
-            .background(Constants.semanticSurfaceBase)
-            .navigationTitle("Analysis")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        showAnalysisSheet = false
-                    }
-                    .foregroundStyle(Constants.semanticInkBrand)
-                }
-            }
-        }
+        )
     }
     
     private var journalDetailSheet: some View {
