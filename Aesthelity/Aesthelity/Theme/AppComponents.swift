@@ -347,6 +347,118 @@ public struct ConfidenceCard: View {
     }
 }
 
+// MARK: - AppButton & Button Variations
+
+/// A standardized button component matching the Aesthelity design system.
+/// Supports BrandPill (Capsule) and Labeled (RoundedRectangle 14pt) variations,
+/// with Default, Pressed, Disabled, and Loading states.
+public struct AppButton: View {
+    public var title: String
+    public var systemImage: String?
+    public var variant: AppButtonVariant
+    public var isLoading: Bool
+    public var minHeight: CGFloat
+    public var action: () -> Void
+    
+    public init(
+        _ title: String,
+        systemImage: String? = nil,
+        variant: AppButtonVariant = .primary,
+        isLoading: Bool = false,
+        minHeight: CGFloat = 44,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.variant = variant
+        self.isLoading = isLoading
+        self.minHeight = minHeight
+        self.action = action
+    }
+    
+    public var body: some View {
+        Button(action: action) {
+            if let systemImage = systemImage {
+                Label(title, systemImage: systemImage)
+            } else {
+                Text(title)
+            }
+        }
+        .buttonStyle(AppButtonStyle(variant: variant, isLoading: isLoading, minHeight: minHeight))
+    }
+}
+
+/// Convenience view for BrandPill button variation (Capsule, Rich Brand Brown #6F4E37).
+public struct BrandPillButton: View {
+    public var title: String
+    public var systemImage: String?
+    public var isLoading: Bool
+    public var minHeight: CGFloat
+    public var action: () -> Void
+    
+    public init(
+        _ title: String,
+        systemImage: String? = nil,
+        isLoading: Bool = false,
+        minHeight: CGFloat = 44,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.isLoading = isLoading
+        self.minHeight = minHeight
+        self.action = action
+    }
+    
+    public var body: some View {
+        AppButton(
+            title,
+            systemImage: systemImage,
+            variant: .brandPill,
+            isLoading: isLoading,
+            minHeight: minHeight,
+            action: action
+        )
+    }
+}
+
+/// Convenience view for Labeled button variations (Primary, Secondary, Tertiary, Destructive).
+public struct LabeledButton: View {
+    public var title: String
+    public var systemImage: String?
+    public var variant: AppButtonVariant
+    public var isLoading: Bool
+    public var minHeight: CGFloat
+    public var action: () -> Void
+    
+    public init(
+        _ title: String,
+        systemImage: String? = nil,
+        variant: AppButtonVariant = .primary,
+        isLoading: Bool = false,
+        minHeight: CGFloat = 44,
+        action: @escaping () -> Void
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.variant = variant
+        self.isLoading = isLoading
+        self.minHeight = minHeight
+        self.action = action
+    }
+    
+    public var body: some View {
+        AppButton(
+            title,
+            systemImage: systemImage,
+            variant: variant,
+            isLoading: isLoading,
+            minHeight: minHeight,
+            action: action
+        )
+    }
+}
+
 // MARK: - Previews
 
 #Preview("Confidence Card") {
@@ -365,5 +477,73 @@ public struct ConfidenceCard: View {
     }
     .padding(0)
     .frame(width: 390, height: 844, alignment: .topLeading)
+    .background(AppTheme.Semantic.surfaceBase)
+}
+
+#Preview("Button Variations - Design Spec") {
+    ScrollView {
+        VStack(spacing: 24) {
+            // BrandPill Section
+            VStack(alignment: .leading, spacing: 10) {
+                Text("BUTTON / BRANDPILL")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                
+                BrandPillButton("BrandPill · Default") {}
+                BrandPillButton("BrandPill · Disabled") {}
+                    .disabled(true)
+                BrandPillButton("BrandPill · Loading", isLoading: true) {}
+            }
+            
+            // Labeled - Primary
+            VStack(alignment: .leading, spacing: 10) {
+                Text("BUTTON / LABELED · PRIMARY")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                
+                LabeledButton("Primary · Default", variant: .primary) {}
+                LabeledButton("Primary · Disabled", variant: .primary) {}
+                    .disabled(true)
+                LabeledButton("Primary · Loading", variant: .primary, isLoading: true) {}
+            }
+            
+            // Labeled - Secondary
+            VStack(alignment: .leading, spacing: 10) {
+                Text("BUTTON / LABELED · SECONDARY")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                
+                LabeledButton("Secondary · Default", variant: .secondary) {}
+                LabeledButton("Secondary · Disabled", variant: .secondary) {}
+                    .disabled(true)
+                LabeledButton("Secondary · Loading", variant: .secondary, isLoading: true) {}
+            }
+            
+            // Labeled - Tertiary
+            VStack(alignment: .leading, spacing: 10) {
+                Text("BUTTON / LABELED · TERTIARY")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                
+                LabeledButton("Tertiary · Default", variant: .tertiary) {}
+                LabeledButton("Tertiary · Disabled", variant: .tertiary) {}
+                    .disabled(true)
+                LabeledButton("Tertiary · Loading", variant: .tertiary, isLoading: true) {}
+            }
+            
+            // Labeled - Destructive
+            VStack(alignment: .leading, spacing: 10) {
+                Text("BUTTON / LABELED · DESTRUCTIVE")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                
+                LabeledButton("Destructive · Default", variant: .destructive) {}
+                LabeledButton("Destructive · Disabled", variant: .destructive) {}
+                    .disabled(true)
+                LabeledButton("Destructive · Loading", variant: .destructive, isLoading: true) {}
+            }
+        }
+        .padding(20)
+    }
     .background(AppTheme.Semantic.surfaceBase)
 }

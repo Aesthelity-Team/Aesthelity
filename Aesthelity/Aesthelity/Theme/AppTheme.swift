@@ -45,6 +45,8 @@ public enum AppTheme {
     
     // MARK: - Semantic Tokens (from Figma / Design System)
     public enum Semantic {
+        /// Canvas surface: #FAF7FF (Color(red: 0.98, green: 0.97, blue: 1))
+        public static let surfaceCanvas = Color(red: 0.98, green: 0.97, blue: 1)
         /// Base background: #F7F3ED (warm cream)
         public static let surfaceBase = Color(hex: "#F7F3ED")
         /// Raised surface / Card background: #FFFFFF
@@ -103,6 +105,7 @@ public enum AppTheme {
         public static let border = Color(hex: "#1A1A1A").opacity(0.08)
         
         // Aliases to Semantic tokens
+        public static let surfaceCanvas = Semantic.surfaceCanvas
         public static let surfaceBase = Semantic.surfaceBase
         public static let surfaceRaised = Semantic.surfaceRaised
         public static let surfaceSubtle = Semantic.surfaceSubtle
@@ -209,6 +212,8 @@ public enum AppTheme {
         public static let cardHero: CGFloat = 24
         /// Pill / Capsule radius: 999pt
         public static let pill: CGFloat = 999
+        /// Labeled Button radius: 14pt (from button variations design specification)
+        public static let buttonLabeled: CGFloat = 14
     }
     
     // MARK: - Shadows
@@ -327,9 +332,215 @@ public extension View {
     }
 }
 
-// MARK: - Button Styles
+// MARK: - Button Variations & Unified Button Styles
 
-/// Primary button style using the brand accent color (#A3B18A) with 12pt corner radius and standard shadow.
+/// Standard button variants conforming to the Aesthelity design system specification.
+public enum AppButtonVariant: String, CaseIterable, Sendable {
+    /// BrandPill: Full capsule shape, rich coffee brown background (#6F4E37)
+    case brandPill
+    /// Primary: Rounded rectangle 14pt, periwinkle blue-purple background (#7C83BC)
+    case primary
+    /// Secondary: Rounded rectangle 14pt, white background, hairline border (#D8CFF0)
+    case secondary
+    /// Tertiary: Rounded rectangle 14pt, ghost/transparent background, indigo purple text (#50578F)
+    case tertiary
+    /// Destructive: Rounded rectangle 14pt, soft crimson background (#F8D7DA), dark crimson text (#842029)
+    case destructive
+}
+
+/// Unified button style implementing BrandPill and Labeled variations
+/// with support for Default, Pressed, Disabled, and Loading states.
+public struct AppButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+    
+    public var variant: AppButtonVariant
+    public var isLoading: Bool
+    public var minHeight: CGFloat
+    public var cornerRadius: CGFloat
+    
+    public init(
+        variant: AppButtonVariant = .primary,
+        isLoading: Bool = false,
+        minHeight: CGFloat = 44,
+        cornerRadius: CGFloat = AppTheme.Radius.buttonLabeled
+    ) {
+        self.variant = variant
+        self.isLoading = isLoading
+        self.minHeight = minHeight
+        self.cornerRadius = cornerRadius
+    }
+    
+    public func makeBody(configuration: Configuration) -> some View {
+        let isPressed = configuration.isPressed
+        let effectiveEnabled = isEnabled && !isLoading
+        
+        let fg = foregroundColor(isPressed: isPressed, isEnabled: effectiveEnabled)
+        let bg = backgroundColor(isPressed: isPressed, isEnabled: effectiveEnabled)
+        let border = borderColor(isPressed: isPressed, isEnabled: effectiveEnabled)
+        let strokeW = borderWidth
+        let isPill = (variant == .brandPill)
+        
+        HStack(spacing: 8) {
+            if isLoading {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle(tint: fg))
+                    .scaleEffect(0.9)
+            }
+            
+            configuration.label
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(fg)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: minHeight)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(bg)
+        .modifier(ButtonShapeModifier(isPill: isPill, cornerRadius: cornerRadius))
+        .modifier(ButtonBorderModifier(isPill: isPill, cornerRadius: cornerRadius, color: border, width: strokeW))
+        .scaleEffect(isPressed ? 0.98 : 1.0)
+        .animation(.easeInOut(duration: 0.15), value: isPressed)
+    }
+    
+    private func foregroundColor(isPressed: Bool, isEnabled: Bool) -> Color {
+        guard isEnabled else {
+            switch variant {
+            case .brandPill:
+                return AppTheme.Semantic.inkSecondary
+            case .primary, .secondary, .tertiary, .destructive:
+                return Color(hex: "#9E97B4")
+            }
+        }
+        
+        switch variant {
+        case .brandPill:
+            return AppTheme.Semantic.inkInverse
+        case .primary, .secondary:
+            return AppTheme.Semantic.inkPrimary
+        case .tertiary:
+            return AppTheme.Semantic.inkAccent
+        case .destructive:
+            return Color(hex: "#842029")
+        }
+    }
+    
+    private func backgroundColor(isPressed: Bool, isEnabled: Bool) -> Color {
+        guard isEnabled else {
+            switch variant {
+            case .brandPill, .primary, .secondary, .destructive:
+                return AppTheme.Semantic.surfaceSubtle
+            case .tertiary:
+                return Color.clear
+            }
+        }
+        
+        switch variant {
+        case .brandPill:
+            return isPressed ? Color(hex: "#563A26") : AppTheme.Semantic.inkBrand
+        case .primary:
+            return isPressed ? Color(hex: "#6C73AC") : AppTheme.Semantic.surfaceAccent
+        case .secondary:
+            return isPressed ? Color(hex: "#FAF7FF") : AppTheme.Semantic.surfaceRaised
+        case .tertiary:
+            return isPressed ? AppTheme.Semantic.surfaceSubtle : Color.clear
+        case .destructive:
+            return isPressed ? Color(hex: "#F1B0B7") : Color(hex: "#F8D7DA")
+        }
+    }
+    
+    private func borderColor(isPressed: Bool, isEnabled: Bool) -> Color {
+        guard isEnabled else {
+            return Color.clear
+        }
+        
+        switch variant {
+        case .secondary:
+            return AppTheme.Semantic.lineHairline
+        case .destructive:
+            return Color(hex: "#F5C6CB")
+        case .brandPill, .primary, .tertiary:
+            return Color.clear
+        }
+    }
+    
+    private var borderWidth: CGFloat {
+        switch variant {
+        case .secondary, .destructive:
+            return 1.5
+        case .brandPill, .primary, .tertiary:
+            return 0
+        }
+    }
+}
+
+private struct ButtonShapeModifier: ViewModifier {
+    let isPill: Bool
+    let cornerRadius: CGFloat
+    
+    func body(content: Content) -> some View {
+        if isPill {
+            content.clipShape(Capsule())
+        } else {
+            content.clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+        }
+    }
+}
+
+private struct ButtonBorderModifier: ViewModifier {
+    let isPill: Bool
+    let cornerRadius: CGFloat
+    let color: Color
+    let width: CGFloat
+    
+    func body(content: Content) -> some View {
+        if width > 0 {
+            if isPill {
+                content.overlay(Capsule().stroke(color, lineWidth: width))
+            } else {
+                content.overlay(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).stroke(color, lineWidth: width))
+            }
+        } else {
+            content
+        }
+    }
+}
+
+public extension ButtonStyle where Self == AppButtonStyle {
+    /// Applies unified button style with given variant and state.
+    static func appStyle(_ variant: AppButtonVariant = .primary, isLoading: Bool = false, minHeight: CGFloat = 44) -> AppButtonStyle {
+        AppButtonStyle(variant: variant, isLoading: isLoading, minHeight: minHeight)
+    }
+    
+    /// BrandPill (Capsule, Brand brown #6F4E37).
+    static var brandPill: AppButtonStyle {
+        AppButtonStyle(variant: .brandPill)
+    }
+    
+    /// Primary Labeled (RoundedRectangle 14pt, Accent periwinkle #7C83BC).
+    static var appPrimary: AppButtonStyle {
+        AppButtonStyle(variant: .primary)
+    }
+    
+    /// Secondary Labeled (RoundedRectangle 14pt, Surface raised with hairline border).
+    static var appSecondary: AppButtonStyle {
+        AppButtonStyle(variant: .secondary)
+    }
+    
+    /// Tertiary Labeled (RoundedRectangle 14pt, Ghost transparent).
+    static var appTertiary: AppButtonStyle {
+        AppButtonStyle(variant: .tertiary)
+    }
+    
+    /// Destructive Labeled (RoundedRectangle 14pt, Crimson soft alert).
+    static var appDestructive: AppButtonStyle {
+        AppButtonStyle(variant: .destructive)
+    }
+}
+
+// MARK: - Backwards Compatibility Button Styles
+
+/// Legacy Primary button style using the brand accent color.
 public struct PrimaryButtonStyle: ButtonStyle {
     var isEnabled: Bool = true
     
@@ -356,7 +567,7 @@ public struct PrimaryButtonStyle: ButtonStyle {
     }
 }
 
-/// Secondary button style using surface background with primary text and 12pt corner radius.
+/// Legacy Secondary button style using card surface background.
 public struct SecondaryButtonStyle: ButtonStyle {
     public init() {}
     
@@ -374,17 +585,5 @@ public struct SecondaryButtonStyle: ButtonStyle {
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.button, style: .continuous))
             .scaleEffect(configuration.isPressed ? 0.98 : 1.0)
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
-public extension ButtonStyle where Self == PrimaryButtonStyle {
-    static var appPrimary: PrimaryButtonStyle {
-        PrimaryButtonStyle()
-    }
-}
-
-public extension ButtonStyle where Self == SecondaryButtonStyle {
-    static var appSecondary: SecondaryButtonStyle {
-        SecondaryButtonStyle()
     }
 }

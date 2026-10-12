@@ -59,6 +59,7 @@ public struct ConfidenceScoreView: View {
                     // Reassurance & Limitations Note
                     disclaimerSection
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 24)
                 .padding(.top, 12)
                 .padding(.bottom, 36)

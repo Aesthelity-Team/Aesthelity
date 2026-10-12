@@ -10,6 +10,9 @@ import SwiftUI
 // MARK: - Constants & Design Tokens
 
 struct Constants {
+    // Semantic Surface Canvas
+    static let semanticSurfaceCanvas: Color = Color(red: 0.98, green: 0.97, blue: 1)
+    
     // Semantic Surface Colors
     static let semanticSurfaceBase: Color = Color(red: 0.97, green: 0.95, blue: 0.93)       // #F7F3ED
     static let semanticSurfaceRaised: Color = Color.white                                    // #FFFFFF
@@ -39,41 +42,91 @@ struct Constants {
 
 // MARK: - Routine Models
 
-enum RoutinePeriod: String, CaseIterable {
+public enum RoutinePeriod: String, CaseIterable, Identifiable, Codable {
     case am = "AM"
     case pm = "PM"
+    
+    public var id: String { rawValue }
 }
 
-enum StepState {
+public enum StepState: Equatable {
     case complete
     case active
     case incomplete
 }
 
-struct RoutineStepItem: Identifiable {
-    let id = UUID()
-    let stepNumber: Int
-    let title: String
-    let subtitle: String
-    var state: StepState
+public struct RoutineStepItem: Identifiable {
+    public let id = UUID()
+    public let stepNumber: Int
+    public let title: String
+    public let subtitle: String
+    public var state: StepState
+    public var hasClash: Bool = false
+    
+    public init(stepNumber: Int, title: String, subtitle: String, state: StepState, hasClash: Bool = false) {
+        self.stepNumber = stepNumber
+        self.title = title
+        self.subtitle = subtitle
+        self.state = state
+        self.hasClash = hasClash
+    }
 }
 
 // MARK: - Main ContentView / Home Screen
 
 struct ContentView: View {
     // State
-    @State private var selectedPeriod: RoutinePeriod = .am
-    @State private var selectedTab: Int = 0
-    @State private var showAnalysisSheet: Bool = false
-    @State private var showClashDemo: Bool = false
-    @State private var showJournalSheet: Bool = false
+    @State var selectedPeriod: RoutinePeriod = .am
+    @State var selectedTab: Int = 0
+    @State var showAnalysisSheet: Bool = false
+    @State var showClashDemo: Bool = true
+    @State var showJournalSheet: Bool = false
+    @State var showCalendarSheet: Bool = false
+    @State var showIngredientClashDetail: Bool = false
+    @State var showManageRoutinesView: Bool = false
+    @State var showEditRoutineView: Bool = false
+    @State var showStartupFlowSheet: Bool = false
+    public var onResetStartup: (() -> Void)? = nil
     
-    // AM Steps
+    public init(
+        selectedPeriod: RoutinePeriod = .am,
+        selectedTab: Int = 0,
+        showAnalysisSheet: Bool = false,
+        showClashDemo: Bool = true,
+        showJournalSheet: Bool = false,
+        showCalendarSheet: Bool = false,
+        showIngredientClashDetail: Bool = false,
+        showManageRoutinesView: Bool = false,
+        showEditRoutineView: Bool = false,
+        onResetStartup: (() -> Void)? = nil
+    ) {
+        self._selectedPeriod = State(initialValue: selectedPeriod)
+        self._selectedTab = State(initialValue: selectedTab)
+        self._showAnalysisSheet = State(initialValue: showAnalysisSheet)
+        self._showClashDemo = State(initialValue: showClashDemo)
+        self._showJournalSheet = State(initialValue: showJournalSheet)
+        self._showCalendarSheet = State(initialValue: showCalendarSheet)
+        self._showIngredientClashDetail = State(initialValue: showIngredientClashDetail)
+        self._showManageRoutinesView = State(initialValue: showManageRoutinesView)
+        self._showEditRoutineView = State(initialValue: showEditRoutineView)
+        self.onResetStartup = onResetStartup
+    }
+    
+    // AM Steps (Normal)
     @State private var amSteps: [RoutineStepItem] = [
         RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete),
         RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active),
         RoutineStepItem(stepNumber: 3, title: "Daily Moisturizer", subtitle: "Pending · Step 3", state: .incomplete),
         RoutineStepItem(stepNumber: 4, title: "SPF 46", subtitle: "Pending · Step 4", state: .incomplete)
+    ]
+    
+    // AM Steps (Clash Demo State)
+    @State private var amClashSteps: [RoutineStepItem] = [
+        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete, hasClash: false),
+        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active, hasClash: true),
+        RoutineStepItem(stepNumber: 3, title: "Retinol Night Cream", subtitle: "Ready · Step 3", state: .active, hasClash: true),
+        RoutineStepItem(stepNumber: 4, title: "Daily Moisturizer", subtitle: "Pending · Step 4", state: .incomplete, hasClash: false),
+        RoutineStepItem(stepNumber: 5, title: "SPF 46", subtitle: "Pending · Step 5", state: .incomplete, hasClash: false)
     ]
     
     // PM Steps
@@ -86,41 +139,128 @@ struct ContentView: View {
     ]
     
     var currentSteps: [RoutineStepItem] {
-        selectedPeriod == .am ? amSteps : pmSteps
+        if selectedPeriod == .am {
+            return showClashDemo ? amClashSteps : amSteps
+        } else {
+            return pmSteps
+        }
     }
     
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Scrollable Home Screen Content
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    headerSection
-                    manageRoutinesRow
-                    editRoutineCard
-                    confidenceScoreCard
-                    todaysRoutineCard
-                    whyThisOrderCard
-                    demoClashBanner
-                    skinJournalSection
+            // Tab Content: All current and future tab screens are wrapped in ScrollView
+            Group {
+                switch selectedTab {
+                case 0:
+                    if showIngredientClashDetail {
+                        IngredientClashView(onBack: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showIngredientClashDetail = false
+                            }
+                        })
+                    } else if showManageRoutinesView {
+                        MyRoutinesView(onBack: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                showManageRoutinesView = false
+                            }
+                        })
+                    } else if showEditRoutineView {
+                        EditRoutineView(
+                            routine: RoutineRepository.shared.routines.first ?? RoutineRecord(name: "AM Glow"),
+                            onBack: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showEditRoutineView = false
+                                }
+                            },
+                            onSave: { _ in
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showEditRoutineView = false
+                                }
+                            }
+                        )
+                    } else {
+                        homeContentView
+                    }
+                case 1:
+                    libraryContentView
+                case 2:
+                    scanContentView
+                case 3:
+                    exploreContentView
+                case 4:
+                    profileContentView
+                default:
+                    homeContentView
                 }
-                .padding(.top, 40)
-                .padding(.bottom, 32)
-                .padding(.horizontal, 24)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             
             // Fixed Bottom Tab Bar
             customTabBar
         }
-        .padding(0)
-        .frame(width: 390, height: 844, alignment: .topLeading)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Constants.semanticSurfaceBase)
+        .ignoresSafeArea(.all, edges: .bottom)
         .sheet(isPresented: $showAnalysisSheet) {
             analysisDetailSheet
         }
         .sheet(isPresented: $showJournalSheet) {
             journalDetailSheet
         }
+        .sheet(isPresented: $showCalendarSheet) {
+            calendarDetailSheet
+        }
+        .sheet(isPresented: $showStartupFlowSheet) {
+            StartupFlowView(
+                initialScreen: .welcome,
+                onFinish: {
+                    showStartupFlowSheet = false
+                }
+            )
+        }
+    }
+    
+    // MARK: - Tab Views (All Scrollable)
+    
+    private var homeContentView: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 20) {
+                // Top Demo Banner
+                demoClashBanner
+                
+                // Header (Home & Welcome)
+                headerSection
+                
+                if showClashDemo && selectedPeriod == .am {
+                    // Ingredient Clash Warning Banner
+                    ingredientClashAlertBanner
+                    
+                    // Routine Card with Clashing Steps
+                    todaysRoutineCard
+                    
+                    // Why this order card
+                    whyThisOrderCard
+                    
+                    // Other sections below routine
+                    confidenceScoreCard
+                    manageRoutinesRow
+                    editRoutineCard
+                    skinJournalSection
+                } else {
+                    manageRoutinesRow
+                    editRoutineCard
+                    confidenceScoreCard
+                    todaysRoutineCard
+                    whyThisOrderCard
+                    skinJournalSection
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
+            .padding(.horizontal, 24)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
     
     // MARK: - 1. Header Section
@@ -145,17 +285,55 @@ struct ContentView: View {
                 .foregroundStyle(Constants.semanticInkPrimary)
                 .padding(.top, 2)
             
-            Text("Your personalized routine, one step at a time.")
-                .font(.system(size: 13, weight: .regular))
-                .foregroundStyle(Constants.semanticInkSecondary)
+            if !showClashDemo {
+                Text("Your personalized routine, one step at a time.")
+                    .font(.system(size: 13, weight: .regular))
+                    .foregroundStyle(Constants.semanticInkSecondary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+    
+    // MARK: - Ingredient Clash Alert Banner
+    private var ingredientClashAlertBanner: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showIngredientClashDetail = true
+            }
+        }) {
+            HStack(alignment: .top, spacing: 12) {
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .fill(Color(hex: "#6D122B"))
+                    .frame(width: 18, height: 18)
+                    .padding(.top, 2)
+                
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Ingredient clash")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color(hex: "#6D122B"))
+                    
+                    Text("Vitamin C Serum + Retinol Night Cream are both in AM Glow. Tap a flagged step for why.")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Color(hex: "#6D122B"))
+                        .lineSpacing(2)
+                }
+                
+                Spacer()
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color(hex: "#EDA5B7"))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
     
     // MARK: - 2. Manage Routines Row
     private var manageRoutinesRow: some View {
         Button(action: {
-            // Manage routines action
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showManageRoutinesView = true
+            }
         }) {
             HStack {
                 Text("Manage routines")
@@ -180,7 +358,9 @@ struct ContentView: View {
     // MARK: - 3. Edit Routine Card
     private var editRoutineCard: some View {
         Button(action: {
-            // Edit routine action
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showEditRoutineView = true
+            }
         }) {
             HStack {
                 Text("Edit routine")
@@ -210,7 +390,8 @@ struct ContentView: View {
     // MARK: - 4. Confidence Score Card
     private var confidenceScoreCard: some View {
         ConfidenceCard(
-            score: 82,
+            score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
+            subtitle: (showClashDemo && selectedPeriod == .am) ? "Active clash detected" : "Routine compatibility",
             amSteps: amSteps.count,
             pmSteps: pmSteps.count,
             onTap: {
@@ -304,12 +485,25 @@ struct ContentView: View {
     // Routine Step Row Builder
     private func stepRowView(for step: RoutineStepItem) -> some View {
         Button(action: {
-            toggleStep(step)
+            if step.hasClash {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showIngredientClashDetail = true
+                }
+            } else {
+                toggleStep(step)
+            }
         }) {
             HStack(spacing: 12) {
                 // Circle Indicator
                 ZStack {
-                    if step.state == .complete {
+                    if step.hasClash {
+                        Circle()
+                            .fill(Color.white)
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle().stroke(Color.white.opacity(0.8), lineWidth: 1)
+                            )
+                    } else if step.state == .complete {
                         Circle()
                             .fill(Constants.semanticSurfaceAccent)
                             .frame(width: 24, height: 24)
@@ -340,8 +534,8 @@ struct ContentView: View {
                 }
                 .frame(width: 44, height: 44)
                 
-                // Titles
-                VStack(alignment: .leading, spacing: 2) {
+                // Titles & Clash Badge
+                VStack(alignment: .leading, spacing: 3) {
                     Text(step.title)
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundStyle(Constants.semanticInkPrimary)
@@ -349,51 +543,96 @@ struct ContentView: View {
                     Text(step.subtitle)
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Constants.semanticInkSecondary)
+                    
+                    if step.hasClash {
+                        HStack(spacing: 5) {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .fill(Color(hex: "#6D122B"))
+                                .frame(width: 14, height: 14)
+                            Text("Ingredient clash")
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color(hex: "#6D122B"))
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.white)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .padding(.top, 2)
+                    }
                 }
                 
                 Spacer()
                 
                 // Trailing Status Text
                 Group {
-                    switch step.state {
-                    case .complete:
-                        Text("Complete")
-                            .foregroundStyle(Constants.semanticInkAccent)
-                    case .active:
+                    if step.hasClash {
                         Text("Active")
                             .foregroundStyle(Constants.semanticInkSecondary)
-                    case .incomplete:
-                        Text("Incomplete")
-                            .foregroundStyle(Constants.semanticInkSecondary)
+                    } else {
+                        switch step.state {
+                        case .complete:
+                            Text("Complete")
+                                .foregroundStyle(Constants.semanticInkAccent)
+                        case .active:
+                            Text("Active")
+                                .foregroundStyle(Constants.semanticInkSecondary)
+                        case .incomplete:
+                            Text("Incomplete")
+                                .foregroundStyle(Constants.semanticInkSecondary)
+                        }
                     }
                 }
                 .font(.system(size: 12, weight: .medium))
             }
             .padding(.horizontal, 12)
-            .padding(.vertical, 14)
+            .padding(.vertical, step.hasClash ? 12 : 14)
             .frame(maxWidth: .infinity)
-            .background(step.state == .active ? Constants.semanticSurfaceSubtle : Constants.semanticSurfaceRaised)
+            .background(
+                step.hasClash
+                    ? Color(hex: "#EDA5B7")
+                    : (step.state == .active ? Constants.semanticSurfaceSubtle : Constants.semanticSurfaceRaised)
+            )
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Constants.semanticLineHairline, lineWidth: step.state == .complete ? 0 : 1)
+                    .stroke(
+                        step.hasClash
+                            ? Color(hex: "#6D122B").opacity(0.15)
+                            : (step.state == .complete ? Color.clear : Constants.semanticLineHairline),
+                        lineWidth: 1
+                    )
             )
-            .shadow(color: Color.black.opacity(0.15), radius: 3, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(step.hasClash ? 0.08 : 0.15), radius: 3, x: 0, y: 2)
         }
         .buttonStyle(.plain)
     }
     
     private func toggleStep(_ step: RoutineStepItem) {
         if selectedPeriod == .am {
-            if let idx = amSteps.firstIndex(where: { $0.id == step.id }) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    switch amSteps[idx].state {
-                    case .complete:
-                        amSteps[idx].state = .incomplete
-                    case .active:
-                        amSteps[idx].state = .complete
-                    case .incomplete:
-                        amSteps[idx].state = .active
+            if showClashDemo {
+                if let idx = amClashSteps.firstIndex(where: { $0.id == step.id }) {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        switch amClashSteps[idx].state {
+                        case .complete:
+                            amClashSteps[idx].state = .incomplete
+                        case .active:
+                            amClashSteps[idx].state = .complete
+                        case .incomplete:
+                            amClashSteps[idx].state = .active
+                        }
+                    }
+                }
+            } else {
+                if let idx = amSteps.firstIndex(where: { $0.id == step.id }) {
+                    withAnimation(.easeInOut(duration: 0.15)) {
+                        switch amSteps[idx].state {
+                        case .complete:
+                            amSteps[idx].state = .incomplete
+                        case .active:
+                            amSteps[idx].state = .complete
+                        case .incomplete:
+                            amSteps[idx].state = .active
+                        }
                     }
                 }
             }
@@ -438,26 +677,55 @@ struct ContentView: View {
         )
     }
     
-    // MARK: - 7. Demo Banner
+    // MARK: - 7. Demo Banner (Peach)
     private var demoClashBanner: some View {
-        Button(action: {
-            showClashDemo.toggle()
-        }) {
-            HStack(spacing: 4) {
-                Text(showClashDemo ? "Demo: Active Clash Detected (Retinol + Vitamin C) ›" : "Demo: AM ingredient clash state ›")
-                    .font(.system(size: 11, weight: .regular))
-                    .foregroundStyle(showClashDemo ? Color(red: 0.70, green: 0.23, blue: 0.28) : Constants.semanticInkSecondary)
+        VStack(spacing: 8) {
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showClashDemo.toggle()
+                }
+            }) {
+                HStack {
+                    Text(showClashDemo ? "DEMO · AM clash — Vitamin C + Retinol in routine" : "DEMO · Tap to preview AM clash (Vitamin C + Retinol)")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(Color(hex: "#6F4E37"))
+                    Spacer()
+                    Image(systemName: showClashDemo ? "exclamationmark.triangle.fill" : "checkmark.seal.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color(hex: "#6F4E37"))
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(Color(hex: "#FECA9B"))
+                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             }
-            .frame(height: 100)
-            .frame(maxWidth: .infinity)
-            .background(showClashDemo ? Color(red: 1.0, green: 0.92, blue: 0.93) : Constants.semanticSurfaceRaised)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(showClashDemo ? Color(red: 0.70, green: 0.23, blue: 0.28).opacity(0.3) : Constants.semanticLineHairline, lineWidth: 1)
-            )
+            .buttonStyle(.plain)
+            
+            Button(action: {
+                if let onReset = onResetStartup {
+                    onReset()
+                } else {
+                    showStartupFlowSheet = true
+                }
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .semibold))
+                    Text("Preview Startup Screens (Welcome · Invalid · Network Error)")
+                        .font(.system(size: 12, weight: .semibold))
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .foregroundStyle(Color(hex: "#50578F"))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 9)
+                .background(Color(hex: "#DFD8F5").opacity(0.85))
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
     
     // MARK: - 8. Skin Journal Section
@@ -476,18 +744,41 @@ struct ContentView: View {
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(Constants.semanticInkSecondary)
                 
-                Button(action: {
-                    showJournalSheet = true
-                }) {
-                    Text("View journal")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Constants.semanticInkPrimary)
+                HStack(spacing: 10) {
+                    Button(action: {
+                        showJournalSheet = true
+                    }) {
+                        Text("View journal")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Constants.semanticInkPrimary)
+                            .frame(maxWidth: .infinity)
+                            .frame(minHeight: 44)
+                            .background(Constants.semanticSurfaceAccent)
+                            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Button(action: {
+                        showCalendarSheet = true
+                    }) {
+                        HStack(spacing: 6) {
+                            Image(systemName: "calendar")
+                                .font(.system(size: 13, weight: .medium))
+                            Text("Calendar")
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundStyle(Constants.semanticInkBrand)
                         .frame(maxWidth: .infinity)
                         .frame(minHeight: 44)
-                        .background(Constants.semanticSurfaceAccent)
+                        .background(Constants.semanticSurfaceBase)
                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Constants.semanticLineHairline, lineWidth: 1)
+                        )
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -506,7 +797,12 @@ struct ContentView: View {
         VStack(spacing: 0) {
             HStack(alignment: .bottom, spacing: 0) {
                 // Tab 0: Home (Active)
-                Button(action: { selectedTab = 0 }) {
+                Button(action: {
+                    selectedTab = 0
+                    showIngredientClashDetail = false
+                    showManageRoutinesView = false
+                    showEditRoutineView = false
+                }) {
                     VStack(spacing: 4) {
                         Image(systemName: selectedTab == 0 ? "house.fill" : "house")
                             .font(.system(size: 20))
@@ -534,7 +830,12 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 
                 // Tab 1: Library
-                Button(action: { selectedTab = 1 }) {
+                Button(action: {
+                    selectedTab = 1
+                    showIngredientClashDetail = false
+                    showManageRoutinesView = false
+                    showEditRoutineView = false
+                }) {
                     VStack(spacing: 4) {
                         Image(systemName: selectedTab == 1 ? "books.vertical.fill" : "books.vertical")
                             .font(.system(size: 20))
@@ -562,7 +863,12 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 
                 // Tab 2: Scan (Center Elevated Button)
-                Button(action: { selectedTab = 2 }) {
+                Button(action: {
+                    selectedTab = 2
+                    showIngredientClashDetail = false
+                    showManageRoutinesView = false
+                    showEditRoutineView = false
+                }) {
                     VStack(spacing: 4) {
                         ZStack {
                             Circle()
@@ -586,9 +892,14 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 
                 // Tab 3: Explore
-                Button(action: { selectedTab = 3 }) {
+                Button(action: {
+                    selectedTab = 3
+                    showIngredientClashDetail = false
+                    showManageRoutinesView = false
+                    showEditRoutineView = false
+                }) {
                     VStack(spacing: 4) {
-                        Image(systemName: selectedTab == 3 ? "safari.fill" : "safari")
+                        Image(systemName: selectedTab == 3 ? "magnifyingglass" : "magnifyingglass")
                             .font(.system(size: 20))
                             .foregroundStyle(selectedTab == 3 ? Constants.semanticInkAccent : Constants.semanticInkBrand)
                             .frame(width: 24, height: 24)
@@ -614,9 +925,14 @@ struct ContentView: View {
                 .buttonStyle(.plain)
                 
                 // Tab 4: Profile
-                Button(action: { selectedTab = 4 }) {
+                Button(action: {
+                    selectedTab = 4
+                    showIngredientClashDetail = false
+                    showManageRoutinesView = false
+                    showEditRoutineView = false
+                }) {
                     VStack(spacing: 4) {
-                        Image(systemName: selectedTab == 4 ? "person.crop.circle.fill" : "person.crop.circle")
+                        Image(systemName: selectedTab == 4 ? "person.fill" : "person")
                             .font(.system(size: 20))
                             .foregroundStyle(selectedTab == 4 ? Constants.semanticInkAccent : Constants.semanticInkBrand)
                             .frame(width: 24, height: 24)
@@ -661,8 +977,8 @@ struct ContentView: View {
     // MARK: - Sheets
     private var analysisDetailSheet: some View {
         ConfidenceScoreView(
-            score: 82,
-            amStepsCount: amSteps.count,
+            score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
+            amStepsCount: currentSteps.count,
             pmStepsCount: pmSteps.count,
             onDismiss: {
                 showAnalysisSheet = false
@@ -671,37 +987,90 @@ struct ContentView: View {
     }
     
     private var journalDetailSheet: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Skin Journal")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(Constants.semanticInkPrimary)
-                
-                Text("Sep 16 · Hydration improving · 3 entries this week")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Constants.semanticInkSecondary)
-                
-                Text("Skin barrier feels intact. No redness reported after Vitamin C application. Retinol introduced on Wednesday evening with moisturizer sandwich method.")
-                    .font(.system(size: 14))
-                    .foregroundStyle(Constants.semanticInkPrimary)
-                    .padding()
-                    .background(Constants.semanticSurfaceRaised)
-                    .clipShape(RoundedRectangle(cornerRadius: 12))
-                
-                Spacer()
+        SkinJournalView(
+            store: .shared,
+            backTitle: "Home",
+            onBack: {
+                showJournalSheet = false
+            },
+            onOpenCalendar: {
+                showJournalSheet = false
+                showCalendarSheet = true
+            },
+            onSelectTab: { tab in
+                selectedTab = tab
+                showJournalSheet = false
             }
-            .padding(24)
-            .background(Constants.semanticSurfaceBase)
-            .navigationTitle("Journal")
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") {
-                        showJournalSheet = false
-                    }
-                    .foregroundStyle(Constants.semanticInkBrand)
+        )
+    }
+    
+    private var calendarDetailSheet: some View {
+        SkinCalendarView(
+            store: .shared,
+            backTitle: "Journal",
+            onBack: {
+                showCalendarSheet = false
+            },
+            onOpenJournal: {
+                showCalendarSheet = false
+                showJournalSheet = true
+            },
+            onSelectTab: { tab in
+                selectedTab = tab
+                showCalendarSheet = false
+            }
+        )
+    }
+    
+    // MARK: - Library Tab Content (Scrollable)
+    private var libraryContentView: some View {
+        LibraryView(showsTabBar: false, fullScreenFrame: false)
+    }
+
+    // MARK: - Scan Tab Content (Scrollable)
+    private var scanContentView: some View {
+        ScanView(showsTabBar: false, onSelectTab: { tab in
+            selectedTab = tab
+            showIngredientClashDetail = false
+            showManageRoutinesView = false
+            showEditRoutineView = false
+        })
+    }
+
+    // MARK: - Explore Tab Content (Scrollable)
+    private var exploreContentView: some View {
+        ExploreView(showsTabBar: false, fullScreenFrame: false)
+    }
+
+    // MARK: - Profile Tab Content (Scrollable)
+    private var profileContentView: some View {
+        ProfileView(
+            productsCount: 24,
+            routinesCount: 2,
+            score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
+            amStepsCount: currentSteps.count,
+            pmStepsCount: pmSteps.count,
+            onOpenJournal: {
+                showJournalSheet = true
+            },
+            onOpenAnalysis: {
+                showAnalysisSheet = true
+            },
+            onSelectRoutine: { period in
+                selectedPeriod = period
+                selectedTab = 0
+                showIngredientClashDetail = false
+                showManageRoutinesView = false
+                showEditRoutineView = false
+            },
+            onOpenStartup: {
+                if let onReset = onResetStartup {
+                    onReset()
+                } else {
+                    showStartupFlowSheet = true
                 }
             }
-        }
+        )
     }
 }
 
