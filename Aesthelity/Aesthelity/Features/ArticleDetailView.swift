@@ -85,14 +85,17 @@ public struct ArticleDetailItem: Identifiable, Equatable {
         ],
         relatedProducts: [
             ArticleProductItem(
+                id: ProductDatabase.vitaminCID,
                 title: "Vitamin C Serum",
                 subtitle: "Brightening serum · AM routine"
             ),
             ArticleProductItem(
+                id: ProductDatabase.dailyUVDefenseID,
                 title: "Daily UV Defense SPF 50",
                 subtitle: "Broad spectrum protection · AM routine"
             ),
             ArticleProductItem(
+                id: ProductDatabase.hydrabioCreamCleanserID,
                 title: "Hydrabio Cream Cleanser",
                 subtitle: "Gentle morning base · AM routine"
             )
@@ -327,7 +330,8 @@ public struct ArticleDetailView: View {
     
     private func relatedProductCardView(product: ArticleProductItem) -> some View {
         Button(action: {
-            let detail = ProductDatabase.shared.detail(forTitle: product.title)
+            let detail = ProductDatabase.shared.product(for: product.id)
+                ?? ProductDatabase.shared.detail(forTitle: product.title)
             if let onSelectProduct = onSelectProduct {
                 onSelectProduct(detail)
             } else {

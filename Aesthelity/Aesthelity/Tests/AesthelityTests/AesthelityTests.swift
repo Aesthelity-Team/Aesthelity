@@ -211,6 +211,61 @@ struct AesthelityTests {
         #expect(libraryViewWithSave.selectedProductDetail?.title == "Vitamin C Serum")
     }
     
+    @Test func productDetailLookupByID() throws {
+        let db = ProductDatabase.shared
+        
+        // 1. Look up Hydrabio Cream Cleanser by ID instead of shortened name "Hydrabio Cre..."
+        let hydrabio = db.product(for: ProductDatabase.hydrabioCreamCleanserID)
+        #expect(hydrabio != nil)
+        #expect(hydrabio?.title == "Hydrabio Cream Cleanser")
+        #expect(hydrabio?.brand == "Bioderma")
+        #expect(hydrabio?.category == .cleanser)
+        
+        // 2. Look up other previously shortened products by ID
+        let sunBlock = db.product(byId: ProductDatabase.sunBlockPostCareID)
+        #expect(sunBlock?.title == "Sun Block Post Care SPF 50+")
+        
+        let superfood = db.detail(for: ProductDatabase.superfoodCicaCleanserID)
+        #expect(superfood.title == "Superfood Cica Cleanser")
+        
+        let foamingWash = db.detail(forId: ProductDatabase.foamingMicellarWashID)
+        #expect(foamingWash?.title == "Foaming Micellar Wash")
+        
+        // 3. Look up by String representation of ID
+        let hydrabioByStringId = db.detail(forId: ProductDatabase.hydrabioCreamCleanserID.uuidString)
+        #expect(hydrabioByStringId?.title == "Hydrabio Cream Cleanser")
+        
+        // 4. Subscript access by UUID
+        let subscriptItem = db[ProductDatabase.hydrabioCreamCleanserID]
+        #expect(subscriptItem?.title == "Hydrabio Cream Cleanser")
+        
+        // 5. Look up via LibraryProductItem carrying ID
+        let libraryItem = LibraryProductItem(
+            id: ProductDatabase.hydrabioCreamCleanserID,
+            title: "Hydrabio Cre...",
+            brand: "Bioderma",
+            category: .cleanser
+        )
+        let resolvedFromLibraryItem = db.detail(for: libraryItem)
+        #expect(resolvedFromLibraryItem.id == ProductDatabase.hydrabioCreamCleanserID)
+        #expect(resolvedFromLibraryItem.title == "Hydrabio Cream Cleanser")
+        
+        // 6. ProductDetailView initialization by ID
+        let detailViewByID = ProductDetailView(id: ProductDatabase.hydrabioCreamCleanserID)
+        #expect(detailViewByID.product.id == ProductDatabase.hydrabioCreamCleanserID)
+        #expect(detailViewByID.product.title == "Hydrabio Cream Cleanser")
+        
+        let detailViewByProductID = ProductDetailView(productId: ProductDatabase.hydrabioCreamCleanserID)
+        #expect(detailViewByProductID.product.title == "Hydrabio Cream Cleanser")
+        
+        let detailViewByStringID = ProductDetailView(productId: ProductDatabase.hydrabioCreamCleanserID.uuidString)
+        #expect(detailViewByStringID.product.title == "Hydrabio Cream Cleanser")
+        
+        // 7. Verify all unique products in database
+        #expect(db.allProducts.count == 14)
+        #expect(db.allProducts.contains { $0.id == ProductDatabase.hydrabioCreamCleanserID })
+    }
+    
     // MARK: - ScanView Tests
     
     @Test func scanViewInitialization() throws {

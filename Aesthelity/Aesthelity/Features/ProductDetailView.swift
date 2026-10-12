@@ -70,15 +70,39 @@ public struct ProductDetailItem: Identifiable, Equatable {
 public class ProductDatabase {
     public static let shared = ProductDatabase()
     
+    // MARK: - Well-Known Stable Product IDs
+    public static let vitaminCID = UUID(uuidString: "E621E1F8-C36C-495A-93FC-0C247A3E6E5F")!
+    public static let gentleFoamingCleanserID = UUID(uuidString: "A1B2C3D4-E5F6-4A5B-8C9D-0E1F2A3B4C5D")!
+    public static let hydrabioCreamCleanserID = UUID(uuidString: "B2C3D4E5-F6A1-4B5C-9D0E-1F2A3B4C5D6E")!
+    public static let barrierBalanceTonerID = UUID(uuidString: "C3D4E5F6-A1B2-4C5D-0E1F-2A3B4C5D6E7F")!
+    public static let clarifyingTonerID = UUID(uuidString: "D4E5F6A1-B2C3-4D5E-1F2A-3B4C5D6E7F8A")!
+    public static let hydratingMilkTonerID = UUID(uuidString: "E5F6A1B2-C3D4-4E5F-2A3B-4C5D6E7F8A9B")!
+    public static let dailyUVDefenseID = UUID(uuidString: "F6A1B2C3-D4E5-4F5A-3B4C-5D6E7F8A9B0C")!
+    public static let sunBlockPostCareID = UUID(uuidString: "A2B3C4D5-E6F7-4A5B-4C5D-6E7F8A9B0C1D")!
+    public static let antheliosUVMeltInID = UUID(uuidString: "B3C4D5E6-F7A8-4B5C-5D6E-7F8A9B0C1D2E")!
+    public static let niacinamideID = UUID(uuidString: "C4D5E6F7-A8B9-4C5D-6E7F-8A9B0C1D2E3F")!
+    public static let caffeineSolutionID = UUID(uuidString: "D5E6F7A8-B9C0-4D5E-7F8A-9B0C1D2E3F4A")!
+    public static let honeyGlazeLipMaskID = UUID(uuidString: "E6F7A8B9-C0D1-4E5F-8A9B-0C1D2E3F4A5B")!
+    public static let superfoodCicaCleanserID = UUID(uuidString: "F7A8B9C0-D1E2-4F5A-9B0C-1D2E3F4A5B6C")!
+    public static let foamingMicellarWashID = UUID(uuidString: "A3B4C5D6-E7F8-4A5B-0C1D-2E3F4A5B6C7D")!
+    
+    private var databaseById: [UUID: ProductDetailItem] = [:]
     private var database: [String: ProductDetailItem] = [:]
     
     public init() {
         seedDefaults()
     }
     
+    /// Register a product detail item in both ID-indexed and title-indexed stores.
+    public func register(_ item: ProductDetailItem) {
+        databaseById[item.id] = item
+        database[item.title] = item
+    }
+    
     private func seedDefaults() {
         // 1. Vitamin C Serum (Exact match to design specification)
         let vitaminC = ProductDetailItem(
+            id: Self.vitaminCID,
             title: "Vitamin C Serum",
             subtitle: "Brightening serum · AM routine",
             brand: "Misticore",
@@ -88,10 +112,11 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Do not combine with retinol", badgeText: "Avoid")
             ]
         )
-        database["Vitamin C Serum"] = vitaminC
+        register(vitaminC)
         
-        // 2. Gentle Foaming Cleanser / Hydrabio
+        // 2. Gentle Foaming Cleanser & Hydrabio Cream Cleanser
         let cleanser = ProductDetailItem(
+            id: Self.gentleFoamingCleanserID,
             title: "Gentle Foaming Cleanser",
             subtitle: "Purifying wash · AM/PM routine",
             brand: "Bioderma",
@@ -101,8 +126,10 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "First water-based step", badgeText: "Best")
             ]
         )
-        database["Gentle Foaming Cleanser"] = cleanser
-        database["Hydrabio Cre..."] = ProductDetailItem(
+        register(cleanser)
+        
+        let hydrabio = ProductDetailItem(
+            id: Self.hydrabioCreamCleanserID,
             title: "Hydrabio Cream Cleanser",
             subtitle: "Moisturizing cleanser · AM/PM routine",
             brand: "Bioderma",
@@ -112,9 +139,11 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Comfortable rinse-off formula", badgeText: "Best")
             ]
         )
+        register(hydrabio)
         
-        // 3. Barrier Balance Toner / Clarifying Toner
+        // 3. Barrier Balance Toner, Clarifying Toner & Hydrating Milk Toner
         let toner = ProductDetailItem(
+            id: Self.barrierBalanceTonerID,
             title: "Barrier Balance Toner",
             subtitle: "Hydrating balance · AM/PM routine",
             brand: "Paula's Choice",
@@ -124,8 +153,10 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Restores moisture barrier balance", badgeText: "Best")
             ]
         )
-        database["Barrier Balance Toner"] = toner
-        database["Clarifying Toner"] = ProductDetailItem(
+        register(toner)
+        
+        let clarifying = ProductDetailItem(
+            id: Self.clarifyingTonerID,
             title: "Clarifying Toner",
             subtitle: "Pore refining toner · AM/PM routine",
             brand: "Paula's Choice",
@@ -135,7 +166,10 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Calms post-cleanse skin", badgeText: "Safe")
             ]
         )
-        database["Hydrating Milk Toner"] = ProductDetailItem(
+        register(clarifying)
+        
+        let hydratingMilk = ProductDetailItem(
+            id: Self.hydratingMilkTonerID,
             title: "Hydrating Milk Toner",
             subtitle: "Ceramide emulsion · AM/PM routine",
             brand: "Rhode",
@@ -145,9 +179,11 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Deeply restorative base layer", badgeText: "Best")
             ]
         )
+        register(hydratingMilk)
         
-        // 4. Daily UV Defense SPF 50 / Sun Block
+        // 4. Daily UV Defense SPF 50, Sun Block Post Care & Anthelios
         let spf = ProductDetailItem(
+            id: Self.dailyUVDefenseID,
             title: "Daily UV Defense SPF 50",
             subtitle: "Protection · AM routine",
             brand: "HistoLab",
@@ -157,8 +193,10 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Cleanse thoroughly before bed", badgeText: "Avoid")
             ]
         )
-        database["Daily UV Defense SPF 50"] = spf
-        database["Sun Block For..."] = ProductDetailItem(
+        register(spf)
+        
+        let sunBlock = ProductDetailItem(
+            id: Self.sunBlockPostCareID,
             title: "Sun Block Post Care SPF 50+",
             subtitle: "Broad spectrum UV barrier · AM routine",
             brand: "HistoLab",
@@ -168,7 +206,10 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Not formulated for night wear", badgeText: "Avoid")
             ]
         )
-        database["Anthelios UV Melt-In"] = ProductDetailItem(
+        register(sunBlock)
+        
+        let anthelios = ProductDetailItem(
+            id: Self.antheliosUVMeltInID,
             title: "Anthelios UV Melt-In SPF 60",
             subtitle: "Ultralight fluid shield · AM routine",
             brand: "La Roche-Posay",
@@ -178,9 +219,11 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Remove with evening double cleanse", badgeText: "Avoid")
             ]
         )
+        register(anthelios)
         
         // 5. Niacinamide 10% + Zinc 1%
         let niacinamide = ProductDetailItem(
+            id: Self.niacinamideID,
             title: "Niacinamide 10% + Zinc 1%",
             subtitle: "Balancing · PM routine",
             brand: "The Ordinary",
@@ -190,11 +233,12 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Regulates sebum overnight", badgeText: "Best")
             ]
         )
-        database["Niacinamide 10% + Zinc 1%"] = niacinamide
+        register(niacinamide)
         database["Niacinamide 10%"] = niacinamide
         
         // 6. Caffeine Solution 5%
-        database["Caffeine Solution 5%"] = ProductDetailItem(
+        let caffeine = ProductDetailItem(
+            id: Self.caffeineSolutionID,
             title: "Caffeine Solution 5%",
             subtitle: "Depuffing eye serum · AM routine",
             brand: "The Ordinary",
@@ -204,9 +248,11 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Gentle hydration around eye contour", badgeText: "Safe")
             ]
         )
+        register(caffeine)
         
         // 7. Honey Glaze Collagen Lip Mask
-        database["Honey Glaze Collagen Lip Mask"] = ProductDetailItem(
+        let honeyGlaze = ProductDetailItem(
+            id: Self.honeyGlazeLipMaskID,
             title: "Honey Glaze Collagen Lip Mask",
             subtitle: "Nourishing lip treatment · PM routine",
             brand: "Gisou",
@@ -216,9 +262,11 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Intense overnight peptide repair", badgeText: "Best")
             ]
         )
+        register(honeyGlaze)
         
-        // 8. Superfood Ci... & Foaming Mice...
-        database["Superfood Ci..."] = ProductDetailItem(
+        // 8. Superfood Cica Cleanser & Foaming Micellar Wash
+        let superfoodCica = ProductDetailItem(
+            id: Self.superfoodCicaCleanserID,
             title: "Superfood Cica Cleanser",
             subtitle: "Antioxidant wash · AM routine",
             brand: "Besoma",
@@ -228,7 +276,10 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Gentle non-stripping second cleanse", badgeText: "Safe")
             ]
         )
-        database["Foaming Mice..."] = ProductDetailItem(
+        register(superfoodCica)
+        
+        let foamingMicellar = ProductDetailItem(
+            id: Self.foamingMicellarWashID,
             title: "Foaming Micellar Wash",
             subtitle: "Gentle rinse · AM/PM routine",
             brand: "Alya Skin",
@@ -238,31 +289,66 @@ public class ProductDatabase {
                 RoutineFitItem(routineName: "PM routine", note: "Water-based second cleanse step", badgeText: "Safe")
             ]
         )
+        register(foamingMicellar)
     }
     
     /// All unique products registered in the database.
     public var allProducts: [ProductDetailItem] {
-        var seen = Set<String>()
-        var list: [ProductDetailItem] = []
-        for item in database.values {
-            if !seen.contains(item.title) {
-                seen.insert(item.title)
-                list.append(item)
-            }
+        databaseById.values.sorted { $0.title < $1.title }
+    }
+    
+    /// Look up product detail by UUID.
+    public func product(for id: UUID) -> ProductDetailItem? {
+        databaseById[id]
+    }
+    
+    /// Look up product detail by UUID.
+    public func product(byId id: UUID) -> ProductDetailItem? {
+        databaseById[id]
+    }
+    
+    /// Look up product detail by UUID with guaranteed fallback.
+    public func detail(for id: UUID) -> ProductDetailItem {
+        databaseById[id] ?? fallbackDetail(id: id, title: "Product", brand: "Aesthelity Essentials", category: .serum)
+    }
+    
+    /// Look up product detail by UUID.
+    public func detail(forId id: UUID) -> ProductDetailItem? {
+        databaseById[id]
+    }
+    
+    /// Look up product detail by String identifier or UUID string.
+    public func detail(forId idString: String) -> ProductDetailItem? {
+        if let uuid = UUID(uuidString: idString), let found = databaseById[uuid] {
+            return found
         }
-        return list.sorted { $0.title < $1.title }
+        if let found = database[idString] {
+            return found
+        }
+        return nil
+    }
+    
+    /// Subscript access by UUID.
+    public subscript(id: UUID) -> ProductDetailItem? {
+        databaseById[id]
     }
     
     /// Look up or dynamically generate product detail for any title.
     public func detail(forTitle title: String) -> ProductDetailItem {
+        if let uuid = UUID(uuidString: title), let item = databaseById[uuid] {
+            return item
+        }
         if let existing = database[title] {
             return existing
         }
-        // Case-insensitive / prefix matching
-        let lower = title.lowercased()
-        for (key, item) in database {
-            if lower.contains(key.lowercased()) || key.lowercased().contains(lower) {
-                return item
+        // Case-insensitive / prefix matching without requiring literal "..." keys
+        let cleanTitle = title.replacingOccurrences(of: "...", with: "").trimmingCharacters(in: .whitespaces).lowercased()
+        if !cleanTitle.isEmpty {
+            for (key, item) in database {
+                let keyLower = key.lowercased()
+                if keyLower.starts(with: cleanTitle) || cleanTitle.starts(with: keyLower) || keyLower.contains(cleanTitle) {
+                    return item
+                }
             }
         }
         // Versatile fallback generator
@@ -270,32 +356,48 @@ public class ProductDatabase {
     }
     
     public func detail(for product: LibraryProductItem) -> ProductDetailItem {
+        // 1. Look up by product ID first
+        if let existing = databaseById[product.id] {
+            return existing
+        }
+        // 2. Look up by title
         if let existing = database[product.title] {
             return existing
         }
-        let lower = product.title.lowercased()
-        for (key, item) in database {
-            if lower.contains(key.lowercased()) || key.lowercased().contains(lower) {
-                return item
+        let cleanTitle = product.title.replacingOccurrences(of: "...", with: "").trimmingCharacters(in: .whitespaces).lowercased()
+        if !cleanTitle.isEmpty {
+            for (key, item) in database {
+                let keyLower = key.lowercased()
+                if keyLower.starts(with: cleanTitle) || cleanTitle.starts(with: keyLower) || keyLower.contains(cleanTitle) {
+                    return item
+                }
             }
         }
-        return fallbackDetail(title: product.title, brand: product.brand, category: product.category)
+        return fallbackDetail(id: product.id, title: product.title, brand: product.brand, category: product.category)
     }
     
     public func detail(for save: RecentSaveItem) -> ProductDetailItem {
+        // 1. Look up by save ID first
+        if let existing = databaseById[save.id] {
+            return existing
+        }
+        // 2. Look up by title
         if let existing = database[save.title] {
             return existing
         }
-        let lower = save.title.lowercased()
-        for (key, item) in database {
-            if lower.contains(key.lowercased()) || key.lowercased().contains(lower) {
-                return item
+        let cleanTitle = save.title.replacingOccurrences(of: "...", with: "").trimmingCharacters(in: .whitespaces).lowercased()
+        if !cleanTitle.isEmpty {
+            for (key, item) in database {
+                let keyLower = key.lowercased()
+                if keyLower.starts(with: cleanTitle) || cleanTitle.starts(with: keyLower) || keyLower.contains(cleanTitle) {
+                    return item
+                }
             }
         }
-        return fallbackDetail(title: save.title, brand: "Aesthelity", category: save.category)
+        return fallbackDetail(id: save.id, title: save.title, brand: "Aesthelity", category: save.category)
     }
     
-    private func fallbackDetail(title: String, brand: String, category: ProductCategory) -> ProductDetailItem {
+    private func fallbackDetail(id: UUID = UUID(), title: String, brand: String, category: ProductCategory) -> ProductDetailItem {
         let isSpf = category == .spf
         let isCleanser = category == .cleanser
         let isToner = category == .toner
@@ -305,6 +407,7 @@ public class ProductDatabase {
         let pmBadge = isSpf ? "Avoid" : (isCleanser ? "Best" : (isToner ? "Best" : "Avoid"))
         
         return ProductDetailItem(
+            id: id,
             title: title,
             subtitle: "\(category.rawValue) formula · AM routine",
             brand: brand,
@@ -531,6 +634,77 @@ public struct ProductDetailView: View {
         self.onSelectTab = onSelectTab
         self._isSaved = State(initialValue: product.isSaved)
         self._isAvoided = State(initialValue: product.isAvoided)
+    }
+    
+    /// Look up product directly by UUID ID.
+    public init(
+        productId: UUID,
+        showsTabBar: Bool = true,
+        fullScreenFrame: Bool = true,
+        onBack: (() -> Void)? = nil,
+        onSelectTab: ((Int) -> Void)? = nil
+    ) {
+        let resolved = ProductDatabase.shared.detail(for: productId)
+        self.init(
+            product: resolved,
+            showsTabBar: showsTabBar,
+            fullScreenFrame: fullScreenFrame,
+            onBack: onBack,
+            onSelectTab: onSelectTab
+        )
+    }
+    
+    /// Look up product directly by UUID ID.
+    public init(
+        id: UUID,
+        showsTabBar: Bool = true,
+        fullScreenFrame: Bool = true,
+        onBack: (() -> Void)? = nil,
+        onSelectTab: ((Int) -> Void)? = nil
+    ) {
+        self.init(
+            productId: id,
+            showsTabBar: showsTabBar,
+            fullScreenFrame: fullScreenFrame,
+            onBack: onBack,
+            onSelectTab: onSelectTab
+        )
+    }
+    
+    /// Look up product directly by String identifier or UUID string.
+    public init(
+        productId: String,
+        showsTabBar: Bool = true,
+        fullScreenFrame: Bool = true,
+        onBack: (() -> Void)? = nil,
+        onSelectTab: ((Int) -> Void)? = nil
+    ) {
+        let resolved = ProductDatabase.shared.detail(forId: productId)
+            ?? ProductDatabase.shared.detail(forTitle: productId)
+        self.init(
+            product: resolved,
+            showsTabBar: showsTabBar,
+            fullScreenFrame: fullScreenFrame,
+            onBack: onBack,
+            onSelectTab: onSelectTab
+        )
+    }
+    
+    /// Look up product directly by String identifier or UUID string.
+    public init(
+        id: String,
+        showsTabBar: Bool = true,
+        fullScreenFrame: Bool = true,
+        onBack: (() -> Void)? = nil,
+        onSelectTab: ((Int) -> Void)? = nil
+    ) {
+        self.init(
+            productId: id,
+            showsTabBar: showsTabBar,
+            fullScreenFrame: fullScreenFrame,
+            onBack: onBack,
+            onSelectTab: onSelectTab
+        )
     }
     
     public var body: some View {

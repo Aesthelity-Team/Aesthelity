@@ -20,12 +20,13 @@ public enum ProductCategory: String, CaseIterable, Identifiable {
 }
 
 public struct LibraryProductItem: Identifiable, Equatable {
-    public let id = UUID()
+    public let id: UUID
     public let title: String
     public let brand: String
     public let category: ProductCategory
     
-    public init(title: String, brand: String, category: ProductCategory) {
+    public init(id: UUID = UUID(), title: String, brand: String, category: ProductCategory) {
+        self.id = id
         self.title = title
         self.brand = brand
         self.category = category
@@ -33,13 +34,14 @@ public struct LibraryProductItem: Identifiable, Equatable {
 }
 
 public struct RecentSaveItem: Identifiable, Equatable {
-    public let id = UUID()
+    public let id: UUID
     public let title: String
     public let subtitle: String
     public let category: ProductCategory
     public let badgeText: String
     
-    public init(title: String, subtitle: String, category: ProductCategory, badgeText: String = "Safe") {
+    public init(id: UUID = UUID(), title: String, subtitle: String, category: ProductCategory, badgeText: String = "Safe") {
+        self.id = id
         self.title = title
         self.subtitle = subtitle
         self.category = category
@@ -249,25 +251,25 @@ public struct LibraryView: View {
     
     // Data Sources
     @State public var products: [LibraryProductItem] = [
-        LibraryProductItem(title: "Sun Block For...", brand: "HistoLab", category: .spf),
-        LibraryProductItem(title: "Hydrabio Cre...", brand: "Bioderma", category: .cleanser),
-        LibraryProductItem(title: "Superfood Ci...", brand: "Besoma", category: .cleanser),
-        LibraryProductItem(title: "Honey Glaze Collagen Lip Mask", brand: "Gisou", category: .serum),
-        LibraryProductItem(title: "Caffeine Solution 5%", brand: "The Ordinary", category: .serum),
-        LibraryProductItem(title: "Foaming Mice...", brand: "Alya Skin", category: .cleanser),
+        LibraryProductItem(id: ProductDatabase.sunBlockPostCareID, title: "Sun Block For...", brand: "HistoLab", category: .spf),
+        LibraryProductItem(id: ProductDatabase.hydrabioCreamCleanserID, title: "Hydrabio Cre...", brand: "Bioderma", category: .cleanser),
+        LibraryProductItem(id: ProductDatabase.superfoodCicaCleanserID, title: "Superfood Ci...", brand: "Besoma", category: .cleanser),
+        LibraryProductItem(id: ProductDatabase.honeyGlazeLipMaskID, title: "Honey Glaze Collagen Lip Mask", brand: "Gisou", category: .serum),
+        LibraryProductItem(id: ProductDatabase.caffeineSolutionID, title: "Caffeine Solution 5%", brand: "The Ordinary", category: .serum),
+        LibraryProductItem(id: ProductDatabase.foamingMicellarWashID, title: "Foaming Mice...", brand: "Alya Skin", category: .cleanser),
         // Additional items for filter expansion
-        LibraryProductItem(title: "Clarifying Toner", brand: "Paula's Choice", category: .toner),
-        LibraryProductItem(title: "Hydrating Milk Toner", brand: "Rhode", category: .toner),
-        LibraryProductItem(title: "Anthelios UV Melt-In", brand: "La Roche-Posay", category: .spf),
-        LibraryProductItem(title: "Niacinamide 10%", brand: "The Ordinary", category: .serum)
+        LibraryProductItem(id: ProductDatabase.clarifyingTonerID, title: "Clarifying Toner", brand: "Paula's Choice", category: .toner),
+        LibraryProductItem(id: ProductDatabase.hydratingMilkTonerID, title: "Hydrating Milk Toner", brand: "Rhode", category: .toner),
+        LibraryProductItem(id: ProductDatabase.antheliosUVMeltInID, title: "Anthelios UV Melt-In", brand: "La Roche-Posay", category: .spf),
+        LibraryProductItem(id: ProductDatabase.niacinamideID, title: "Niacinamide 10%", brand: "The Ordinary", category: .serum)
     ]
     
     @State public var recentSaves: [RecentSaveItem] = [
-        RecentSaveItem(title: "Vitamin C Serum", subtitle: "Brightening · AM", category: .serum, badgeText: "Safe"),
-        RecentSaveItem(title: "Gentle Foaming Cleanser", subtitle: "Purifying · AM/PM", category: .cleanser, badgeText: "Safe"),
-        RecentSaveItem(title: "Barrier Balance Toner", subtitle: "Hydrating · AM/PM", category: .toner, badgeText: "Safe"),
-        RecentSaveItem(title: "Daily UV Defense SPF 50", subtitle: "Protection · AM", category: .spf, badgeText: "Safe"),
-        RecentSaveItem(title: "Niacinamide 10% + Zinc 1%", subtitle: "Balancing · PM", category: .serum, badgeText: "Safe")
+        RecentSaveItem(id: ProductDatabase.vitaminCID, title: "Vitamin C Serum", subtitle: "Brightening · AM", category: .serum, badgeText: "Safe"),
+        RecentSaveItem(id: ProductDatabase.gentleFoamingCleanserID, title: "Gentle Foaming Cleanser", subtitle: "Purifying · AM/PM", category: .cleanser, badgeText: "Safe"),
+        RecentSaveItem(id: ProductDatabase.barrierBalanceTonerID, title: "Barrier Balance Toner", subtitle: "Hydrating · AM/PM", category: .toner, badgeText: "Safe"),
+        RecentSaveItem(id: ProductDatabase.dailyUVDefenseID, title: "Daily UV Defense SPF 50", subtitle: "Protection · AM", category: .spf, badgeText: "Safe"),
+        RecentSaveItem(id: ProductDatabase.niacinamideID, title: "Niacinamide 10% + Zinc 1%", subtitle: "Balancing · PM", category: .serum, badgeText: "Safe")
     ]
     
     public init(
