@@ -8,9 +8,9 @@ Branch naming quick reference
 
 Use the pattern issue-number-short-description for development branches.
 
-Example: 15-welcome-first-use
+Example: 3-welcome-first-use
 
-    15 = the GitHub issue number
+    3 = the GitHub issue number
     welcome-first-use = a short description of the work
 
 Project status
@@ -49,7 +49,7 @@ Sprint 3 	Routine journeys, personalization, makeup, and integration 	Wed, Nov 1
 Sprint 4 	Library, scanner, journal, Explore, settings, accessibility, and handoff 	Wed, Dec 9, 2026
 Development workflow
 
-    Create a branch from main for each issue, using a name such as 14-normalize-ingredients.
+    Create a branch from main for each issue, using a name such as 2-normalize-ingredients.
     Link the pull request to its GitHub issue with Closes #<issue-number>.
     Add tests and screenshots or a short verification note when applicable.
     Request at least one teammate review before merging.
