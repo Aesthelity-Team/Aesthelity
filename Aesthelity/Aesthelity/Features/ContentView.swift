@@ -832,6 +832,7 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.home")
                 
                 // Tab 1: Library
                 Button(action: {
@@ -865,6 +866,7 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.library")
                 
                 // Tab 2: Scan (Center Elevated Button)
                 Button(action: {
@@ -894,6 +896,7 @@ struct ContentView: View {
                     .padding(.bottom, 4)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.scan")
                 
                 // Tab 3: Explore
                 Button(action: {
@@ -927,6 +930,7 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.explore")
                 
                 // Tab 4: Profile
                 Button(action: {
@@ -960,6 +964,7 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("tab.profile")
             }
             .frame(height: 72)
             
