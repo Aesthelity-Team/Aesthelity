@@ -10,6 +10,11 @@ import SwiftUI
 @main
 struct AesthelityApp: App {
     @AppStorage("hasCompletedStartup") private var hasCompletedStartup: Bool = false
+    init() {
+        if CommandLine.arguments.contains("-resetStartupForUITests") {
+            UserDefaults.standard.removeObject(forKey: "hasCompletedStartup")
+        }
+    }
     
     var body: some Scene {
         WindowGroup {
