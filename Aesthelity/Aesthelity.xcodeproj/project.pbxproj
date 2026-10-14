@@ -44,6 +44,7 @@
 				Tests/AesthelityUITests/AesthelityUITests.swift,
 				Tests/AesthelityUITests/OnboardingUITests.swift,
 				Tests/AesthelityUITests/ProfileUITests.swift,
+				Tests/AesthelityUITests/Sprint1DemoUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
 			target = 6E315A7B3076EC58002817B4 /* Aesthelity */;
@@ -68,6 +69,7 @@
 				Tests/AesthelityUITests/AesthelityUITests.swift,
 				Tests/AesthelityUITests/OnboardingUITests.swift,
 				Tests/AesthelityUITests/ProfileUITests.swift,
+				Tests/AesthelityUITests/Sprint1DemoUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
 			target = 6E315A953076EC59002817B4 /* AesthelityUITests */;
