@@ -27,6 +27,11 @@ class CatalogTests(unittest.TestCase):
     def test_retinol_alone_has_no_combination_caution(self):
         p=next(p for p in self.c['products'] if p['subtype']=='retinol')
         self.assertEqual(evaluate([p],{'recorded_allergens':[]}),[])
+    def test_findings_have_user_facing_text(self):
+        for s in self.c['scenarios']:
+            for f in s['expected_findings']:
+                for key in ('category','explanation','reason'):
+                    self.assertTrue(isinstance(f[key],str) and f[key].strip(),f'{s["id"]}: missing {key}')
     def test_wrong_expected_finding_rejected(self):
         self.c['scenarios'][1]['expected_findings']=[]
         with self.assertRaises(ValueError): validate(self.c)

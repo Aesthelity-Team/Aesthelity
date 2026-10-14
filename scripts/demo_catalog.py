@@ -6,7 +6,7 @@ from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 CATEGORIES = {'cleanser','serum','treatment','moisturizer','sunscreen','toner','mist','mask'}
 def load(directory=None):
-    directory = Path(directory) if directory else ROOT / 'data/demo'
+    directory = Path(directory) if directory else ROOT / 'Aesthelity/Aesthelity/Resources/DemoData'
     result = {}
     for name in ('products','profiles','scenarios'):
         data = json.loads((directory / (name+'.json')).read_text(encoding='utf-8'))
@@ -21,15 +21,24 @@ def evaluate(products, profile):
     for p in products:
         status=p['ingredient_list_status']
         if status != 'complete':
-            findings.append(dict(kind='unknown',product_ids=[p['id']],ingredient=None,message=f'Ingredient list is {status}; demo assessment is incomplete.'))
+            findings.append(dict(kind='unknown',product_ids=[p['id']],ingredient=None,message=f'Ingredient list is {status}; demo assessment is incomplete.',
+                category='Incomplete product data',
+                explanation=f"We don't have the full ingredient list for {p['name']}, so we can't fully check it against your routine. Treat this as incomplete, not as a safe result.",
+                reason=f'The ingredient list is {status}.'))
         for ingredient in p['ingredients']:
             if ingredient.strip().casefold() in allergens:
-                findings.append(dict(kind='allergen',product_ids=[p['id']],ingredient=ingredient,message=f'Listed ingredient matches the demo profile’s recorded allergen: {ingredient}.'))
+                findings.append(dict(kind='allergen',product_ids=[p['id']],ingredient=ingredient,message=f'Listed ingredient matches the demo profile’s recorded allergen: {ingredient}.',
+                    category='Allergen',
+                    explanation=f"{p['name']} contains {ingredient}, which you've listed as an allergen. You may want to skip this product.",
+                    reason=f'{ingredient} is on your recorded allergen list.'))
     retinols=[p for p in products if p['subtype']=='retinol']
     exfoliants=[p for p in products if p['subtype'] in {'exfoliant','exfoliating'}]
     for a in retinols:
         for b in exfoliants:
-            findings.append(dict(kind='caution',product_ids=[a['id'],b['id']],ingredient=None,message='Demo rule: retinol and exfoliating treatment selected together. Review this combination.'))
+            findings.append(dict(kind='caution',product_ids=[a['id'],b['id']],ingredient=None,message='Demo rule: retinol and exfoliating treatment selected together. Review this combination.',
+                category='Active ingredient overlap',
+                explanation='Using retinol and an exfoliating treatment in the same routine can leave skin red, dry, or irritated. Try using them on different nights.',
+                reason=f"{a['name']} and {b['name']} are both in this routine."))
     return findings
 
 def validate(catalog):
