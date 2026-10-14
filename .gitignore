@@ -33,6 +33,7 @@ fastlane/test_output
 # IDE and editor files
 .idea/
 .vscode/
+.gemini/
 *.swp
 *.swo
 
