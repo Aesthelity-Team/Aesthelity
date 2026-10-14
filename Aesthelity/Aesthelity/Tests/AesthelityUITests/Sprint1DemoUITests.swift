@@ -12,6 +12,7 @@ final class Sprint1DemoUITests: XCTestCase {
 
     @MainActor
     private func launchFreshApp() -> XCUIApplication {
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["--pf01-ui-testing", "--pf01-reset-profile"]
         app.launch()

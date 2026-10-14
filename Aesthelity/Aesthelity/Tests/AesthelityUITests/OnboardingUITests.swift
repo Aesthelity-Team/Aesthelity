@@ -15,6 +15,7 @@ final class OnboardingUITests: XCTestCase {
     }
 
     private func launchFreshApp() -> XCUIApplication {
+        XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
         app.launchArguments = ["--pf01-ui-testing", "--pf01-reset-profile", "-resetStartupForUITests"]
         app.launch()
