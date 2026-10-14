@@ -543,6 +543,26 @@ struct AesthelityTests {
         #expect(normalSteps[3].title == "SPF 46")
     }
     
+    @Test func contentViewPopulatedRoutineHasNoEmptyMessage() throws {
+        #expect(ContentView(selectedPeriod: .am).emptyRoutineMessage == nil)
+        #expect(ContentView(selectedPeriod: .am, showClashDemo: false).emptyRoutineMessage == nil)
+        #expect(ContentView(selectedPeriod: .pm).emptyRoutineMessage == nil)
+    }
+
+    @Test func contentViewEmptySelectedRoutineShowsMessage() throws {
+        let sampleAM = ContentView(selectedPeriod: .am, showClashDemo: false).currentSteps
+
+        let emptyPM = ContentView(selectedPeriod: .pm, amSteps: sampleAM, amClashSteps: sampleAM, pmSteps: [])
+        #expect(emptyPM.currentSteps.isEmpty)
+        #expect(emptyPM.emptyRoutineMessage == "No PM routine steps to show yet.")
+
+        let populatedAM = ContentView(selectedPeriod: .am, amSteps: sampleAM, amClashSteps: sampleAM, pmSteps: [])
+        #expect(populatedAM.emptyRoutineMessage == nil)
+
+        let emptyClashAM = ContentView(selectedPeriod: .am, showClashDemo: true, amSteps: sampleAM, amClashSteps: [], pmSteps: [])
+        #expect(emptyClashAM.emptyRoutineMessage == "No AM routine steps to show yet.")
+    }
+
     @Test func contentViewClashDetailNavigationState() throws {
         let contentView = ContentView(showIngredientClashDetail: true)
         #expect(contentView.showIngredientClashDetail == true)
