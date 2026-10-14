@@ -25,17 +25,40 @@ public enum StartupScreen: String, CaseIterable, Identifiable {
 
 public struct StartupFlowView: View {
     @State public var currentScreen: StartupScreen
-    @State public var selectedConcerns: Set<String> = ["Sensitivity & redness", "Barrier repair"]
-    public var onFinish: () -> Void
+    @State var draft = SkinProfileDraft()
+    /// Shown under ingredient fields after Continue fails. Cleared on the next attempt.
+    @State var ingredientErrors: [SkinProfileDraft.IngredientInputError] = []
+    var onFinish: (SkinProfile) -> Void
     
-    public init(
+    init(
         initialScreen: StartupScreen = .welcome,
-        onFinish: @escaping () -> Void = {}
+        onFinish: @escaping (SkinProfile) -> Void = { _ in }
     ) {
         self._currentScreen = State(initialValue: initialScreen)
         self.onFinish = onFinish
     }
     
+    /// Welcome, sign-in, and the demo bypass enter the app without a skin profile.
+    private func finishWithoutProfile() {
+        onFinish(SkinProfile())
+    }
+
+    private func continueProfileSetup() {
+        let catalog = (try? IngredientAliasCatalog.loadBundled())
+            ?? IngredientAliasCatalog(version: 1, ingredients: [], ambiguousTerms: [])
+        switch draft.submit(using: IngredientNormalizer(catalog: catalog)) {
+        case .completed(let profile):
+            ingredientErrors = []
+            onFinish(profile)
+        case .invalid(let errors):
+            ingredientErrors = errors
+        }
+    }
+
+    private func skipProfileSetup() {
+        onFinish(draft.skip())
+    }
+
     public var body: some View {
         ZStack(alignment: .top) {
             // Background Sky Wallpaper (Shared across all startup screens)
@@ -64,25 +87,28 @@ public struct StartupFlowView: View {
                                     currentScreen = .signInNormal
                                 }
                             },
-                            onSkip: onFinish
+                            onSkip: finishWithoutProfile
                         )
                         
                     case .concerns:
                         OnboardingConcernsView(
-                            selectedConcerns: $selectedConcerns,
+                            skinType: $draft.skinType,
+                            concerns: $draft.concerns,
+                            avoidedIngredientInputs: $draft.avoidedIngredientInputs,
+                            ingredientErrors: ingredientErrors,
                             onBack: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
                                 }
                             },
-                            onContinue: onFinish,
-                            onSkip: onFinish
+                            onContinue: continueProfileSetup,
+                            onSkip: skipProfileSetup
                         )
                         
                     case .signInNormal:
                         AuthSignInView(
                             initialMode: .normal,
-                            onSuccess: onFinish,
+                            onSuccess: finishWithoutProfile,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -93,7 +119,7 @@ public struct StartupFlowView: View {
                     case .signInInvalid:
                         AuthSignInView(
                             initialMode: .invalid,
-                            onSuccess: onFinish,
+                            onSuccess: finishWithoutProfile,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -104,7 +130,7 @@ public struct StartupFlowView: View {
                     case .signInFailed:
                         AuthSignInView(
                             initialMode: .failed,
-                            onSuccess: onFinish,
+                            onSuccess: finishWithoutProfile,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -116,7 +142,10 @@ public struct StartupFlowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .ignoresSafeArea(.all, edges: .all)
+        .ignoresSafeArea(.container, edges: .all)
+        .onChange(of: draft.avoidedIngredientInputs) {
+            ingredientErrors = []
+        }
     }
     
     // Shared Background Wallpaper
@@ -178,7 +207,7 @@ public struct StartupFlowView: View {
                 }
                 
                 // Instant bypass button to enter app
-                Button(action: onFinish) {
+                Button(action: finishWithoutProfile) {
                     HStack(spacing: 4) {
                         Text("Enter App")
                         Image(systemName: "arrow.right")
@@ -761,159 +790,170 @@ public struct OnboardingWelcomeView: View {
     }
 }
 
-// MARK: - 3. Onboarding Concerns Selection Screen
+// MARK: - 3. Onboarding Skin Profile Screen
 
 public struct OnboardingConcernsView: View {
-    @Binding public var selectedConcerns: Set<String>
+    @Binding var skinType: SkinProfile.SkinType?
+    @Binding var concerns: Set<SkinProfile.Concern>
+    @Binding var avoidedIngredientInputs: [String]
+    var ingredientErrors: [SkinProfileDraft.IngredientInputError] = []
     public var onBack: () -> Void
     public var onContinue: () -> Void
     public var onSkip: () -> Void
-    
-    public let availableConcerns: [String] = [
-        "Acne prone",
-        "Sensitivity & redness",
-        "Barrier repair",
-        "Anti-aging / fine lines",
-        "Dryness & hydration",
-        "Hyperpigmentation & dark spots",
-        "Oil control & pores",
-        "Uneven texture"
-    ]
-    
-    public init(
-        selectedConcerns: Binding<Set<String>>,
-        onBack: @escaping () -> Void = {},
-        onContinue: @escaping () -> Void = {},
-        onSkip: @escaping () -> Void = {}
-    ) {
-        self._selectedConcerns = selectedConcerns
-        self.onBack = onBack
-        self.onContinue = onContinue
-        self.onSkip = onSkip
-    }
-    
+
     public var body: some View {
         VStack(spacing: 0) {
-            // Header Bar with Back Button
             HStack {
                 Button(action: onBack) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1A1628"))
-                }
-                .buttonStyle(.plain)
-                
-                Spacer()
-                
-                Button(action: onSkip) {
-                    Text("Skip")
+                    Label("Back", systemImage: "chevron.left")
                         .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color(hex: "#625478"))
+                        .foregroundStyle(Color(hex: "#1A1628"))
                 }
                 .buttonStyle(.plain)
+                Spacer()
+                Button("Skip", action: onSkip)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color(hex: "#625478"))
+                    .buttonStyle(.plain)
             }
             .padding(.horizontal, 24)
             .padding(.top, 8)
             .padding(.bottom, 16)
-            
+
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Step Indicator
-                    Text("Step 1 of 2 · Skin Profile")
+                    Text("Step 1 of 1 · Skin Profile")
                         .font(.system(size: 12, weight: .bold))
                         .foregroundStyle(Color(hex: "#6F4E37"))
                         .textCase(.uppercase)
-                    
-                    // Title & Description
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("What are your skin priorities?")
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(Color(hex: "#1A1628"))
-                        
-                        Text("Select your primary goals. Aesthelity will use these to flag ingredient clashes and suggest safe layering.")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(Color(hex: "#625478"))
-                            .lineSpacing(3)
+                    Text("Tell us about your skin")
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundStyle(Color(hex: "#1A1628"))
+                    Text("Optional. Pick a skin type, any priorities, and ingredients you avoid. Avoided ingredients are preferences, not allergies.")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color(hex: "#625478"))
+
+                    section("Skin type") {
+                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                            ForEach(SkinProfile.SkinType.allCases, id: \.self) { type in
+                                choice(type.title, selected: skinType == type) {
+                                    skinType = skinType == type ? nil : type
+                                }
+                            }
+                        }
                     }
-                    
-                    // Concerns Selection Wrap
-                    concernChipsLayout
-                        .padding(.top, 8)
-                    
-                    Spacer(minLength: 40)
+                    section("Skin priorities") {
+                        ForEach(SkinProfile.Concern.allCases, id: \.self) { concern in
+                            choice(concern.title, selected: concerns.contains(concern), checkmark: true) {
+                                if concerns.contains(concern) { concerns.remove(concern) } else { concerns.insert(concern) }
+                            }
+                        }
+                    }
+                    section("Ingredients to avoid") {
+                        Text("One ingredient per entry. Leave this empty if you have none.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color(hex: "#625478"))
+                        ForEach(avoidedIngredientInputs.indices, id: \.self) { index in
+                            ingredientRow(at: index)
+                        }
+                        Button { avoidedIngredientInputs.append("") } label: {
+                            Label("Add ingredient", systemImage: "plus.circle.fill")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color(hex: "#50578F"))
+                                .frame(maxWidth: .infinity, minHeight: 46, alignment: .leading)
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
                 .padding(.horizontal, 24)
             }
-            
-            // Bottom Action Area
+            .scrollDismissesKeyboard(.interactively)
+
             VStack(spacing: 12) {
                 Button(action: onContinue) {
-                    HStack(spacing: 8) {
-                        Text("Continue")
-                        Image(systemName: "arrow.right")
-                    }
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(Color(hex: "#7C83BC"))
-                    .clipShape(Capsule())
-                    .shadow(color: Color(hex: "#7C83BC").opacity(0.35), radius: 6, x: 0, y: 3)
+                    Label("Continue", systemImage: "arrow.right")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 52)
+                        .background(Color(hex: "#7C83BC"))
+                        .clipShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                
-                Text("\(selectedConcerns.count) priorities selected")
+                Text(ingredientErrors.isEmpty
+                     ? "\(concerns.count) priorities selected"
+                     : "Fix the highlighted ingredients")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: "#625478"))
+                    .foregroundStyle(ingredientErrors.isEmpty ? Color(hex: "#625478") : Color(hex: "#8A1538"))
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 36)
         }
     }
-    
-    // Concern Chips Grid Layout
-    private var concernChipsLayout: some View {
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            ForEach(availableConcerns, id: \.self) { concern in
-                let isSelected = selectedConcerns.contains(concern)
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        if isSelected {
-                            selectedConcerns.remove(concern)
-                        } else {
-                            selectedConcerns.insert(concern)
-                        }
-                    }
-                }) {
-                    HStack(spacing: 12) {
-                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(isSelected ? Color(hex: "#7C83BC") : Color(hex: "#A096AF"))
-                        
-                        Text(concern)
-                            .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
-                            .foregroundStyle(Color(hex: "#1A1628"))
-                        
-                        Spacer()
-                    }
-                    .padding(.horizontal, 16)
-                    .frame(height: 50)
-                    .background(isSelected ? Color.white : Color.white.opacity(0.8))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(
-                                isSelected ? Color(hex: "#7C83BC") : Color(hex: "#D8CFF0"),
-                                lineWidth: isSelected ? 1.5 : 1
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(isSelected ? 0.08 : 0.03), radius: 4, x: 0, y: 2)
+            Text(title).font(.system(size: 15, weight: .semibold)).foregroundStyle(Color(hex: "#1A1628"))
+            content()
+        }
+    }
+
+    private func choice(_ title: String, selected: Bool, checkmark: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                if checkmark {
+                    Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(selected ? Color(hex: "#7C83BC") : Color(hex: "#A096AF"))
+                }
+                Text(title)
+                    .font(.system(size: 15, weight: selected ? .semibold : .regular))
+                    .foregroundStyle(Color(hex: "#1A1628"))
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .background(selected ? Color.white : Color.white.opacity(0.8))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(selected ? Color(hex: "#7C83BC") : Color(hex: "#D8CFF0"), lineWidth: selected ? 1.5 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func ingredientRow(at index: Int) -> some View {
+        let error = ingredientErrors.first { $0.entryIndex == index }
+        return VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                TextField("Ingredient name", text: ingredientBinding(at: index))
+                    .textInputAutocapitalization(.words)
+                    .autocorrectionDisabled()
+                Button { avoidedIngredientInputs.remove(at: index) } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(Color(hex: "#A096AF"))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Remove ingredient \(index + 1)")
+            }
+            .padding(.horizontal, 14)
+            .frame(height: 50)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(error == nil ? Color(hex: "#D8CFF0") : Color(hex: "#8A1538"), lineWidth: error == nil ? 1 : 2)
+            )
+            if let error {
+                Text(error.message).font(.system(size: 12, weight: .medium)).foregroundStyle(Color(hex: "#8A1538"))
             }
         }
+    }
+
+    private func ingredientBinding(at index: Int) -> Binding<String> {
+        Binding(
+            get: { index < avoidedIngredientInputs.count ? avoidedIngredientInputs[index] : "" },
+            set: { if index < avoidedIngredientInputs.count { avoidedIngredientInputs[index] = $0 } }
+        )
     }
 }
