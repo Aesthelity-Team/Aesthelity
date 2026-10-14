@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "id": "normal_am",
+      "scenario_type": "normal",
+      "product_ids": [
+        "cleanser_gel",
+        "serum_hydrating",
+        "moisturizer_gel",
+        "sunscreen_mineral"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "am",
+      "expected_findings": []
+    },
+    {
+      "id": "caution_pm",
+      "scenario_type": "caution",
+      "product_ids": [
+        "serum_retinol",
+        "treatment_exfoliant"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "pm",
+      "expected_findings": [
+        {
+          "kind": "caution",
+          "product_ids": [
+            "serum_retinol",
+            "treatment_exfoliant"
+          ],
+          "ingredient": null,
+          "message": "Demo rule: retinol and exfoliating treatment selected together. Review this combination.",
+          "category": "Active ingredient overlap",
+          "explanation": "Using retinol and an exfoliating treatment in the same routine can leave skin red, dry, or irritated. Try using them on different nights.",
+          "reason": "Retinol Night Serum (Fictional) and Exfoliating Treatment (Fictional) are both in this routine."
+        }
+      ]
+    },
+    {
+      "id": "allergen_mist",
+      "scenario_type": "allergen",
+      "product_ids": [
+        "mist_fragranced"
+      ],
+      "profile_id": "profile_limonene_allergy",
+      "routine_time": "am",
+      "expected_findings": [
+        {
+          "kind": "allergen",
+          "product_ids": [
+            "mist_fragranced"
+          ],
+          "ingredient": "Limonene",
+          "message": "Listed ingredient matches the demo profile’s recorded allergen: Limonene.",
+          "category": "Allergen",
+          "explanation": "Fragranced Mist (Fictional) contains Limonene, which you've listed as an allergen. You may want to skip this product.",
+          "reason": "Limonene is on your recorded allergen list."
+        }
+      ]
+    },
+    {
+      "id": "unknown_sunscreen",
+      "scenario_type": "unknown",
+      "product_ids": [
+        "sunscreen_unknown"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "am",
+      "expected_findings": [
+        {
+          "kind": "unknown",
+          "product_ids": [
+            "sunscreen_unknown"
+          ],
+          "ingredient": null,
+          "message": "Ingredient list is unavailable; demo assessment is incomplete.",
+          "category": "Incomplete product data",
+          "explanation": "We don't have the full ingredient list for Unverified Sunscreen Demo (Fictional), so we can't fully check it against your routine. Treat this as incomplete, not as a safe result.",
+          "reason": "The ingredient list is unavailable."
+        }
+      ]
+    },
+    {
+      "id": "unknown_mask",
+      "scenario_type": "unknown",
+      "product_ids": [
+        "mask_partial"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "pm",
+      "expected_findings": [
+        {
+          "kind": "unknown",
+          "product_ids": [
+            "mask_partial"
+          ],
+          "ingredient": null,
+          "message": "Ingredient list is partial; demo assessment is incomplete.",
+          "category": "Incomplete product data",
+          "explanation": "We don't have the full ingredient list for Incomplete Mask Demo (Fictional), so we can't fully check it against your routine. Treat this as incomplete, not as a safe result.",
+          "reason": "The ingredient list is partial."
+        }
+      ]
+    }
+  ]
+}

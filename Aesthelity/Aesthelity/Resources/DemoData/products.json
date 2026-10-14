@@ -1,0 +1,406 @@
+{
+  "schema_version": 1,
+  "products": [
+    {
+      "id": "cleanser_gel",
+      "name": "Gentle Gel Cleanser (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "cleanser",
+      "subtype": "gel",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Cocamidopropyl Betaine",
+        "Sodium Chloride"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#cleanser_gel",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "cleanser_oil",
+      "name": "Demo Cleansing Oil (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "cleanser",
+      "subtype": "oil",
+      "ingredients": [
+        "Caprylic/Capric Triglyceride",
+        "Squalane",
+        "Polysorbate 80"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#cleanser_oil",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "serum_hydrating",
+      "name": "Hydrating Serum (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "serum",
+      "subtype": "hydrating",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Sodium Hyaluronate",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#serum_hydrating",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "serum_niacinamide",
+      "name": "Niacinamide Serum (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "serum",
+      "subtype": "niacinamide",
+      "ingredients": [
+        "Water",
+        "Niacinamide",
+        "Glycerin",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#serum_niacinamide",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "serum_retinol",
+      "name": "Retinol Night Serum (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "serum",
+      "subtype": "retinol",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Squalane",
+        "Retinol",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#serum_retinol",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "serum_vitamin_c",
+      "name": "Vitamin C Serum (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "serum",
+      "subtype": "vitamin_c",
+      "ingredients": [
+        "Water",
+        "Ascorbic Acid",
+        "Glycerin",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#serum_vitamin_c",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "treatment_exfoliant",
+      "name": "Exfoliating Treatment (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "treatment",
+      "subtype": "exfoliant",
+      "ingredients": [
+        "Water",
+        "Glycolic Acid",
+        "Glycerin",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#treatment_exfoliant",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "treatment_spot",
+      "name": "Spot Treatment (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "treatment",
+      "subtype": "spot",
+      "ingredients": [
+        "Water",
+        "Salicylic Acid",
+        "Glycerin",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#treatment_spot",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "moisturizer_gel",
+      "name": "Gel Moisturizer (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "moisturizer",
+      "subtype": "gel",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Squalane",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#moisturizer_gel",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "moisturizer_cream",
+      "name": "Rich Cream Moisturizer (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "moisturizer",
+      "subtype": "cream",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Caprylic/Capric Triglyceride",
+        "Cetyl Alcohol",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#moisturizer_cream",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "sunscreen_mineral",
+      "name": "Mineral Sunscreen Demo (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "sunscreen",
+      "subtype": "mineral",
+      "ingredients": [
+        "Zinc Oxide",
+        "Water",
+        "Glycerin",
+        "Caprylic/Capric Triglyceride"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#sunscreen_mineral",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "sunscreen_unknown",
+      "name": "Unverified Sunscreen Demo (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "sunscreen",
+      "subtype": "unspecified",
+      "ingredients": [],
+      "ingredient_list_status": "unavailable",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#sunscreen_unknown",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "toner_hydrating",
+      "name": "Hydrating Toner (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "toner",
+      "subtype": "hydrating",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Panthenol",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#toner_hydrating",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "toner_exfoliating",
+      "name": "Exfoliating Toner (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "toner",
+      "subtype": "exfoliating",
+      "ingredients": [
+        "Water",
+        "Glycolic Acid",
+        "Glycerin",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#toner_exfoliating",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "mist_plain",
+      "name": "Simple Hydrating Mist (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "mist",
+      "subtype": "hydrating",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#mist_plain",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "mist_fragranced",
+      "name": "Fragranced Mist (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "mist",
+      "subtype": "fragranced",
+      "ingredients": [
+        "Water",
+        "Glycerin",
+        "Limonene",
+        "Phenoxyethanol"
+      ],
+      "ingredient_list_status": "complete",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#mist_fragranced",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    },
+    {
+      "id": "mask_partial",
+      "name": "Incomplete Mask Demo (Fictional)",
+      "brand": "Aesthelity Demo",
+      "category": "mask",
+      "subtype": "wash_off",
+      "ingredients": [
+        "Water",
+        "Glycerin"
+      ],
+      "ingredient_list_status": "partial",
+      "is_fictional": true,
+      "source_url": "https://github.com/Aesthelity-Team/Aesthelity/issues/1",
+      "source_ref": "docs/PROVENANCE.md#mask_partial",
+      "verified_on": "2026-10-10",
+      "provenance": {
+        "kind": "team_authored_fixture",
+        "verification_method": "Checked against the authored fixture specification; no external formulation verification",
+        "note": "Synthetic list for software testing; not a complete commercial formula."
+      },
+      "spf": null
+    }
+  ]
+}
