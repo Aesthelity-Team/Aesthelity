@@ -15,7 +15,7 @@ final class Sprint1DemoUITests: XCTestCase {
         let app = XCUIApplication()
         app.launchArguments = ["--pf01-ui-testing", "--pf01-reset-profile"]
         app.launch()
-        XCTAssertTrue(app.buttons["Get Started"].waitForExistence(timeout: 10), "A fresh launch should show the welcome screen.")
+        XCTAssertTrue(app.buttons["profile-get-started"].waitForExistence(timeout: 10), "A fresh launch should show the welcome screen.")
         return app
     }
 

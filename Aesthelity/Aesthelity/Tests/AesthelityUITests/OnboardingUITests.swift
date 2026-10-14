@@ -16,7 +16,7 @@ final class OnboardingUITests: XCTestCase {
 
     private func launchFreshApp() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["-resetStartupForUITests"]
+        app.launchArguments = ["--pf01-ui-testing", "--pf01-reset-profile", "-resetStartupForUITests"]
         app.launch()
         return app
     }
@@ -26,7 +26,7 @@ final class OnboardingUITests: XCTestCase {
         let app = launchFreshApp()
 
         XCTAssertTrue(
-            app.buttons["Get Started"].waitForExistence(timeout: 10),
+            app.buttons["profile-get-started"].waitForExistence(timeout: 10),
             "The welcome screen should display the Get Started button."
         )
     }
@@ -35,7 +35,7 @@ final class OnboardingUITests: XCTestCase {
     func testGetStartedOpensSkinConcernsSetup() throws {
         let app = launchFreshApp()
 
-        let getStartedButton = app.buttons["Get Started"]
+        let getStartedButton = app.buttons["profile-get-started"]
         XCTAssertTrue(getStartedButton.waitForExistence(timeout: 10))
 
         getStartedButton.tap()
@@ -46,14 +46,14 @@ final class OnboardingUITests: XCTestCase {
             "Get Started should open the skin concerns setup screen."
         )
 
-        XCTAssertTrue(app.buttons["Continue"].exists)
+        XCTAssertTrue(app.buttons["profile-continue"].exists)
     }
 
     @MainActor
     func testRepeatedGetStartedTapsDoNotCreateDuplicateScreens() throws {
         let app = launchFreshApp()
 
-        let getStartedButton = app.buttons["Get Started"]
+        let getStartedButton = app.buttons["profile-get-started"]
         XCTAssertTrue(getStartedButton.waitForExistence(timeout: 10))
 
         // Two taps in one gesture, so the second always lands while the welcome screen is leaving.
@@ -82,11 +82,11 @@ final class OnboardingUITests: XCTestCase {
     func testCompletedSetupUsesReturningUserRoute() throws {
         let app = launchFreshApp()
 
-        let getStartedButton = app.buttons["Get Started"]
+        let getStartedButton = app.buttons["profile-get-started"]
         XCTAssertTrue(getStartedButton.waitForExistence(timeout: 10))
         getStartedButton.tap()
 
-        let continueButton = app.buttons["Continue"]
+        let continueButton = app.buttons["profile-continue"]
         XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
         continueButton.tap()
 
@@ -96,7 +96,7 @@ final class OnboardingUITests: XCTestCase {
         )
 
         app.terminate()
-        app.launchArguments = []
+        app.launchArguments = ["--pf01-ui-testing"]
         app.launch()
 
         XCTAssertTrue(
@@ -104,7 +104,7 @@ final class OnboardingUITests: XCTestCase {
             "A returning user should land on Home."
         )
         XCTAssertFalse(
-            app.buttons["Get Started"].exists,
+            app.buttons["profile-get-started"].exists,
             "A returning user should not see the welcome screen."
         )
     }
