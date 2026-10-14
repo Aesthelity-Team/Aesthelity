@@ -1,6 +1,21 @@
 name: DATA-01 dataset checks
 
-on: [push, pull_request]
+on:
+  pull_request:
+    paths:
+      - 'Aesthelity/Aesthelity/Resources/DemoData/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'docs/PROVENANCE.md'
+      - '.github/workflows/data01.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Aesthelity/Aesthelity/Resources/DemoData/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'docs/PROVENANCE.md'
+      - '.github/workflows/data01.yml'
 
 jobs:
   validate:

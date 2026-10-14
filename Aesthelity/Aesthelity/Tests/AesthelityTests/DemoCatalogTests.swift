@@ -25,7 +25,18 @@ struct DemoCatalogTests {
 
     @Test func coversEveryScenarioType() {
         let types = Set(catalog.scenarios.map(\.scenarioType))
-        #expect(types == ["normal", "caution", "allergen", "unknown"])
+        #expect(types == Set(DemoScenarioType.allCases))
+    }
+
+    @Test func coversEveryProductCategory() {
+        let categories = Set(catalog.products.map(\.category))
+        #expect(categories == Set(DemoProductCategory.allCases))
+    }
+
+    @Test func unavailableIngredientListsAreEmpty() {
+        for product in catalog.products {
+            #expect((product.ingredientListStatus == .unavailable) == product.ingredients.isEmpty, "\(product.id)")
+        }
     }
 
     @Test func scenarioReferencesResolve() {
@@ -51,12 +62,12 @@ struct DemoCatalogTests {
     }
 
     @Test func normalScenarioHasNoFindings() throws {
-        let normal = try #require(catalog.scenarios.first { $0.scenarioType == "normal" })
+        let normal = try #require(catalog.scenarios.first { $0.scenarioType == .normal })
         #expect(normal.expectedFindings.isEmpty)
     }
 
     @Test func allergenFindingNamesTheIngredient() throws {
-        let allergen = try #require(catalog.scenarios.flatMap(\.expectedFindings).first { $0.kind == "allergen" })
+        let allergen = try #require(catalog.scenarios.flatMap(\.expectedFindings).first { $0.kind == .allergen })
         #expect(allergen.ingredient == "Limonene")
     }
 }

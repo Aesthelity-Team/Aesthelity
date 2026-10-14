@@ -1,13 +1,35 @@
 import Foundation
 
+// Raw values must match the strings in Resources/DemoData/*.json; an unrecognized value fails decoding.
+
+enum DemoProductCategory: String, Decodable, CaseIterable {
+    case cleanser, serum, treatment, moisturizer, sunscreen, toner, mist, mask
+}
+
+enum IngredientListStatus: String, Decodable, CaseIterable {
+    case complete, partial, unavailable
+}
+
+enum DemoFindingKind: String, Decodable, CaseIterable {
+    case caution, allergen, unknown
+}
+
+enum DemoScenarioType: String, Decodable, CaseIterable {
+    case normal, caution, allergen, unknown
+}
+
+enum DemoRoutineTime: String, Decodable, CaseIterable {
+    case am, pm
+}
+
 struct DemoProduct: Decodable, Identifiable {
     let id: String
     let name: String
     let brand: String
-    let category: String
+    let category: DemoProductCategory
     let subtype: String
     let ingredients: [String]
-    let ingredientListStatus: String
+    let ingredientListStatus: IngredientListStatus
     let isFictional: Bool
     let sourceUrl: String
     let sourceRef: String
@@ -27,8 +49,7 @@ struct DemoProfile: Decodable, Identifiable {
 }
 
 struct DemoFinding: Decodable {
-    /// One of "caution", "allergen", or "unknown".
-    let kind: String
+    let kind: DemoFindingKind
     let productIds: [String]
     let ingredient: String?
     let message: String
@@ -39,11 +60,10 @@ struct DemoFinding: Decodable {
 
 struct DemoScenario: Decodable, Identifiable {
     let id: String
-    /// One of "normal", "caution", "allergen", or "unknown".
-    let scenarioType: String
+    let scenarioType: DemoScenarioType
     let productIds: [String]
     let profileId: String
-    let routineTime: String
+    let routineTime: DemoRoutineTime
     let expectedFindings: [DemoFinding]
 }
 
