@@ -206,21 +206,50 @@ public struct RoutineStepCard: View {
 
 /// Explanatory analysis card matching Sprint 1 AN-01 requirements.
 public struct AnalysisFindingCard: View {
+    public struct Detail: Hashable {
+        let label: String
+        let value: String
+
+        public init(_ label: String, _ value: String) {
+            self.label = label
+            self.value = value
+        }
+    }
+
     let headline: String
     let explanation: String
     let tag: String
+    let tagIcon: String
+    let tagStyle: AppBadge.Style
+    let details: [Detail]
+    let reason: String?
+    let note: String?
     
-    public init(headline: String, explanation: String, tag: String = "Compatibility Notice") {
+    public init(
+        headline: String,
+        explanation: String,
+        tag: String = "Compatibility Notice",
+        tagIcon: String = "sparkles",
+        tagStyle: AppBadge.Style = .accent,
+        details: [Detail] = [],
+        reason: String? = nil,
+        note: String? = nil
+    ) {
         self.headline = headline
         self.explanation = explanation
         self.tag = tag
+        self.tagIcon = tagIcon
+        self.tagStyle = tagStyle
+        self.details = details
+        self.reason = reason
+        self.note = note
     }
     
     public var body: some View {
         AppCard {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                 HStack {
-                    AppBadge(tag, icon: "sparkles", style: .accent)
+                    AppBadge(tag, icon: tagIcon, style: tagStyle)
                     Spacer()
                 }
                 
@@ -228,10 +257,46 @@ public struct AnalysisFindingCard: View {
                     .font(AppTheme.Typography.headline)
                     .foregroundStyle(AppTheme.Colors.primaryText)
                 
+                ForEach(details, id: \.self) { detail in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(detail.label)
+                            .font(AppTheme.Typography.captionBold)
+                            .foregroundStyle(AppTheme.Colors.secondaryText)
+                        Text(detail.value)
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundStyle(AppTheme.Colors.primaryText)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+
                 Text(explanation)
                     .font(AppTheme.Typography.body)
                     .foregroundStyle(AppTheme.Colors.secondaryText)
                     .lineSpacing(3)
+
+                if let reason {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Why this finding was generated")
+                            .font(AppTheme.Typography.captionBold)
+                            .foregroundStyle(AppTheme.Colors.secondaryText)
+                        Text(reason)
+                            .font(AppTheme.Typography.subheadline)
+                            .foregroundStyle(AppTheme.Colors.primaryText)
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+
+                if let note {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.top, 2)
+                        Text(note)
+                            .font(AppTheme.Typography.caption)
+                    }
+                    .foregroundStyle(AppTheme.Colors.primaryText)
+                    .accessibilityElement(children: .combine)
+                }
             }
         }
     }
