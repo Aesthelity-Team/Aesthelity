@@ -209,14 +209,98 @@ public struct AnalysisFindingCard: View {
     let headline: String
     let explanation: String
     let tag: String
+    let finding: AnalysisFinding?
     
     public init(headline: String, explanation: String, tag: String = "Compatibility Notice") {
         self.headline = headline
         self.explanation = explanation
         self.tag = tag
+        self.finding = nil
+    }
+    
+    public init(finding: AnalysisFinding) {
+        self.headline = finding.headline
+        self.explanation = finding.explanation
+        self.tag = finding.category
+        self.finding = finding
     }
     
     public var body: some View {
+        if let finding {
+            findingBody(finding)
+        } else {
+            summaryBody
+        }
+    }
+    
+    private func findingBody(_ finding: AnalysisFinding) -> some View {
+        AppCard {
+            VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
+                HStack(spacing: AppTheme.Spacing.sm) {
+                    FindingSeverityBadge(severity: finding.severity)
+                    AppBadge(finding.category, style: .subtle)
+                    Spacer(minLength: 0)
+                }
+                
+                Text(finding.headline)
+                    .font(AppTheme.Typography.headline)
+                    .foregroundStyle(AppTheme.Colors.primaryText)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    findingDetailRow(label: "Product", value: finding.productName)
+                    findingDetailRow(label: "Ingredient", value: finding.ingredientName)
+                }
+                
+                Text(finding.explanation)
+                    .font(AppTheme.Typography.body)
+                    .foregroundStyle(AppTheme.Colors.secondaryText)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Why you're seeing this")
+                        .font(AppTheme.Typography.captionBold)
+                        .foregroundStyle(AppTheme.Colors.primaryText)
+                    Text(finding.reason)
+                        .font(AppTheme.Typography.caption13)
+                        .foregroundStyle(AppTheme.Colors.secondaryText)
+                        .lineSpacing(2)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                
+                if let limitation = finding.limitation {
+                    HStack(alignment: .top, spacing: 6) {
+                        Image(systemName: "info.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .padding(.top, 1)
+                        Text(limitation)
+                            .font(AppTheme.Typography.caption13)
+                            .lineSpacing(2)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundStyle(finding.severity.tint)
+                    .padding(AppTheme.Spacing.sm)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(finding.severity.tint.opacity(0.12))
+                    .clipShape(RoundedRectangle(cornerRadius: AppTheme.Radius.small, style: .continuous))
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+    }
+    
+    private func findingDetailRow(label: String, value: String) -> some View {
+        HStack(spacing: 4) {
+            Text("\(label):")
+                .font(AppTheme.Typography.captionBold)
+                .foregroundStyle(AppTheme.Colors.secondaryText)
+            Text(value)
+                .font(AppTheme.Typography.captionMedium)
+                .foregroundStyle(AppTheme.Colors.primaryText)
+        }
+    }
+    
+    private var summaryBody: some View {
         AppCard {
             VStack(alignment: .leading, spacing: AppTheme.Spacing.sm) {
                 HStack {
@@ -234,6 +318,42 @@ public struct AnalysisFindingCard: View {
                     .lineSpacing(3)
             }
         }
+    }
+}
+
+// MARK: - FindingSeverityBadge
+
+extension FindingSeverity {
+    public var tint: Color {
+        switch self {
+        case .normal: return AppTheme.Colors.accent
+        case .caution: return AppTheme.Semantic.inkBrand
+        case .unknown: return AppTheme.Semantic.inkSecondary
+        }
+    }
+}
+
+/// Severity pill for analysis findings (normal, caution, unknown).
+public struct FindingSeverityBadge: View {
+    let severity: FindingSeverity
+    
+    public init(severity: FindingSeverity) {
+        self.severity = severity
+    }
+    
+    public var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: severity.iconName)
+                .font(.system(size: 11, weight: .semibold))
+            Text(severity.label)
+                .font(AppTheme.Typography.captionBold)
+        }
+        .foregroundStyle(severity.tint)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(severity.tint.opacity(0.15))
+        .clipShape(Capsule())
+        .accessibilityLabel("Severity: \(severity.label)")
     }
 }
 

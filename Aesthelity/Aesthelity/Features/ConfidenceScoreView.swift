@@ -16,17 +16,20 @@ public struct ConfidenceScoreView: View {
     public var score: Int = 82
     public var amStepsCount: Int = 4
     public var pmStepsCount: Int = 5
+    public var findings: [AnalysisFinding] = MockAnalysisFindings.all
     public var onDismiss: (() -> Void)? = nil
     
     public init(
         score: Int = 82,
         amStepsCount: Int = 4,
         pmStepsCount: Int = 5,
+        findings: [AnalysisFinding] = MockAnalysisFindings.all,
         onDismiss: (() -> Void)? = nil
     ) {
         self.score = score
         self.amStepsCount = amStepsCount
         self.pmStepsCount = pmStepsCount
+        self.findings = findings
         self.onDismiss = onDismiss
     }
     
@@ -174,23 +177,9 @@ public struct ConfidenceScoreView: View {
                 .font(AppTheme.Typography.headline)
                 .foregroundStyle(AppTheme.Semantic.inkPrimary)
             
-            AnalysisFindingCard(
-                headline: "Vitamin C + SPF 46 Synergy",
-                explanation: "L-Ascorbic Acid neutralizes harmful free radicals and environmental stressors, dramatically boosting sunscreen photoprotection against UVA/UVB damage.",
-                tag: "High Synergy"
-            )
-            
-            AnalysisFindingCard(
-                headline: "Safe Separation of Night Actives",
-                explanation: "Exfoliating acids and retinoids are kept exclusively in the PM routine, avoiding daytime photo-sensitization and direct pH clashing with Vitamin C.",
-                tag: "Clean Layering"
-            )
-            
-            AnalysisFindingCard(
-                headline: "Moisture Barrier Buffering",
-                explanation: "Applying Daily Moisturizer prior to SPF forms a balanced lipid film, locking in active hydration and minimizing any transepidermal water loss.",
-                tag: "Barrier Care"
-            )
+            ForEach(findings) { finding in
+                AnalysisFindingCard(finding: finding)
+            }
         }
     }
     
@@ -276,6 +265,15 @@ public struct ConfidenceScoreView: View {
         score: 82,
         amStepsCount: 4,
         pmStepsCount: 5
+    )
+}
+
+#Preview("Confidence Score Screen - Clash Demo") {
+    ConfidenceScoreView(
+        score: 64,
+        amStepsCount: 5,
+        pmStepsCount: 5,
+        findings: MockAnalysisFindings.forClashDemo(true)
     )
 }
 

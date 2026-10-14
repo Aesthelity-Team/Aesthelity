@@ -980,6 +980,7 @@ struct ContentView: View {
             score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
             amStepsCount: currentSteps.count,
             pmStepsCount: pmSteps.count,
+            findings: MockAnalysisFindings.forClashDemo(showClashDemo && selectedPeriod == .am),
             onDismiss: {
                 showAnalysisSheet = false
             }
