@@ -41,7 +41,7 @@ final class OnboardingUITests: XCTestCase {
         getStartedButton.tap()
 
         XCTAssertTrue(
-            app.staticTexts["Tell us about your skin"]
+            app.staticTexts["Your skin profile"]
                 .waitForExistence(timeout: 5),
             "Get Started should open the skin concerns setup screen."
         )
@@ -59,14 +59,14 @@ final class OnboardingUITests: XCTestCase {
         // Two taps in one gesture, so the second always lands while the welcome screen is leaving.
         getStartedButton.doubleTap()
 
-        let concernsTitle = app.staticTexts["Tell us about your skin"]
+        let concernsTitle = app.staticTexts["Your skin profile"]
 
         XCTAssertTrue(
             concernsTitle.waitForExistence(timeout: 5),
             "The skin concerns setup screen should be displayed once."
         )
         XCTAssertEqual(
-            app.staticTexts.matching(NSPredicate(format: "label == %@", "Tell us about your skin")).count,
+            app.staticTexts.matching(NSPredicate(format: "label == %@", "Your skin profile")).count,
             1,
             "Only one setup screen should be presented."
         )

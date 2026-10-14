@@ -86,7 +86,7 @@ struct ContentView: View {
     @State var showManageRoutinesView: Bool = false
     @State var showEditRoutineView: Bool = false
     @State var showStartupFlowSheet: Bool = false
-    @Binding var skinProfile: SkinProfile
+    @State private var showSkinProfileSetupSheet = false
     public var onResetStartup: (() -> Void)? = nil
     
     public init(
@@ -99,7 +99,6 @@ struct ContentView: View {
         showIngredientClashDetail: Bool = false,
         showManageRoutinesView: Bool = false,
         showEditRoutineView: Bool = false,
-        skinProfile: Binding<SkinProfile> = .constant(SkinProfile()),
         onResetStartup: (() -> Void)? = nil
     ) {
         self._selectedPeriod = State(initialValue: selectedPeriod)
@@ -111,7 +110,6 @@ struct ContentView: View {
         self._showIngredientClashDetail = State(initialValue: showIngredientClashDetail)
         self._showManageRoutinesView = State(initialValue: showManageRoutinesView)
         self._showEditRoutineView = State(initialValue: showEditRoutineView)
-        self._skinProfile = skinProfile
         self.onResetStartup = onResetStartup
     }
     
@@ -233,10 +231,16 @@ struct ContentView: View {
         .sheet(isPresented: $showStartupFlowSheet) {
             StartupFlowView(
                 initialScreen: .welcome,
-                onFinish: { profile in
-                    skinProfile = profile
+                onFinish: {
                     showStartupFlowSheet = false
                 }
+            )
+        }
+        .sheet(isPresented: $showSkinProfileSetupSheet) {
+            StartupFlowView(
+                initialScreen: .concerns,
+                onCancel: { showSkinProfileSetupSheet = false },
+                onFinish: { showSkinProfileSetupSheet = false }
             )
         }
     }
@@ -998,7 +1002,7 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .buttonStyle(.plain)
-                .accessibilityIdentifier("tab.profile")
+                .accessibilityIdentifier("profile-tab")
             }
             .frame(height: 72)
             
@@ -1093,7 +1097,6 @@ struct ContentView: View {
             score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
             amStepsCount: currentSteps.count,
             pmStepsCount: pmSteps.count,
-            skinProfile: skinProfile,
             onOpenJournal: {
                 showJournalSheet = true
             },
@@ -1113,6 +1116,9 @@ struct ContentView: View {
                 } else {
                     showStartupFlowSheet = true
                 }
+            },
+            onEditSkinProfile: {
+                showSkinProfileSetupSheet = true
             }
         )
     }
@@ -1122,10 +1128,12 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(SkinProfileStore(fileURL: URL.temporaryDirectory.appendingPathComponent("pf01-preview/profile.json")))
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(SkinProfileStore(fileURL: URL.temporaryDirectory.appendingPathComponent("pf01-preview/profile.json")))
     }
 }

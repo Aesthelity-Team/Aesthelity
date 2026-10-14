@@ -1013,25 +1013,28 @@ struct AesthelityTests {
     }
     
     @Test func onboardingConcernsSelection() throws {
-        var skinType: SkinProfile.SkinType? = nil
-        var concerns: Set<SkinProfile.Concern> = []
-        var ingredients: [String] = []
+        var selected = SkinProfileDraft(concerns: [.sensitivityAndRedness])
         var backCalled = false
         var continueCalled = false
         var skipCalled = false
         
+        let binding = SwiftUI.Binding<SkinProfileDraft>(
+            get: { selected },
+            set: { selected = $0 }
+        )
+        
         let concernsView = OnboardingConcernsView(
-            skinType: SwiftUI.Binding(get: { skinType }, set: { skinType = $0 }),
-            concerns: SwiftUI.Binding(get: { concerns }, set: { concerns = $0 }),
-            avoidedIngredientInputs: SwiftUI.Binding(get: { ingredients }, set: { ingredients = $0 }),
+            draft: binding,
+            errors: [],
+            saveError: nil,
+            normalizer: nil,
             onBack: { backCalled = true },
             onContinue: { continueCalled = true },
             onSkip: { skipCalled = true }
         )
         
-        #expect(concernsView.skinType == nil)
-        #expect(concernsView.concerns.isEmpty)
         #expect(SkinProfile.Concern.allCases.count == 8)
+        #expect(concernsView.draft.concerns.contains(.sensitivityAndRedness))
         
         concernsView.onBack()
         #expect(backCalled == true)

@@ -10,36 +10,47 @@ import SwiftUI
 @main
 struct AesthelityApp: App {
     @AppStorage("hasCompletedStartup") private var hasCompletedStartup: Bool = false
-    /// Held for this launch only. Saving it across launches is later persistence work.
-    @State private var skinProfile = SkinProfile()
+    @StateObject private var profileStore: SkinProfileStore
+
     init() {
-        if CommandLine.arguments.contains("-resetStartupForUITests") {
+        let arguments = ProcessInfo.processInfo.arguments
+        let testing = arguments.contains("--pf01-ui-testing")
+        if arguments.contains("-resetStartupForUITests") {
             UserDefaults.standard.removeObject(forKey: "hasCompletedStartup")
         }
+        let defaults = testing ? UserDefaults(suiteName: "PF01.UITests")! : .standard
+        let fileURL = testing
+            ? URL.applicationSupportDirectory.appendingPathComponent("PF01UITests/profile.json")
+            : SkinProfileStore.defaultFileURL
+        if testing && ProcessInfo.processInfo.arguments.contains("--pf01-reset-profile") {
+            defaults.removeObject(forKey: "hasCompletedStartup")
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        _hasCompletedStartup = AppStorage(wrappedValue: false, "hasCompletedStartup", store: defaults)
+        _profileStore = StateObject(wrappedValue: SkinProfileStore(fileURL: fileURL))
     }
     
     var body: some Scene {
         WindowGroup {
-            if hasCompletedStartup {
-                ContentView(
-                    skinProfile: $skinProfile,
-                    onResetStartup: {
+            Group {
+                if hasCompletedStartup {
+                    ContentView(onResetStartup: {
                         withAnimation(.easeInOut(duration: 0.25)) {
                             hasCompletedStartup = false
                         }
-                    }
-                )
-            } else {
-                StartupFlowView(
-                    initialScreen: .welcome,
-                    onFinish: { profile in
-                        skinProfile = profile
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            hasCompletedStartup = true
+                    })
+                } else {
+                    StartupFlowView(
+                        initialScreen: .welcome,
+                        onFinish: {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                hasCompletedStartup = true
+                            }
                         }
-                    }
-                )
+                    )
+                }
             }
+            .environmentObject(profileStore)
         }
     }
 }

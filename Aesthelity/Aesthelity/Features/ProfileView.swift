@@ -8,18 +8,19 @@
 import SwiftUI
 
 public struct ProfileView: View {
+    @EnvironmentObject private var profileStore: SkinProfileStore
     // MARK: - Properties & Callbacks
     public var productsCount: Int
     public var routinesCount: Int
     public var score: Int
     public var amStepsCount: Int
     public var pmStepsCount: Int
-    var skinProfile: SkinProfile
     public var onOpenJournal: (() -> Void)?
     public var onOpenAnalysis: (() -> Void)?
     public var onSelectRoutine: ((RoutinePeriod) -> Void)?
     public var onOpenSettings: (() -> Void)?
     public var onOpenStartup: (() -> Void)?
+    public var onEditSkinProfile: (() -> Void)?
     public var onSelectTab: ((Int) -> Void)?
     
     // MARK: - Local State
@@ -27,19 +28,19 @@ public struct ProfileView: View {
     @State private var routineRemindersEnabled: Bool = true
     @State public var showSettings: Bool = false
     
-    init(
+    public init(
         productsCount: Int = 24,
         routinesCount: Int = 2,
         score: Int = 82,
         amStepsCount: Int = 4,
         pmStepsCount: Int = 5,
-        skinProfile: SkinProfile = SkinProfile(),
         showSettings: Bool = false,
         onOpenJournal: (() -> Void)? = nil,
         onOpenAnalysis: (() -> Void)? = nil,
         onSelectRoutine: ((RoutinePeriod) -> Void)? = nil,
         onOpenSettings: (() -> Void)? = nil,
         onOpenStartup: (() -> Void)? = nil,
+        onEditSkinProfile: (() -> Void)? = nil,
         onSelectTab: ((Int) -> Void)? = nil
     ) {
         self.productsCount = productsCount
@@ -47,21 +48,21 @@ public struct ProfileView: View {
         self.score = score
         self.amStepsCount = amStepsCount
         self.pmStepsCount = pmStepsCount
-        self.skinProfile = skinProfile
         self._showSettings = State(initialValue: showSettings)
         self.onOpenJournal = onOpenJournal
         self.onOpenAnalysis = onOpenAnalysis
         self.onSelectRoutine = onSelectRoutine
         self.onOpenSettings = onOpenSettings
         self.onOpenStartup = onOpenStartup
+        self.onEditSkinProfile = onEditSkinProfile
         self.onSelectTab = onSelectTab
     }
     
     public var body: some View {
         if showSettings {
             SettingsView(
-                skinType: skinProfile.skinTypeSummary,
-                concerns: skinProfile.concernsSummary,
+                skinType: profileStore.profile.skinType?.displayName ?? "Not provided",
+                concerns: profileStore.profile.concernSummary,
                 showsTabBar: false,
                 onBack: {
                     showSettings = false
@@ -99,6 +100,7 @@ public struct ProfileView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Constants.semanticSurfaceBase)
+            .accessibilityIdentifier("profile-summary-scroll")
         }
     }
     
@@ -165,7 +167,7 @@ public struct ProfileView: View {
                     .font(.system(size: 21, weight: .bold))
                     .foregroundStyle(Constants.semanticInkBrand)
                 
-                Text(skinProfile.skinTypeSummary)
+                Text(profileStore.profile.skinType.map { "\($0.displayName) skin" } ?? "Skin type not provided")
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(Constants.semanticInkBrand.opacity(0.85))
             }
@@ -222,45 +224,23 @@ public struct ProfileView: View {
     // MARK: - 4. Skin Type Section
     private var skinTypeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Skin Profile")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(Constants.semanticInkBrand)
-            
-            VStack(alignment: .leading, spacing: 4) {
-                Text(skinProfile.skinTypeSummary)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Constants.semanticInkBrand)
-                Text(skinProfile.concernsSummary)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(Constants.semanticInkSecondary)
-                if skinProfile.isComplete {
-                    Text("Avoiding: \(skinProfile.avoidedIngredientsSummary)")
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(Constants.semanticInkSecondary)
+            Text("Skin Profile").font(.headline).foregroundStyle(Constants.semanticInkBrand)
+            VStack(alignment: .leading, spacing: 16) {
+                if let error = profileStore.loadError {
+                    Text(error).font(.subheadline).foregroundStyle(.red)
                 }
+                SkinProfileSummaryView(profile: profileStore.profile)
+                Button("Edit skin profile") { onEditSkinProfile?() }
+                    .font(.subheadline.weight(.semibold))
+                    .accessibilityIdentifier("edit-skin-profile")
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Constants.semanticSurfaceRaised)
-            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .stroke(
-                        LinearGradient(
-                            colors: [
-                                Color(red: 0.98, green: 0.65, blue: 0.72), // soft rose pink border
-                                Color(red: 0.65, green: 0.68, blue: 0.90)  // soft periwinkle border
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1.5
-                    )
-            )
-            .shadow(color: Color(red: 0.49, green: 0.51, blue: 0.74).opacity(0.12), radius: 8, x: 0, y: 4)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
         }
     }
-    
+
     // MARK: - 5. Skin Journal Section
     private var skinJournalSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -524,4 +504,5 @@ public struct ProfileView: View {
 
 #Preview("Profile Screen") {
     ProfileView()
+        .environmentObject(SkinProfileStore(fileURL: URL.temporaryDirectory.appendingPathComponent("pf01-preview/profile.json")))
 }
