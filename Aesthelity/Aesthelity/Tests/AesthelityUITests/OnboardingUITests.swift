@@ -41,7 +41,7 @@ final class OnboardingUITests: XCTestCase {
         getStartedButton.tap()
 
         XCTAssertTrue(
-            app.staticTexts["What are your skin priorities?"]
+            app.staticTexts["Tell us about your skin"]
                 .waitForExistence(timeout: 5),
             "Get Started should open the skin concerns setup screen."
         )
@@ -62,7 +62,7 @@ final class OnboardingUITests: XCTestCase {
             getStartedButton.tap()
         }
 
-        let concernsTitle = app.staticTexts["What are your skin priorities?"]
+        let concernsTitle = app.staticTexts["Tell us about your skin"]
 
         XCTAssertTrue(
             concernsTitle.waitForExistence(timeout: 5),
