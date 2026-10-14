@@ -39,6 +39,7 @@
 				Tests/AesthelityTests/IngredientNormalizerTests.swift,
 				Tests/AesthelityTests/SkinProfileTests.swift,
 				Tests/AesthelityTests/SkinProfileDraftTests.swift,
+				Tests/AesthelityTests/SkinProfileStoreTests.swift,
 				Tests/AesthelityUITests/AesthelityUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
@@ -53,6 +54,7 @@
 				Tests/AesthelityTests/IngredientNormalizerTests.swift,
 				Tests/AesthelityTests/SkinProfileTests.swift,
 				Tests/AesthelityTests/SkinProfileDraftTests.swift,
+				Tests/AesthelityTests/SkinProfileStoreTests.swift,
 			);
 			target = 6E315A8B3076EC59002817B4 /* AesthelityTests */;
 		};
