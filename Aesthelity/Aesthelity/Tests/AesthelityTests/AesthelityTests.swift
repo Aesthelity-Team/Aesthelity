@@ -535,6 +535,53 @@ struct AesthelityTests {
         #expect(normalSteps[3].title == "SPF 46")
     }
     
+    @Test func contentViewNormalAMRoutineOrderAndStepNumbers() throws {
+        let steps = ContentView(selectedPeriod: .am, showClashDemo: false).currentSteps
+        #expect(steps.map(\.title) == ["Gentle Cleanser", "Vitamin C Serum", "Daily Moisturizer", "SPF 46"])
+        #expect(steps.map(\.stepNumber) == [1, 2, 3, 4])
+        #expect(steps.allSatisfy { $0.subtitle.hasSuffix("Step \($0.stepNumber)") })
+    }
+
+    @Test func contentViewPMRoutineOrderAndStepNumbers() throws {
+        let steps = ContentView(selectedPeriod: .pm, showClashDemo: false).currentSteps
+        #expect(steps.map(\.title) == ["Oil Cleanser", "Gentle Cleanser", "Niacinamide Serum", "Night Recovery Cream", "Hydrating Eye Balm"])
+        #expect(steps.map(\.stepNumber) == [1, 2, 3, 4, 5])
+        #expect(steps.allSatisfy { $0.subtitle.hasSuffix("Step \($0.stepNumber)") })
+        #expect(steps.allSatisfy { $0.hasClash == false })
+    }
+
+    @Test func contentViewPeriodSelectionChoosesMatchingRoutine() throws {
+        let amTitles = ContentView(selectedPeriod: .am, showClashDemo: false).currentSteps.map(\.title)
+        let pmTitles = ContentView(selectedPeriod: .pm, showClashDemo: false).currentSteps.map(\.title)
+        #expect(amTitles != pmTitles)
+        #expect(pmTitles.first == "Oil Cleanser")
+
+        // The clash demo only applies to AM; PM keeps its own routine.
+        let pmWithClashDemo = ContentView(selectedPeriod: .pm, showClashDemo: true).currentSteps
+        #expect(pmWithClashDemo.map(\.title) == pmTitles)
+        #expect(pmWithClashDemo.allSatisfy { $0.hasClash == false })
+    }
+
+    @Test func contentViewPopulatedRoutineHasNoEmptyMessage() throws {
+        #expect(ContentView(selectedPeriod: .am).emptyRoutineMessage == nil)
+        #expect(ContentView(selectedPeriod: .am, showClashDemo: false).emptyRoutineMessage == nil)
+        #expect(ContentView(selectedPeriod: .pm).emptyRoutineMessage == nil)
+    }
+
+    @Test func contentViewEmptySelectedRoutineShowsMessage() throws {
+        let sampleAM = ContentView(selectedPeriod: .am, showClashDemo: false).currentSteps
+
+        let emptyPM = ContentView(selectedPeriod: .pm, amSteps: sampleAM, amClashSteps: sampleAM, pmSteps: [])
+        #expect(emptyPM.currentSteps.isEmpty)
+        #expect(emptyPM.emptyRoutineMessage == "No PM routine steps to show yet.")
+
+        let populatedAM = ContentView(selectedPeriod: .am, amSteps: sampleAM, amClashSteps: sampleAM, pmSteps: [])
+        #expect(populatedAM.emptyRoutineMessage == nil)
+
+        let emptyClashAM = ContentView(selectedPeriod: .am, showClashDemo: true, amSteps: sampleAM, amClashSteps: [], pmSteps: [])
+        #expect(emptyClashAM.emptyRoutineMessage == "No AM routine steps to show yet.")
+    }
+
     @Test func contentViewClashDetailNavigationState() throws {
         let contentView = ContentView(showIngredientClashDetail: true)
         #expect(contentView.showIngredientClashDetail == true)
@@ -723,6 +770,23 @@ struct AesthelityTests {
         #expect(weekly?.scheduleSummary.contains("2× / week") == true)
     }
     
+    @Test func homeNormalAMRoutineMatchesAMGlow() throws {
+        let amGlow = RoutineRepository().routines.first(where: { $0.name == "AM Glow" })
+        let homeAM = ContentView(selectedPeriod: .am, showClashDemo: false).currentSteps
+        #expect(amGlow?.steps.map(\.title) == homeAM.map(\.title))
+        #expect(amGlow?.steps.map(\.stepNumber) == homeAM.map(\.stepNumber))
+    }
+
+    @Test func myRoutinesShowsEmptyStateWhenRepositoryIsEmpty() throws {
+        let seeded = RoutineRepository()
+        #expect(MyRoutinesView(repository: seeded).displayedRoutines.map(\.name) == ["AM Glow", "PM Repair", "Weekly Exfoliate"])
+        #expect(MyRoutinesView(repository: seeded, initialEmptyDemo: true).displayedRoutines.isEmpty)
+
+        let empty = RoutineRepository()
+        empty.routines = []
+        #expect(MyRoutinesView(repository: empty).displayedRoutines.isEmpty)
+    }
+
     @Test func routineFrequencyAndScheduleFormatting() throws {
         #expect(RoutineFrequency.allCases.count == 5)
         #expect(RoutineFrequency.everyDay.rawValue == "Every day")

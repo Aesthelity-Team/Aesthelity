@@ -112,6 +112,19 @@ struct ContentView: View {
         self.onResetStartup = onResetStartup
     }
     
+    init(
+        selectedPeriod: RoutinePeriod = .am,
+        showClashDemo: Bool = true,
+        amSteps: [RoutineStepItem],
+        amClashSteps: [RoutineStepItem],
+        pmSteps: [RoutineStepItem]
+    ) {
+        self.init(selectedPeriod: selectedPeriod, showClashDemo: showClashDemo)
+        self._amSteps = State(initialValue: amSteps)
+        self._amClashSteps = State(initialValue: amClashSteps)
+        self._pmSteps = State(initialValue: pmSteps)
+    }
+
     // AM Steps (Normal)
     @State private var amSteps: [RoutineStepItem] = [
         RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete),
@@ -146,6 +159,10 @@ struct ContentView: View {
         }
     }
     
+    var emptyRoutineMessage: String? {
+        currentSteps.isEmpty ? "No \(selectedPeriod.rawValue) routine steps to show yet." : nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Tab Content: All current and future tab screens are wrapped in ScrollView
@@ -446,8 +463,25 @@ struct ContentView: View {
             
             // Steps List
             VStack(spacing: 6.67) {
-                ForEach(currentSteps) { step in
-                    stepRowView(for: step)
+                if let emptyRoutineMessage {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(emptyRoutineMessage)
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Constants.semanticInkPrimary)
+
+                        Text("The sample routine isn't available right now.")
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundStyle(Constants.semanticInkSecondary)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 14)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Constants.semanticSurfaceRaised)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                } else {
+                    ForEach(currentSteps) { step in
+                        stepRowView(for: step)
+                    }
                 }
             }
             
@@ -1078,6 +1112,10 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+}
+
+#Preview("Home · Empty PM routine") {
+    ContentView(selectedPeriod: .pm, amSteps: [], amClashSteps: [], pmSteps: [])
 }
 
 struct ContentView_Previews: PreviewProvider {

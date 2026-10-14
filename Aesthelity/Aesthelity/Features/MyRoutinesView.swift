@@ -27,7 +27,7 @@ public struct MyRoutinesView: View {
         self.onBack = onBack
     }
     
-    private var displayedRoutines: [RoutineRecord] {
+    var displayedRoutines: [RoutineRecord] {
         showEmptyStateDemo ? [] : repository.routines
     }
     
