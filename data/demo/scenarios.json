@@ -1,0 +1,96 @@
+{
+  "schema_version": 1,
+  "scenarios": [
+    {
+      "id": "normal_am",
+      "scenario_type": "normal",
+      "product_ids": [
+        "cleanser_gel",
+        "serum_hydrating",
+        "moisturizer_gel",
+        "sunscreen_mineral"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "am",
+      "expected_findings": []
+    },
+    {
+      "id": "caution_pm",
+      "scenario_type": "caution",
+      "product_ids": [
+        "serum_retinol",
+        "treatment_exfoliant"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "pm",
+      "expected_findings": [
+        {
+          "kind": "caution",
+          "product_ids": [
+            "serum_retinol",
+            "treatment_exfoliant"
+          ],
+          "ingredient": null,
+          "message": "Demo rule: retinol and exfoliating treatment selected together. Review this combination."
+        }
+      ]
+    },
+    {
+      "id": "allergen_mist",
+      "scenario_type": "allergen",
+      "product_ids": [
+        "mist_fragranced"
+      ],
+      "profile_id": "profile_limonene_allergy",
+      "routine_time": "am",
+      "expected_findings": [
+        {
+          "kind": "allergen",
+          "product_ids": [
+            "mist_fragranced"
+          ],
+          "ingredient": "Limonene",
+          "message": "Listed ingredient matches the demo profile’s recorded allergen: Limonene."
+        }
+      ]
+    },
+    {
+      "id": "unknown_sunscreen",
+      "scenario_type": "unknown",
+      "product_ids": [
+        "sunscreen_unknown"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "am",
+      "expected_findings": [
+        {
+          "kind": "unknown",
+          "product_ids": [
+            "sunscreen_unknown"
+          ],
+          "ingredient": null,
+          "message": "Ingredient list is unavailable; demo assessment is incomplete."
+        }
+      ]
+    },
+    {
+      "id": "unknown_mask",
+      "scenario_type": "unknown",
+      "product_ids": [
+        "mask_partial"
+      ],
+      "profile_id": "profile_no_recorded_allergies",
+      "routine_time": "pm",
+      "expected_findings": [
+        {
+          "kind": "unknown",
+          "product_ids": [
+            "mask_partial"
+          ],
+          "ingredient": null,
+          "message": "Ingredient list is partial; demo assessment is incomplete."
+        }
+      ]
+    }
+  ]
+}

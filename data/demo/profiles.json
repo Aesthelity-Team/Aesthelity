@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "profiles": [
+    {
+      "id": "profile_no_recorded_allergies",
+      "recorded_allergens": []
+    },
+    {
+      "id": "profile_limonene_allergy",
+      "recorded_allergens": [
+        "Limonene"
+      ]
+    }
+  ]
+}
