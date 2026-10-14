@@ -1,43 +1,136 @@
-//
-//  AesthelityUITests.swift
-//  AesthelityUITests
-//
-//  Created by liza on 10/7/26.
-//
-
 import XCTest
 
 final class AesthelityUITests: XCTestCase {
 
     override func setUpWithError() throws {
-        // Put setup code here. This method is called before the invocation of each test method in the class.
-
-        // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
-
-        // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
-    }
-
-    override func tearDownWithError() throws {
-        // Put teardown code here. This method is called after the invocation of each test method in the class.
     }
 
     @MainActor
-    func testExample() throws {
-        // UI tests must launch the application that they test.
+    private func launchAppToHome() -> XCUIApplication {
         let app = XCUIApplication()
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        // If onboarding appears, complete the sample setup flow.
+        let getStarted = app.buttons["Get Started"]
+
+        if getStarted.waitForExistence(timeout: 3) {
+            getStarted.tap()
+
+            let continueButton = app.buttons["Continue"]
+            if continueButton.waitForExistence(timeout: 5) {
+                continueButton.tap()
+            }
+        }
+
+        return app
     }
 
     @MainActor
-    func testLaunchPerformance() throws {
-        if #available(macOS 10.15, iOS 13.0, tvOS 13.0, watchOS 7.0, *) {
-            // This measures how long it takes to launch your application.
-            measure(metrics: [XCTApplicationLaunchMetric()]) {
-                XCUIApplication().launch()
+    private func openMyRoutines() -> XCUIApplication {
+        let app = launchAppToHome()
+
+        let manageRoutines = app.buttons.containing(
+            NSPredicate(format: "label CONTAINS[c] %@", "Manage routines")
+        ).firstMatch
+        // The Manage routines row may be below the visible Home content.
+        for _ in 0..<3 {
+            if manageRoutines.exists {
+                break
             }
+            app.swipeUp()
         }
+
+        XCTAssertTrue(
+            manageRoutines.waitForExistence(timeout: 10),
+            "The Manage routines button should be available on the Home screen."
+        )
+
+        manageRoutines.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["My routines"].waitForExistence(timeout: 5)
+        )
+
+        return app
     }
+
+    @MainActor
+    func testSampleAMAndPMRoutinesAreDisplayed() throws {
+        let app = openMyRoutines()
+
+        XCTAssertTrue(app.staticTexts["AM Glow"].exists)
+        XCTAssertTrue(app.staticTexts["PM Repair"].exists)
+    }
+
+    @MainActor
+    func testAMRoutineDisplaysProductsInOrder() throws {
+        let app = openMyRoutines()
+
+        let amRoutine = app.buttons.containing(
+            NSPredicate(format: "label CONTAINS %@", "AM Glow")
+        ).firstMatch
+
+        XCTAssertTrue(amRoutine.waitForExistence(timeout: 5))
+        amRoutine.tap()
+
+        let cleanser = app.staticTexts["Gentle Cleanser"]
+        let vitaminC = app.staticTexts["Vitamin C Serum"]
+        let moisturizer = app.staticTexts["Daily Moisturizer"]
+        let sunscreen = app.staticTexts["SPF 46"]
+
+        XCTAssertTrue(cleanser.waitForExistence(timeout: 5))
+        XCTAssertTrue(vitaminC.exists)
+        XCTAssertTrue(moisturizer.exists)
+        XCTAssertTrue(sunscreen.exists)
+
+        XCTAssertLessThan(cleanser.frame.minY, vitaminC.frame.minY)
+        XCTAssertLessThan(vitaminC.frame.minY, moisturizer.frame.minY)
+        XCTAssertLessThan(moisturizer.frame.minY, sunscreen.frame.minY)
+    }
+
+    @MainActor
+    func testPMRoutineDisplaysProductsInOrder() throws {
+        let app = openMyRoutines()
+
+        let pmRoutine = app.buttons.containing(
+            NSPredicate(format: "label CONTAINS %@", "PM Repair")
+        ).firstMatch
+
+        XCTAssertTrue(pmRoutine.waitForExistence(timeout: 5))
+        pmRoutine.tap()
+
+        let preCleanse = app.staticTexts["Micellar Pre-Cleanse"]
+        let foamingWash = app.staticTexts["Gentle Foaming Wash"]
+        let hyaluronicAcid = app.staticTexts["Hyaluronic Acid"]
+        let nightCream = app.staticTexts["Barrier Night Cream"]
+        let lipMask = app.staticTexts["Lip Sleep Mask"]
+
+        XCTAssertTrue(preCleanse.waitForExistence(timeout: 5))
+        XCTAssertTrue(foamingWash.exists)
+        XCTAssertTrue(hyaluronicAcid.exists)
+        XCTAssertTrue(nightCream.exists)
+        XCTAssertTrue(lipMask.exists)
+
+        XCTAssertLessThan(preCleanse.frame.minY, foamingWash.frame.minY)
+        XCTAssertLessThan(foamingWash.frame.minY, hyaluronicAcid.frame.minY)
+        XCTAssertLessThan(hyaluronicAcid.frame.minY, nightCream.frame.minY)
+        XCTAssertLessThan(nightCream.frame.minY, lipMask.frame.minY)
+    }
+
+    @MainActor
+    func testRoutineEmptyStateIsDisplayed() throws {
+        let app = openMyRoutines()
+
+        let emptyButton = app.buttons["Empty"]
+        XCTAssertTrue(emptyButton.waitForExistence(timeout: 5))
+        emptyButton.tap()
+
+        XCTAssertTrue(
+            app.staticTexts["No routines yet"].waitForExistence(timeout: 5)
+        )
+
+        XCTAssertTrue(app.buttons["Create routine"].exists)
+    }
+
 }
