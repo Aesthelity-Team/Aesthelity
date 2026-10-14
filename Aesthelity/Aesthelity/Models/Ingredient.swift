@@ -28,13 +28,13 @@ struct IngredientAliasCatalog: Codable {
     let ambiguousTerms: [AmbiguousIngredientTerm]
 }
 
-struct NormalizationWarning: Equatable {
+struct NormalizationWarning: Codable, Equatable {
     let input: String
     let message: String
 }
 
-struct NormalizedIngredient: Equatable {
-    enum Status: Equatable {
+struct NormalizedIngredient: Codable, Equatable {
+    enum Status: Codable, Equatable {
         case matched(ingredientID: String)
         case uncertain(suggestedID: String)
         case ambiguous(candidateIDs: [String])
