@@ -41,6 +41,7 @@
 				Tests/AesthelityTests/SkinProfileTests.swift,
 				Tests/AesthelityTests/SkinProfileDraftTests.swift,
 				Tests/AesthelityUITests/AesthelityUITests.swift,
+				Tests/AesthelityUITests/OnboardingUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
 			target = 6E315A7B3076EC58002817B4 /* Aesthelity */;
@@ -62,6 +63,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityUITests/AesthelityUITests.swift,
+				Tests/AesthelityUITests/OnboardingUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
 			target = 6E315A953076EC59002817B4 /* AesthelityUITests */;

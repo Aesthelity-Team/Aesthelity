@@ -12,6 +12,11 @@ struct AesthelityApp: App {
     @AppStorage("hasCompletedStartup") private var hasCompletedStartup: Bool = false
     /// Held for this launch only. Saving it across launches is later persistence work.
     @State private var skinProfile = SkinProfile()
+    init() {
+        if CommandLine.arguments.contains("-resetStartupForUITests") {
+            UserDefaults.standard.removeObject(forKey: "hasCompletedStartup")
+        }
+    }
     
     var body: some Scene {
         WindowGroup {
