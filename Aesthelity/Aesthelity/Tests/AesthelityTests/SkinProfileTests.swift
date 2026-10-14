@@ -10,6 +10,7 @@ struct SkinProfileTests {
         #expect(newProfile.setupStatus == .notStarted)
         #expect(skippedProfile.setupStatus == .skipped)
         for profile in [newProfile, skippedProfile] {
+            #expect(profile.schemaVersion == 1)
             #expect(!profile.isComplete)
             #expect(profile.skinType == nil)
             #expect(profile.concerns.isEmpty)
@@ -30,6 +31,7 @@ struct SkinProfileTests {
         let restored = try roundTrip(profile)
 
         #expect(restored == profile)
+        #expect(restored.schemaVersion == 1)
         #expect(restored.isComplete)
         #expect(restored.avoidedIngredients.map(\.originalText) == inputs)
         #expect(restored.avoidedIngredients.map(\.ingredientID) == ["fragrance", nil, nil, nil])
@@ -48,5 +50,22 @@ struct SkinProfileTests {
 
     private func roundTrip(_ profile: SkinProfile) throws -> SkinProfile {
         try JSONDecoder().decode(SkinProfile.self, from: JSONEncoder().encode(profile))
+    }
+
+    @Test func schemaVersionIsEncodedAndPreserved() throws {
+        let profile = SkinProfile(schemaVersion: 2)
+        let data = try JSONEncoder().encode(profile)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["schemaVersion"] as? Int == 2)
+        #expect(try roundTrip(profile) == profile)
+    }
+
+    @Test func profilesWithoutSchemaVersionDecodeAsVersionOne() throws {
+        let profile = SkinProfile(skinType: .dry, concerns: [.barrierRepair], setupStatus: .completed)
+        let data = try JSONEncoder().encode(profile)
+        var object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        object.removeValue(forKey: "schemaVersion")
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+        #expect(try JSONDecoder().decode(SkinProfile.self, from: legacyData) == profile)
     }
 }

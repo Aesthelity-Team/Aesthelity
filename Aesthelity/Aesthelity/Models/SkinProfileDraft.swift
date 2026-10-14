@@ -38,9 +38,21 @@ struct SkinProfileDraft: Equatable {
 
     /// Returns errors for all invalid entries so the UI can display them inline.
     func validationErrors() -> [IngredientInputError] {
-        avoidedIngredientInputs.enumerated().compactMap { index, input in
+        validationErrors(for: preparedInputs)
+    }
+
+    private var preparedInputs: [String] {
+        avoidedIngredientInputs.map { input in
+            let visibleScalars = input.unicodeScalars.filter { $0.properties.generalCategory != .format }
+            return String(String.UnicodeScalarView(visibleScalars))
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+    }
+
+    private func validationErrors(for inputs: [String]) -> [IngredientInputError] {
+        inputs.enumerated().compactMap { index, input in
             let reason: IngredientInputError.Reason
-            if input.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if input.isEmpty {
                 reason = .empty
             } else if input.count > Self.maximumIngredientLength {
                 reason = .tooLong
@@ -51,19 +63,23 @@ struct SkinProfileDraft: Equatable {
             } else {
                 return nil
             }
-            return IngredientInputError(entryIndex: index, input: input, reason: reason)
+            return IngredientInputError(entryIndex: index, input: avoidedIngredientInputs[index], reason: reason)
         }
     }
 
     /// Builds a profile only after validation succeeds. Unknown names retain DATA-02 warnings.
     func submit(using normalizer: IngredientNormalizer) -> SubmissionResult {
-        let errors = validationErrors()
+        let inputs = preparedInputs
+        let errors = validationErrors(for: inputs)
         guard errors.isEmpty else { return .invalid(errors) }
 
         var seenIDs = Set<String>()
-        let ingredients = normalizer.normalize(avoidedIngredientInputs).filter { ingredient in
-            guard let id = ingredient.ingredientID else { return true }
-            return seenIDs.insert(id).inserted
+        var seenUnresolvedKeys = Set<String>()
+        let ingredients = normalizer.normalize(inputs).filter { ingredient in
+            if let id = ingredient.ingredientID {
+                return seenIDs.insert(id).inserted
+            }
+            return seenUnresolvedKeys.insert(IngredientNormalizer.key(for: ingredient.originalText)).inserted
         }
 
         return .completed(SkinProfile(

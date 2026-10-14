@@ -29,6 +29,7 @@ struct SkinProfile: Codable, Equatable {
         case unevenTexture = "uneven-texture"
     }
 
+    var schemaVersion: Int
     var skinType: SkinType?
     var concerns: Set<Concern>
     /// Keeps original text, matching status, and warnings from DATA-02 intact.
@@ -39,12 +40,27 @@ struct SkinProfile: Codable, Equatable {
         skinType: SkinType? = nil,
         concerns: Set<Concern> = [],
         avoidedIngredients: [NormalizedIngredient] = [],
-        setupStatus: SetupStatus = .notStarted
+        setupStatus: SetupStatus = .notStarted,
+        schemaVersion: Int = 1
     ) {
+        self.schemaVersion = schemaVersion
         self.skinType = skinType
         self.concerns = concerns
         self.avoidedIngredients = avoidedIngredients
         self.setupStatus = setupStatus
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case schemaVersion, skinType, concerns, avoidedIngredients, setupStatus
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+        skinType = try container.decodeIfPresent(SkinType.self, forKey: .skinType)
+        concerns = try container.decode(Set<Concern>.self, forKey: .concerns)
+        avoidedIngredients = try container.decode([NormalizedIngredient].self, forKey: .avoidedIngredients)
+        setupStatus = try container.decode(SetupStatus.self, forKey: .setupStatus)
     }
 
     var isComplete: Bool { setupStatus == .completed }
