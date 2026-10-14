@@ -86,6 +86,7 @@ struct ContentView: View {
     @State var showManageRoutinesView: Bool = false
     @State var showEditRoutineView: Bool = false
     @State var showStartupFlowSheet: Bool = false
+    @State private var showSkinProfileSetupSheet = false
     public var onResetStartup: (() -> Void)? = nil
     
     public init(
@@ -216,6 +217,13 @@ struct ContentView: View {
                 onFinish: {
                     showStartupFlowSheet = false
                 }
+            )
+        }
+        .sheet(isPresented: $showSkinProfileSetupSheet) {
+            StartupFlowView(
+                initialScreen: .concerns,
+                onCancel: { showSkinProfileSetupSheet = false },
+                onFinish: { showSkinProfileSetupSheet = false }
             )
         }
     }
@@ -956,6 +964,7 @@ struct ContentView: View {
                     .padding(.bottom, 8)
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("profile-tab")
             }
             .frame(height: 72)
             
@@ -1069,6 +1078,9 @@ struct ContentView: View {
                 } else {
                     showStartupFlowSheet = true
                 }
+            },
+            onEditSkinProfile: {
+                showSkinProfileSetupSheet = true
             }
         )
     }
@@ -1078,10 +1090,12 @@ struct ContentView: View {
 
 #Preview {
     ContentView()
+        .environmentObject(SkinProfileStore(fileURL: URL.temporaryDirectory.appendingPathComponent("pf01-preview/profile.json")))
 }
 
 struct ContentView_Previews: PreviewProvider {
     static var previews: some View {
         ContentView()
+            .environmentObject(SkinProfileStore(fileURL: URL.temporaryDirectory.appendingPathComponent("pf01-preview/profile.json")))
     }
 }

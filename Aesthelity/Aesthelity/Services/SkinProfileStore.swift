@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class SkinProfileStore: ObservableObject {
-    static let defaultFileURL = URL.applicationSupportDirectory
+    nonisolated static let defaultFileURL = URL.applicationSupportDirectory
         .appendingPathComponent("SkinProfile/profile.json")
 
     @Published private(set) var profile = SkinProfile()
