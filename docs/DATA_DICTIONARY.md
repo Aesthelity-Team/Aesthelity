@@ -17,6 +17,6 @@ JSON files are UTF-8 objects with schema_version = 1 and a named array.
 | provenance | kind, verification_method, note; identifies synthetic origin |
 | spf | null; no tested sun-protection claim |
 
-Profiles contain id and recorded_allergens (strings). Scenarios contain id, scenario_type (normal/caution/allergen/unknown), product_ids, profile_id, routine_time (am/pm), and expected_findings. Findings contain kind, product_ids, ingredient (string or null), and message.
+Profiles contain id and recorded_allergens (strings). Scenarios contain id, scenario_type (normal/caution/allergen/unknown), product_ids, profile_id, routine_time (am/pm), and expected_findings. Findings contain kind (caution/allergen/unknown), product_ids, ingredient (string or null), message (developer-facing rule note), category (short user-facing label), explanation (plain-language text shown to users), and reason (why the finding was generated).
 
 A product is never assigned a universal safety rating. Normal means no findings under these limited demo rules. Partial lists can match known allergens but cannot exclude other allergens. Scenario expectation data belongs to test/demo assets, not to authoritative product facts.

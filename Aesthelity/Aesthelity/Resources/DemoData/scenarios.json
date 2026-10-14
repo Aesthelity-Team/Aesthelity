@@ -31,7 +31,10 @@
             "treatment_exfoliant"
           ],
           "ingredient": null,
-          "message": "Demo rule: retinol and exfoliating treatment selected together. Review this combination."
+          "message": "Demo rule: retinol and exfoliating treatment selected together. Review this combination.",
+          "category": "Active ingredient overlap",
+          "explanation": "Using retinol and an exfoliating treatment in the same routine can leave skin red, dry, or irritated. Try using them on different nights.",
+          "reason": "Retinol Night Serum (Fictional) and Exfoliating Treatment (Fictional) are both in this routine."
         }
       ]
     },
@@ -50,7 +53,10 @@
             "mist_fragranced"
           ],
           "ingredient": "Limonene",
-          "message": "Listed ingredient matches the demo profile’s recorded allergen: Limonene."
+          "message": "Listed ingredient matches the demo profile’s recorded allergen: Limonene.",
+          "category": "Allergen",
+          "explanation": "Fragranced Mist (Fictional) contains Limonene, which you've listed as an allergen. You may want to skip this product.",
+          "reason": "Limonene is on your recorded allergen list."
         }
       ]
     },
@@ -69,7 +75,10 @@
             "sunscreen_unknown"
           ],
           "ingredient": null,
-          "message": "Ingredient list is unavailable; demo assessment is incomplete."
+          "message": "Ingredient list is unavailable; demo assessment is incomplete.",
+          "category": "Incomplete product data",
+          "explanation": "We don't have the full ingredient list for Unverified Sunscreen Demo (Fictional), so we can't fully check it against your routine. Treat this as incomplete, not as a safe result.",
+          "reason": "The ingredient list is unavailable."
         }
       ]
     },
@@ -88,7 +97,10 @@
             "mask_partial"
           ],
           "ingredient": null,
-          "message": "Ingredient list is partial; demo assessment is incomplete."
+          "message": "Ingredient list is partial; demo assessment is incomplete.",
+          "category": "Incomplete product data",
+          "explanation": "We don't have the full ingredient list for Incomplete Mask Demo (Fictional), so we can't fully check it against your routine. Treat this as incomplete, not as a safe result.",
+          "reason": "The ingredient list is partial."
         }
       ]
     }

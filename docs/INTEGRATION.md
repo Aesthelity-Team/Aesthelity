@@ -1,21 +1,18 @@
 # Integration and demo walkthrough
 
-## Repository
-
-1. Create branch `1-curated-demo-product-set` from your team's current development base.
-2. Copy data/demo, scripts/demo_catalog.py, tests/test_demo_catalog.py, and the documentation into matching repository locations. If those names already exist, compare and merge rather than overwrite. The Python loader assumes its script is one level below the repository root.
-3. Add the workflow only if it fits your existing CI setup. Update working-directory/imports if this package lives under a subfolder.
-4. Run both README commands. Include results in the PR.
-
 ## Swift catalog
 
-1. Add ios/DemoCatalog.swift to the app target in Xcode.
-2. Add data/demo/products.json to the app target's resources. Check target membership and Copy Bundle Resources; ensure another products.json is not already present.
-3. Load with `let catalog = try DemoCatalog.load()` inside an error-handling path. Display catalog.products in your existing product list. Present fictional labeling in the demo UI.
-4. Check that all 17 items load and categories/ingredients are visible. Show provenance in a debug/detail view if applicable. Avoid displaying an SPF badge because spf is null.
-5. The Swift adapter loads only products. profiles.json and scenarios.json supply integration/test inputs; their expected_findings may drive mocked Sprint 1 analysis screens. The Python evaluator demonstrates the behavior but does not automatically run inside iOS.
+The JSON files live in `Aesthelity/Aesthelity/Resources/DemoData/` and are bundled with the app automatically. `Aesthelity/Aesthelity/Models/DemoCatalog.swift` loads all three:
 
-The Swift adapter must be built and exercised in the actual Xcode project. It has not been validated against your app's existing models, file layout, or deployment target.
+```swift
+let catalog = try DemoCatalog.load()
+let scenario = catalog.scenarios.first { $0.id == "caution_pm" }
+let names = scenario?.productIds.compactMap { catalog.product(id: $0)?.name }
+```
+
+- Show fictional labeling in the UI, and don't show an SPF badge (spf is null).
+- `expectedFindings` on each scenario carry user-facing `category`, `explanation`, and `reason` text for the Sprint 1 mocked analysis screen. The Python evaluator generates the same findings but does not run inside iOS.
+- `DemoCatalogTests` checks that the bundled data loads and that scenario references resolve.
 
 ## Python usage
 

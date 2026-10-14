@@ -47,3 +47,6 @@ Config/Secrets.plist
 # Test and coverage output
 coverage/
 DerivedData/
+
+# Python
+__pycache__/
