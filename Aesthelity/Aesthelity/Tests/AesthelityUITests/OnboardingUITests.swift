@@ -56,11 +56,8 @@ final class OnboardingUITests: XCTestCase {
         let getStartedButton = app.buttons["Get Started"]
         XCTAssertTrue(getStartedButton.waitForExistence(timeout: 10))
 
-        getStartedButton.tap()
-
-        if getStartedButton.exists && getStartedButton.isHittable {
-            getStartedButton.tap()
-        }
+        // Two taps in one gesture, so the second always lands while the welcome screen is leaving.
+        getStartedButton.doubleTap()
 
         let concernsTitle = app.staticTexts["Tell us about your skin"]
 
@@ -68,6 +65,17 @@ final class OnboardingUITests: XCTestCase {
             concernsTitle.waitForExistence(timeout: 5),
             "The skin concerns setup screen should be displayed once."
         )
+        XCTAssertEqual(
+            app.staticTexts.matching(NSPredicate(format: "label == %@", "Tell us about your skin")).count,
+            1,
+            "Only one setup screen should be presented."
+        )
+        XCTAssertFalse(getStartedButton.exists)
+
+        // A single Back must return to the welcome screen; a stacked duplicate would leave setup showing.
+        app.buttons["Back"].tap()
+        XCTAssertTrue(getStartedButton.waitForExistence(timeout: 5))
+        XCTAssertTrue(concernsTitle.waitForNonExistence(timeout: 5))
     }
 
     @MainActor
@@ -82,12 +90,21 @@ final class OnboardingUITests: XCTestCase {
         XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
         continueButton.tap()
 
+        XCTAssertTrue(
+            app.staticTexts["Today's Routine"].waitForExistence(timeout: 10),
+            "Continue should enter the app on Home."
+        )
+
         app.terminate()
         app.launchArguments = []
         app.launch()
 
+        XCTAssertTrue(
+            app.staticTexts["Today's Routine"].waitForExistence(timeout: 10),
+            "A returning user should land on Home."
+        )
         XCTAssertFalse(
-            app.buttons["Get Started"].waitForExistence(timeout: 3),
+            app.buttons["Get Started"].exists,
             "A returning user should not see the welcome screen."
         )
     }
