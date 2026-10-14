@@ -68,3 +68,57 @@ struct SkinProfile: Codable, Equatable {
     /// A fresh skipped profile does not accidentally submit an unfinished draft.
     static var skipped: SkinProfile { SkinProfile(setupStatus: .skipped) }
 }
+
+extension SkinProfile.SkinType {
+    var title: String {
+        switch self {
+        case .normal: "Normal"
+        case .dry: "Dry"
+        case .oily: "Oily"
+        case .combination: "Combination"
+        }
+    }
+}
+
+extension SkinProfile.Concern {
+    /// The same words as the onboarding choices, so the profile reads back what the user picked.
+    var title: String {
+        switch self {
+        case .acneProne: "Acne prone"
+        case .sensitivityAndRedness: "Sensitivity & redness"
+        case .barrierRepair: "Barrier repair"
+        case .fineLines: "Anti-aging / fine lines"
+        case .drynessAndHydration: "Dryness & hydration"
+        case .darkSpots: "Hyperpigmentation & dark spots"
+        case .oilControlAndPores: "Oil control & pores"
+        case .unevenTexture: "Uneven texture"
+        }
+    }
+}
+
+extension SkinProfile {
+    /// Concerns in onboarding order. `concerns` itself is an unordered set.
+    var orderedConcerns: [Concern] { Concern.allCases.filter(concerns.contains) }
+
+    var skinTypeSummary: String {
+        summary(skinType.map { "\($0.title) skin" } ?? "Skin type not selected")
+    }
+
+    var concernsSummary: String {
+        let titles = orderedConcerns.map(\.title)
+        return summary(titles.isEmpty ? "None selected" : titles.joined(separator: ", "))
+    }
+
+    var avoidedIngredientsSummary: String {
+        let names = avoidedIngredients.map(\.originalText)
+        return isComplete ? (names.isEmpty ? "None" : names.joined(separator: ", ")) : "None"
+    }
+
+    private func summary(_ completed: String) -> String {
+        switch setupStatus {
+        case .notStarted: "Not set up"
+        case .skipped: "Skipped"
+        case .completed: completed
+        }
+    }
+}

@@ -86,6 +86,7 @@ struct ContentView: View {
     @State var showManageRoutinesView: Bool = false
     @State var showEditRoutineView: Bool = false
     @State var showStartupFlowSheet: Bool = false
+    @Binding var skinProfile: SkinProfile
     public var onResetStartup: (() -> Void)? = nil
     
     public init(
@@ -98,6 +99,7 @@ struct ContentView: View {
         showIngredientClashDetail: Bool = false,
         showManageRoutinesView: Bool = false,
         showEditRoutineView: Bool = false,
+        skinProfile: Binding<SkinProfile> = .constant(SkinProfile()),
         onResetStartup: (() -> Void)? = nil
     ) {
         self._selectedPeriod = State(initialValue: selectedPeriod)
@@ -109,6 +111,7 @@ struct ContentView: View {
         self._showIngredientClashDetail = State(initialValue: showIngredientClashDetail)
         self._showManageRoutinesView = State(initialValue: showManageRoutinesView)
         self._showEditRoutineView = State(initialValue: showEditRoutineView)
+        self._skinProfile = skinProfile
         self.onResetStartup = onResetStartup
     }
     
@@ -213,7 +216,8 @@ struct ContentView: View {
         .sheet(isPresented: $showStartupFlowSheet) {
             StartupFlowView(
                 initialScreen: .welcome,
-                onFinish: {
+                onFinish: { profile in
+                    skinProfile = profile
                     showStartupFlowSheet = false
                 }
             )
@@ -1050,6 +1054,7 @@ struct ContentView: View {
             score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
             amStepsCount: currentSteps.count,
             pmStepsCount: pmSteps.count,
+            skinProfile: skinProfile,
             onOpenJournal: {
                 showJournalSheet = true
             },

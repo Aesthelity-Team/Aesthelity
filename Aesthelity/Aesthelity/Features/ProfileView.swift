@@ -14,6 +14,7 @@ public struct ProfileView: View {
     public var score: Int
     public var amStepsCount: Int
     public var pmStepsCount: Int
+    var skinProfile: SkinProfile
     public var onOpenJournal: (() -> Void)?
     public var onOpenAnalysis: (() -> Void)?
     public var onSelectRoutine: ((RoutinePeriod) -> Void)?
@@ -26,12 +27,13 @@ public struct ProfileView: View {
     @State private var routineRemindersEnabled: Bool = true
     @State public var showSettings: Bool = false
     
-    public init(
+    init(
         productsCount: Int = 24,
         routinesCount: Int = 2,
         score: Int = 82,
         amStepsCount: Int = 4,
         pmStepsCount: Int = 5,
+        skinProfile: SkinProfile = SkinProfile(),
         showSettings: Bool = false,
         onOpenJournal: (() -> Void)? = nil,
         onOpenAnalysis: (() -> Void)? = nil,
@@ -45,6 +47,7 @@ public struct ProfileView: View {
         self.score = score
         self.amStepsCount = amStepsCount
         self.pmStepsCount = pmStepsCount
+        self.skinProfile = skinProfile
         self._showSettings = State(initialValue: showSettings)
         self.onOpenJournal = onOpenJournal
         self.onOpenAnalysis = onOpenAnalysis
@@ -57,6 +60,8 @@ public struct ProfileView: View {
     public var body: some View {
         if showSettings {
             SettingsView(
+                skinType: skinProfile.skinTypeSummary,
+                concerns: skinProfile.concernsSummary,
                 showsTabBar: false,
                 onBack: {
                     showSettings = false
@@ -160,7 +165,7 @@ public struct ProfileView: View {
                     .font(.system(size: 21, weight: .bold))
                     .foregroundStyle(Constants.semanticInkBrand)
                 
-                Text("Combination skin · Sensitive")
+                Text(skinProfile.skinTypeSummary)
                     .font(.system(size: 14, weight: .regular))
                     .foregroundStyle(Constants.semanticInkBrand.opacity(0.85))
             }
@@ -217,25 +222,21 @@ public struct ProfileView: View {
     // MARK: - 4. Skin Type Section
     private var skinTypeSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Skin Type")
+            Text("Skin Profile")
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(Constants.semanticInkBrand)
             
-            VStack(alignment: .leading, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Combination · Sensitive")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Constants.semanticInkBrand)
-                    
-                    Text("Oily T-zone, dry cheeks")
+            VStack(alignment: .leading, spacing: 4) {
+                Text(skinProfile.skinTypeSummary)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Constants.semanticInkBrand)
+                Text(skinProfile.concernsSummary)
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Constants.semanticInkSecondary)
+                if skinProfile.isComplete {
+                    Text("Avoiding: \(skinProfile.avoidedIngredientsSummary)")
                         .font(.system(size: 14, weight: .regular))
                         .foregroundStyle(Constants.semanticInkSecondary)
-                }
-                
-                HStack(spacing: 8) {
-                    skinTagPill("Acne")
-                    skinTagPill("Redness")
-                    skinTagPill("Dullness")
                 }
             }
             .padding(18)
@@ -258,16 +259,6 @@ public struct ProfileView: View {
             )
             .shadow(color: Color(red: 0.49, green: 0.51, blue: 0.74).opacity(0.12), radius: 8, x: 0, y: 4)
         }
-    }
-    
-    private func skinTagPill(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 12, weight: .medium))
-            .foregroundStyle(Color(red: 0.35, green: 0.32, blue: 0.44))
-            .padding(.horizontal, 16)
-            .padding(.vertical, 7)
-            .background(Color(red: 0.90, green: 0.89, blue: 0.96))
-            .clipShape(Capsule())
     }
     
     // MARK: - 5. Skin Journal Section

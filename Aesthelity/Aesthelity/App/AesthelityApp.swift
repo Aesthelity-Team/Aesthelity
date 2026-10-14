@@ -10,19 +10,25 @@ import SwiftUI
 @main
 struct AesthelityApp: App {
     @AppStorage("hasCompletedStartup") private var hasCompletedStartup: Bool = false
+    /// Held for this launch only. Saving it across launches is later persistence work.
+    @State private var skinProfile = SkinProfile()
     
     var body: some Scene {
         WindowGroup {
             if hasCompletedStartup {
-                ContentView(onResetStartup: {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        hasCompletedStartup = false
+                ContentView(
+                    skinProfile: $skinProfile,
+                    onResetStartup: {
+                        withAnimation(.easeInOut(duration: 0.25)) {
+                            hasCompletedStartup = false
+                        }
                     }
-                })
+                )
             } else {
                 StartupFlowView(
                     initialScreen: .welcome,
-                    onFinish: {
+                    onFinish: { profile in
+                        skinProfile = profile
                         withAnimation(.easeInOut(duration: 0.25)) {
                             hasCompletedStartup = true
                         }

@@ -39,6 +39,22 @@ struct SkinProfileTests {
         #expect(restored.avoidedIngredients.warnings.map(\.input) == Array(inputs.dropFirst()))
     }
 
+    @Test func summariesReadBackSetupChoices() {
+        #expect(SkinProfile().skinTypeSummary == "Not set up")
+        #expect(SkinProfile.skipped.skinTypeSummary == "Skipped")
+        #expect(SkinProfile.skipped.concernsSummary == "Skipped")
+
+        let completed = SkinProfile(
+            skinType: .dry,
+            concerns: [.barrierRepair, .acneProne],
+            setupStatus: .completed
+        )
+        #expect(completed.skinTypeSummary == "Dry skin")
+        #expect(completed.concernsSummary == "Acne prone, Barrier repair")
+        #expect(completed.avoidedIngredientsSummary == "None")
+        #expect(SkinProfile(setupStatus: .completed).concernsSummary == "None selected")
+    }
+
     @Test func submittingOptionalEmptyFieldsDoesNotImplySetupWasSkipped() throws {
         let profile = try roundTrip(SkinProfile(setupStatus: .completed))
 

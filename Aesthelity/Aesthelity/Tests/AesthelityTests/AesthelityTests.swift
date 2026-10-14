@@ -422,6 +422,14 @@ struct AesthelityTests {
         #expect(settingsOpened == true)
     }
     
+    @Test func skinProfileIsPassedToProfileAndContentViews() throws {
+        let skinProfile = SkinProfile(skinType: .oily, concerns: [.acneProne], setupStatus: .completed)
+
+        #expect(ProfileView().skinProfile == SkinProfile())
+        #expect(ProfileView(skinProfile: skinProfile).skinProfile == skinProfile)
+        #expect(ContentView(skinProfile: .constant(skinProfile)).skinProfile == skinProfile)
+    }
+
     // MARK: - Article Detail Tests
     
     @Test func articleDetailExampleData() throws {
@@ -924,13 +932,13 @@ struct AesthelityTests {
     }
     
     @Test func startupFlowViewInitialization() throws {
-        var finished = false
-        let flow = StartupFlowView(initialScreen: .welcome) {
-            finished = true
+        var finishedProfile: SkinProfile?
+        let flow = StartupFlowView(initialScreen: .welcome) { profile in
+            finishedProfile = profile
         }
         #expect(flow.currentScreen == .welcome)
-        flow.onFinish()
-        #expect(finished == true)
+        flow.onFinish(SkinProfile())
+        #expect(finishedProfile == SkinProfile())
         
         let customFlow = StartupFlowView(initialScreen: .signInFailed)
         #expect(customFlow.currentScreen == .signInFailed)
@@ -985,25 +993,25 @@ struct AesthelityTests {
     }
     
     @Test func onboardingConcernsSelection() throws {
-        var selected: Set<String> = ["Sensitivity & redness"]
+        var skinType: SkinProfile.SkinType? = nil
+        var concerns: Set<SkinProfile.Concern> = []
+        var ingredients: [String] = []
         var backCalled = false
         var continueCalled = false
         var skipCalled = false
         
-        let binding = SwiftUI.Binding<Set<String>>(
-            get: { selected },
-            set: { selected = $0 }
-        )
-        
         let concernsView = OnboardingConcernsView(
-            selectedConcerns: binding,
+            skinType: SwiftUI.Binding(get: { skinType }, set: { skinType = $0 }),
+            concerns: SwiftUI.Binding(get: { concerns }, set: { concerns = $0 }),
+            avoidedIngredientInputs: SwiftUI.Binding(get: { ingredients }, set: { ingredients = $0 }),
             onBack: { backCalled = true },
             onContinue: { continueCalled = true },
             onSkip: { skipCalled = true }
         )
         
-        #expect(concernsView.availableConcerns.count == 8)
-        #expect(concernsView.selectedConcerns.contains("Sensitivity & redness") == true)
+        #expect(concernsView.skinType == nil)
+        #expect(concernsView.concerns.isEmpty)
+        #expect(SkinProfile.Concern.allCases.count == 8)
         
         concernsView.onBack()
         #expect(backCalled == true)
