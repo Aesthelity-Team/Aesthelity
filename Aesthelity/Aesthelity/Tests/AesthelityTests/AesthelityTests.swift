@@ -33,16 +33,16 @@ struct AesthelityTests {
     @Test func colorHexInitializer() throws {
         let accentColor = Color(hex: "#A3B18A")
         #expect(accentColor != nil)
-
+        
         let cardColor = Color(hex: "#F5F5F5")
         #expect(cardColor != nil)
     }
-
+    
     @Test func confidenceCardTokens() throws {
         #expect(AppTheme.Radius.cardLarge == 20)
         #expect(AppTheme.Semantic.confidenceGradientStart != nil)
         #expect(AppTheme.Semantic.confidenceGradientEnd != nil)
-
+        
         let card = ConfidenceCard(
             score: 85,
             title: "CONFIDENCE SCORE",
@@ -54,7 +54,7 @@ struct AesthelityTests {
         #expect(card.amSteps == 3)
         #expect(card.pmSteps == 4)
     }
-
+    
     @Test func confidenceScoreViewInitialization() throws {
         let view = ConfidenceScoreView(
             score: 82,
@@ -65,19 +65,19 @@ struct AesthelityTests {
         #expect(view.amStepsCount == 4)
         #expect(view.pmStepsCount == 5)
     }
-
+    
     @Test func contentViewInitialization() throws {
         let view = ContentView()
         #expect(view != nil)
     }
-
+    
     @Test func semanticSurfaceCanvasToken() throws {
         let canvasColor = Constants.semanticSurfaceCanvas
         #expect(canvasColor != nil)
         #expect(AppTheme.Semantic.surfaceCanvas != nil)
         #expect(AppTheme.Colors.surfaceCanvas != nil)
     }
-
+    
     @Test func libraryViewInitializationAndDefaults() throws {
         let libraryView = LibraryView()
         #expect(libraryView.showsTabBar == true)
@@ -87,10 +87,10 @@ struct AesthelityTests {
         #expect(libraryView.filteredRecentSaves.count == 5)
         #expect(libraryView.selectedProductDetail == nil)
     }
-
+    
     @Test func libraryCategoryFiltering() throws {
         let libraryView = LibraryView()
-
+        
         // Filter by Cleanser
         let cleanserProducts = libraryView.filteredProducts(for: .cleanser)
         #expect(cleanserProducts.allSatisfy { $0.category == .cleanser })
@@ -100,7 +100,7 @@ struct AesthelityTests {
         let cleanserSaves = libraryView.filteredRecentSaves(for: .cleanser)
         #expect(cleanserSaves.allSatisfy { $0.category == .cleanser })
         #expect(cleanserSaves.contains { $0.title == "Gentle Foaming Cleanser" })
-
+        
         // Filter by Serum
         let serumProducts = libraryView.filteredProducts(for: .serum)
         #expect(serumProducts.allSatisfy { $0.category == .serum })
@@ -109,7 +109,7 @@ struct AesthelityTests {
         let serumSaves = libraryView.filteredRecentSaves(for: .serum)
         #expect(serumSaves.allSatisfy { $0.category == .serum })
         #expect(serumSaves.contains { $0.title == "Vitamin C Serum" })
-
+        
         // Filter by SPF
         let spfProducts = libraryView.filteredProducts(for: .spf)
         #expect(spfProducts.allSatisfy { $0.category == .spf })
@@ -117,7 +117,7 @@ struct AesthelityTests {
         let spfSaves = libraryView.filteredRecentSaves(for: .spf)
         #expect(spfSaves.allSatisfy { $0.category == .spf })
         #expect(spfSaves.contains { $0.title == "Daily UV Defense SPF 50" })
-
+        
         // Filter by Toner
         let tonerProducts = libraryView.filteredProducts(for: .toner)
         #expect(tonerProducts.allSatisfy { $0.category == .toner })
@@ -125,52 +125,52 @@ struct AesthelityTests {
         let tonerSaves = libraryView.filteredRecentSaves(for: .toner)
         #expect(tonerSaves.allSatisfy { $0.category == .toner })
         #expect(tonerSaves.contains { $0.title == "Barrier Balance Toner" })
-
+        
         // Filter by All
         let allProducts = libraryView.filteredProducts(for: .all)
         #expect(allProducts.count == 10)
         let allSaves = libraryView.filteredRecentSaves(for: .all)
         #expect(allSaves.count == 5)
     }
-
+    
     @Test func librarySearchFiltering() throws {
         let libraryView = LibraryView()
-
+        
         // Search by product name
         let nameSaves = libraryView.filteredRecentSaves(query: "Vitamin C")
         #expect(nameSaves.count == 1)
         #expect(nameSaves.first?.title == "Vitamin C Serum")
-
+        
         // Search by brand
         let brandProducts = libraryView.filteredProducts(query: "Bioderma")
         #expect(brandProducts.count == 1)
         #expect(brandProducts.first?.brand == "Bioderma")
     }
-
+    
     // MARK: - Product Detail & Database Tests
-
+    
     @Test func productDatabaseVitaminCDefault() throws {
         let db = ProductDatabase.shared
         let item = db.detail(forTitle: "Vitamin C Serum")
-
+        
         #expect(item.title == "Vitamin C Serum")
         #expect(item.subtitle == "Brightening serum · AM routine")
         #expect(item.brand == "Misticore")
         #expect(item.category == .serum)
         #expect(item.routineFits.count == 2)
-
+        
         let amFit = item.routineFits.first(where: { $0.routineName == "AM routine" })
         #expect(amFit?.note == "Works before SPF")
         #expect(amFit?.badgeText == "Best")
-
+        
         let pmFit = item.routineFits.first(where: { $0.routineName == "PM routine" })
         #expect(pmFit?.note == "Do not combine with retinol")
         #expect(pmFit?.badgeText == "Avoid")
     }
-
+    
     @Test func productDatabaseVersatileFallbacks() throws {
         let db = ProductDatabase.shared
-
+        
         // Lookup for LibraryProductItem
         let libraryItem = LibraryProductItem(title: "Custom Hydrating Mist", brand: "Aura Botanicals", category: .toner)
         let detail = db.detail(for: libraryItem)
@@ -178,13 +178,13 @@ struct AesthelityTests {
         #expect(detail.brand == "Aura Botanicals")
         #expect(detail.category == .toner)
         #expect(detail.routineFits.count >= 2)
-
+        
         // Lookup for SPF product
         let spfItem = LibraryProductItem(title: "Mineral Shield SPF", brand: "SunGuard", category: .spf)
         let spfDetail = db.detail(for: spfItem)
         #expect(spfDetail.routineFits.contains { $0.routineName == "PM routine" && $0.badgeText == "Avoid" })
     }
-
+    
     @Test func productDetailViewInitialization() throws {
         let item = ProductDatabase.shared.detail(forTitle: "Vitamin C Serum")
         let detailView = ProductDetailView(
@@ -196,49 +196,49 @@ struct AesthelityTests {
         #expect(detailView.showsTabBar == true)
         #expect(detailView.fullScreenFrame == true)
     }
-
+    
     @Test func libraryViewProductSelection() throws {
         let sampleProduct = LibraryProductItem(title: "Sun Block For...", brand: "HistoLab", category: .spf)
         let detail = ProductDatabase.shared.detail(for: sampleProduct)
-
+        
         let libraryViewWithProduct = LibraryView(selectedProductDetail: detail)
         #expect(libraryViewWithProduct.selectedProductDetail != nil)
         #expect(libraryViewWithProduct.selectedProductDetail?.title.contains("Sun Block") == true)
-
+        
         let sampleSave = RecentSaveItem(title: "Vitamin C Serum", subtitle: "Brightening · AM", category: .serum)
         let saveDetail = ProductDatabase.shared.detail(for: sampleSave)
         let libraryViewWithSave = LibraryView(selectedProductDetail: saveDetail)
         #expect(libraryViewWithSave.selectedProductDetail?.title == "Vitamin C Serum")
     }
-
+    
     @Test func productDetailLookupByID() throws {
         let db = ProductDatabase.shared
-
+        
         // 1. Look up Hydrabio Cream Cleanser by ID instead of shortened name "Hydrabio Cre..."
         let hydrabio = db.product(for: ProductDatabase.hydrabioCreamCleanserID)
         #expect(hydrabio != nil)
         #expect(hydrabio?.title == "Hydrabio Cream Cleanser")
         #expect(hydrabio?.brand == "Bioderma")
         #expect(hydrabio?.category == .cleanser)
-
+        
         // 2. Look up other previously shortened products by ID
         let sunBlock = db.product(byId: ProductDatabase.sunBlockPostCareID)
         #expect(sunBlock?.title == "Sun Block Post Care SPF 50+")
-
+        
         let superfood = db.detail(for: ProductDatabase.superfoodCicaCleanserID)
         #expect(superfood.title == "Superfood Cica Cleanser")
-
+        
         let foamingWash = db.detail(forId: ProductDatabase.foamingMicellarWashID)
         #expect(foamingWash?.title == "Foaming Micellar Wash")
-
+        
         // 3. Look up by String representation of ID
         let hydrabioByStringId = db.detail(forId: ProductDatabase.hydrabioCreamCleanserID.uuidString)
         #expect(hydrabioByStringId?.title == "Hydrabio Cream Cleanser")
-
+        
         // 4. Subscript access by UUID
         let subscriptItem = db[ProductDatabase.hydrabioCreamCleanserID]
         #expect(subscriptItem?.title == "Hydrabio Cream Cleanser")
-
+        
         // 5. Look up via LibraryProductItem carrying ID
         let libraryItem = LibraryProductItem(
             id: ProductDatabase.hydrabioCreamCleanserID,
@@ -249,33 +249,33 @@ struct AesthelityTests {
         let resolvedFromLibraryItem = db.detail(for: libraryItem)
         #expect(resolvedFromLibraryItem.id == ProductDatabase.hydrabioCreamCleanserID)
         #expect(resolvedFromLibraryItem.title == "Hydrabio Cream Cleanser")
-
+        
         // 6. ProductDetailView initialization by ID
         let detailViewByID = ProductDetailView(id: ProductDatabase.hydrabioCreamCleanserID)
         #expect(detailViewByID.product.id == ProductDatabase.hydrabioCreamCleanserID)
         #expect(detailViewByID.product.title == "Hydrabio Cream Cleanser")
-
+        
         let detailViewByProductID = ProductDetailView(productId: ProductDatabase.hydrabioCreamCleanserID)
         #expect(detailViewByProductID.product.title == "Hydrabio Cream Cleanser")
-
+        
         let detailViewByStringID = ProductDetailView(productId: ProductDatabase.hydrabioCreamCleanserID.uuidString)
         #expect(detailViewByStringID.product.title == "Hydrabio Cream Cleanser")
-
+        
         // 7. Verify all unique products in database
         #expect(db.allProducts.count == 14)
         #expect(db.allProducts.contains { $0.id == ProductDatabase.hydrabioCreamCleanserID })
     }
-
+    
     // MARK: - ScanView Tests
-
+    
     @Test func scanViewInitialization() throws {
         let scanView = ScanView()
         #expect(scanView.showsTabBar == false)
-
+        
         let scanViewWithTabBar = ScanView(showsTabBar: true)
         #expect(scanViewWithTabBar.showsTabBar == true)
     }
-
+    
     @Test func scanModeCasesAndIcons() throws {
         #expect(ScanMode.allCases.count == 2)
         #expect(ScanMode.ingredients.rawValue == "Ingredients")
@@ -283,21 +283,21 @@ struct AesthelityTests {
         #expect(ScanMode.ingredients.iconName == "text.viewfinder")
         #expect(ScanMode.barcode.iconName == "barcode.viewfinder")
     }
-
+    
     @Test func scanSafetyLevelsAndTokens() throws {
         let safe = IngredientSafetyLevel.safe
         #expect(safe.rawValue == "Harmonious")
         #expect(safe.iconName == "checkmark.circle.fill")
-
+        
         let caution = IngredientSafetyLevel.caution
         #expect(caution.rawValue == "Routine Caution")
         #expect(caution.iconName == "exclamationmark.triangle.fill")
-
+        
         let clash = IngredientSafetyLevel.clash
         #expect(clash.rawValue == "Formula Clash")
         #expect(clash.iconName == "xmark.octagon.fill")
     }
-
+    
     @Test func scanResultSheetModel() throws {
         let resultSheet = ScanResultSheet(
             scannedTitle: "Niacinamide 10% + Zinc 1%",
@@ -310,7 +310,7 @@ struct AesthelityTests {
         #expect(resultSheet.compatibilityScore == 96)
         #expect(resultSheet.actives.count == 3)
     }
-
+    
     @Test func profileViewInitializationAndDefaults() throws {
         let view = ProfileView()
         #expect(view.productsCount == 24)
@@ -322,12 +322,12 @@ struct AesthelityTests {
         #expect(view.onOpenAnalysis == nil)
         #expect(view.onSelectRoutine == nil)
     }
-
+    
     @Test func profileViewCustomParametersAndActions() throws {
         var journalOpened = false
         var analysisOpened = false
         var selectedPeriod: RoutinePeriod? = nil
-
+        
         let view = ProfileView(
             productsCount: 18,
             routinesCount: 3,
@@ -338,25 +338,25 @@ struct AesthelityTests {
             onOpenAnalysis: { analysisOpened = true },
             onSelectRoutine: { period in selectedPeriod = period }
         )
-
+        
         #expect(view.productsCount == 18)
         #expect(view.routinesCount == 3)
         #expect(view.score == 95)
         #expect(view.amStepsCount == 3)
         #expect(view.pmStepsCount == 6)
-
+        
         view.onOpenJournal?()
         #expect(journalOpened == true)
-
+        
         view.onOpenAnalysis?()
         #expect(analysisOpened == true)
-
+        
         view.onSelectRoutine?(.pm)
         #expect(selectedPeriod == .pm)
     }
-
+    
     // MARK: - SettingsView Tests
-
+    
     @Test func settingsViewDefaults() throws {
         let settings = SettingsView()
         #expect(settings.skinType == "Combination · Sensitive")
@@ -371,12 +371,12 @@ struct AesthelityTests {
         #expect(settings.onSelectTab == nil)
         #expect(settings.onDeleteScanHistory == nil)
     }
-
+    
     @Test func settingsViewCustomParametersAndCallbacks() throws {
         var backCalled = false
         var selectedTab: Int? = nil
         var deleteCalled = false
-
+        
         let settings = SettingsView(
             skinType: "Oily · Acne-Prone",
             concerns: "Blemishes, Hyperpigmentation",
@@ -390,7 +390,7 @@ struct AesthelityTests {
             onSelectTab: { tab in selectedTab = tab },
             onDeleteScanHistory: { deleteCalled = true }
         )
-
+        
         #expect(settings.skinType == "Oily · Acne-Prone")
         #expect(settings.concerns == "Blemishes, Hyperpigmentation")
         #expect(settings.amRoutineReminder == false)
@@ -399,17 +399,17 @@ struct AesthelityTests {
         #expect(settings.weeklySkinReportEnabled == false)
         #expect(settings.showsTabBar == true)
         #expect(settings.selectedTab == 2)
-
+        
         settings.onBack?()
         #expect(backCalled == true)
-
+        
         settings.onSelectTab?(3)
         #expect(selectedTab == 3)
-
+        
         settings.onDeleteScanHistory?()
         #expect(deleteCalled == true)
     }
-
+    
     @Test func profileViewSettingsIntegration() throws {
         var settingsOpened = false
         let profile = ProfileView(
@@ -417,11 +417,11 @@ struct AesthelityTests {
             onOpenSettings: { settingsOpened = true }
         )
         #expect(profile.showSettings == true)
-
+        
         profile.onOpenSettings?()
         #expect(settingsOpened == true)
     }
-
+    
     @Test func profileEditCallbackOpensSharedSetup() throws {
         var opened = false
         let profile = ProfileView(onEditSkinProfile: { opened = true })
@@ -430,7 +430,7 @@ struct AesthelityTests {
     }
 
     // MARK: - Article Detail Tests
-
+    
     @Test func articleDetailExampleData() throws {
         let example = ArticleDetailItem.example
         #expect(example.badge == "GUIDE")
@@ -447,7 +447,7 @@ struct AesthelityTests {
         #expect(example.relatedProducts.count == 3)
         #expect(example.relatedProducts[0].title == "Vitamin C Serum")
     }
-
+    
     @Test func articleDetailViewInitialization() throws {
         var backTapped = false
         var selectedTab: Int? = nil
@@ -458,26 +458,26 @@ struct AesthelityTests {
             onBack: { backTapped = true },
             onSelectTab: { tab in selectedTab = tab }
         )
-
+        
         #expect(articleView.showsTabBar == true)
         #expect(articleView.fullScreenFrame == true)
         #expect(articleView.article.title == ArticleDetailItem.example.title)
-
+        
         articleView.onBack?()
         #expect(backTapped == true)
-
+        
         articleView.onSelectTab?(3)
         #expect(selectedTab == 3)
     }
-
+    
     @Test func exploreViewInitializationAndGuides() throws {
         let defaultExplore = ExploreView()
         #expect(defaultExplore.showsTabBar == true)
         #expect(defaultExplore.guides.contains { $0.title.contains("How to Layer SPF") })
     }
-
+    
     // MARK: - Ingredient Clash Tests
-
+    
     @Test func ingredientClashViewInitialization() throws {
         var backTapped = false
         let clashView = IngredientClashView(onBack: {
@@ -487,7 +487,7 @@ struct AesthelityTests {
         clashView.onBack?()
         #expect(backTapped == true)
     }
-
+    
     @Test func routineStepItemClashProperty() throws {
         let nonClashStep = RoutineStepItem(
             stepNumber: 1,
@@ -498,7 +498,7 @@ struct AesthelityTests {
         )
         #expect(nonClashStep.hasClash == false)
         #expect(nonClashStep.title == "Gentle Cleanser")
-
+        
         let clashStep = RoutineStepItem(
             stepNumber: 2,
             title: "Vitamin C Serum",
@@ -509,12 +509,12 @@ struct AesthelityTests {
         #expect(clashStep.hasClash == true)
         #expect(clashStep.title == "Vitamin C Serum")
     }
-
+    
     @Test func contentViewClashDemoStateDefaultsAndSteps() throws {
         let contentView = ContentView()
         #expect(contentView.showClashDemo == true)
         #expect(contentView.selectedPeriod == .am)
-
+        
         // In default clash demo state for AM
         let steps = contentView.currentSteps
         #expect(steps.count == 5)
@@ -529,10 +529,10 @@ struct AesthelityTests {
         #expect(steps[4].title == "SPF 46")
         #expect(steps[4].hasClash == false)
     }
-
+    
     @Test func contentViewToggleClashDemoState() throws {
         let contentView = ContentView(showClashDemo: false)
-
+        
         let normalSteps = contentView.currentSteps
         #expect(normalSteps.count == 4)
         #expect(normalSteps.allSatisfy { $0.hasClash == false })
@@ -541,7 +541,7 @@ struct AesthelityTests {
         #expect(normalSteps[2].title == "Daily Moisturizer")
         #expect(normalSteps[3].title == "SPF 46")
     }
-
+    
     @Test func contentViewPopulatedRoutineHasNoEmptyMessage() throws {
         #expect(ContentView(selectedPeriod: .am).emptyRoutineMessage == nil)
         #expect(ContentView(selectedPeriod: .am, showClashDemo: false).emptyRoutineMessage == nil)
@@ -566,7 +566,7 @@ struct AesthelityTests {
         let contentView = ContentView(showIngredientClashDetail: true)
         #expect(contentView.showIngredientClashDetail == true)
     }
-
+    
     @Test func skinMoodEnumCases() throws {
         let allMoods = SkinMood.allCases
         #expect(allMoods.count == 6)
@@ -579,7 +579,7 @@ struct AesthelityTests {
         #expect(SkinMood.calm.displayName == "Calm")
         #expect(SkinMood.calm.id == "Calm")
     }
-
+    
     @Test func skinLogEntryModel() throws {
         let entry = SkinLogEntry(
             dateString: "September 13",
@@ -601,14 +601,14 @@ struct AesthelityTests {
         #expect(entry.badgeText == "Good")
         #expect(entry.isHighlighted == true)
     }
-
+    
     @Test func skinJournalStoreDefaultsAndSaving() throws {
         let store = SkinJournalStore()
         #expect(store.entries.count == 3)
         #expect(store.entries[0].dateString == "September 13")
         #expect(store.entries[1].dateString == "September 9")
         #expect(store.entries[2].dateString == "September 6")
-
+        
         let newEntry = SkinLogEntry(
             dateString: "September 20",
             title: "Hydration check",
@@ -618,19 +618,19 @@ struct AesthelityTests {
         store.saveEntry(newEntry)
         #expect(store.entries.count == 4)
         #expect(store.entries[0].dateString == "September 20")
-
+        
         var modifiedEntry = newEntry
         modifiedEntry.note = "Updated note"
         store.saveEntry(modifiedEntry)
         #expect(store.entries.count == 4)
         #expect(store.entries[0].note == "Updated note")
     }
-
+    
     @Test func skinCalendarViewDefaults() throws {
         let store = SkinJournalStore()
         var openedLog: SkinLogEntry? = nil
         var openedJournal = false
-
+        
         let view = SkinCalendarView(
             store: store,
             backTitle: "Journal",
@@ -650,7 +650,7 @@ struct AesthelityTests {
         view.onOpenJournal?()
         #expect(openedJournal == true)
     }
-
+    
     @Test func skinLogViewDefaultsAndSaving() throws {
         let entry = SkinLogEntry(
             dateString: "September 13",
@@ -661,10 +661,10 @@ struct AesthelityTests {
             conditions: ["Low redness", "Routine complete", "SPF applied"],
             badgeText: "Good"
         )
-
+        
         var savedEntry: SkinLogEntry? = nil
         var dismissed = false
-
+        
         let logView = SkinLogView(
             entry: entry,
             backTitle: "Calendar",
@@ -686,12 +686,12 @@ struct AesthelityTests {
         logView.onSave?(entry)
         #expect(savedEntry?.title == entry.title)
     }
-
+    
     @Test func skinJournalViewDefaults() throws {
         let store = SkinJournalStore()
         var openedCalendar = false
         var dismissed = false
-
+        
         let journalView = SkinJournalView(
             store: store,
             backTitle: "Home",
@@ -712,7 +712,7 @@ struct AesthelityTests {
         journalView.onOpenCalendar?()
         #expect(openedCalendar == true)
     }
-
+    
     @Test func contentViewCalendarSheetState() throws {
         let defaultView = ContentView()
         #expect(defaultView.showCalendarSheet == false)
@@ -721,13 +721,13 @@ struct AesthelityTests {
         #expect(activeView.showCalendarSheet == true)
         #expect(activeView.showJournalSheet == true)
     }
-
+    
     // MARK: - Routine Screen & Feature Tests
-
+    
     @Test func routineRepositoryDefaults() throws {
         let repo = RoutineRepository.shared
         #expect(repo.routines.count >= 3)
-
+        
         let amGlow = repo.routines.first(where: { $0.name == "AM Glow" })
         #expect(amGlow != nil)
         #expect(amGlow?.period == .am)
@@ -735,21 +735,21 @@ struct AesthelityTests {
         #expect(amGlow?.steps.count == 4)
         #expect(amGlow?.frequency == .everyDay)
         #expect(amGlow?.scheduleSummary.contains("7:00 AM") == true)
-
+        
         let pmRepair = repo.routines.first(where: { $0.name == "PM Repair" })
         #expect(pmRepair != nil)
         #expect(pmRepair?.period == .pm)
         #expect(pmRepair?.status == .paused)
         #expect(pmRepair?.frequency == .everyOtherDay)
         #expect(pmRepair?.scheduleSummary.contains("9:00 PM") == true)
-
+        
         let weekly = repo.routines.first(where: { $0.name == "Weekly Exfoliate" })
         #expect(weekly != nil)
         #expect(weekly?.status == .active)
         #expect(weekly?.frequency == .twoTimesAWeek)
         #expect(weekly?.scheduleSummary.contains("2× / week") == true)
     }
-
+    
     @Test func routineFrequencyAndScheduleFormatting() throws {
         #expect(RoutineFrequency.allCases.count == 5)
         #expect(RoutineFrequency.everyDay.rawValue == "Every day")
@@ -757,29 +757,29 @@ struct AesthelityTests {
         #expect(RoutineFrequency.twoTimesAWeek.rawValue == "2 times a week")
         #expect(RoutineFrequency.onceAWeek.rawValue == "Once a week")
         #expect(RoutineFrequency.onceAMonth.rawValue == "Once a month")
-
+        
         let everyDayRecord = RoutineRecord(name: "Morning", frequency: .everyDay, reminderTime: "7:00 AM")
         #expect(everyDayRecord.scheduleSummary == "Every day · 7:00 AM")
-
+        
         let everyOtherRecord = RoutineRecord(name: "Alt", frequency: .everyOtherDay, reminderTime: "8:00 AM")
         #expect(everyOtherRecord.scheduleSummary == "Every other day · 8:00 AM")
-
+        
         let weeklyRecord = RoutineRecord(name: "Weekend", frequency: .onceAWeek, reminderTime: "9:00 AM")
         #expect(weeklyRecord.scheduleSummary == "Once a week · 9:00 AM")
-
+        
         let monthlyRecord = RoutineRecord(name: "Monthly", frequency: .onceAMonth, reminderTime: "10:00 AM")
         #expect(monthlyRecord.scheduleSummary == "Once a month · 10:00 AM")
-
+        
         let weekdays = RoutineWeekday.allCases
         #expect(weekdays.count == 7)
     }
-
+    
     @Test func routineNotificationSettingsLeadTimes() throws {
         #expect(NotificationLeadTime.allCases.count == 3)
         #expect(NotificationLeadTime.atTime.rawValue == "At time")
         #expect(NotificationLeadTime.min15.rawValue == "15 min before")
         #expect(NotificationLeadTime.hour1.rawValue == "1 hour before")
-
+        
         let record = RoutineRecord(
             name: "Test Routine",
             pushRemindersEnabled: true,
@@ -790,18 +790,18 @@ struct AesthelityTests {
         #expect(record.leadTime == .min15)
         #expect(record.quietHoursEnabled == true)
     }
-
+    
     @Test func routineStepReordering() throws {
         let initialSteps = [
             RoutineStepItem(stepNumber: 1, title: "Cleanser", subtitle: "Step 1", state: .complete),
             RoutineStepItem(stepNumber: 2, title: "Toner", subtitle: "Step 2", state: .active),
             RoutineStepItem(stepNumber: 3, title: "Moisturizer", subtitle: "Step 3", state: .incomplete)
         ]
-
+        
         var reordered = initialSteps
         let item = reordered.remove(at: 0)
         reordered.insert(item, at: 1)
-
+        
         for i in 0..<reordered.count {
             let s = reordered[i]
             reordered[i] = RoutineStepItem(
@@ -812,7 +812,7 @@ struct AesthelityTests {
                 hasClash: s.hasClash
             )
         }
-
+        
         #expect(reordered[0].title == "Toner")
         #expect(reordered[0].stepNumber == 1)
         #expect(reordered[1].title == "Cleanser")
@@ -820,7 +820,7 @@ struct AesthelityTests {
         #expect(reordered[2].title == "Moisturizer")
         #expect(reordered[2].stepNumber == 3)
     }
-
+    
     @Test func editRoutineStepLimitMaxEight() throws {
         var steps: [RoutineStepItem] = []
         for i in 1...8 {
@@ -828,17 +828,17 @@ struct AesthelityTests {
         }
         let record = RoutineRecord(name: "Full Routine", period: .am, steps: steps)
         #expect(record.steps.count == 8)
-
+        
         let view = EditRoutineView(routine: record)
         #expect(view.steps.count == 8)
     }
-
+    
     @Test func contentViewRoutineNavigationStates() throws {
         let view = ContentView(showManageRoutinesView: true, showEditRoutineView: true)
         #expect(view.showManageRoutinesView == true)
         #expect(view.showEditRoutineView == true)
     }
-
+    
     @Test func createRoutineViewInitialization() throws {
         var cancelCalled = false
         var savedRecord: RoutineRecord? = nil
@@ -855,7 +855,7 @@ struct AesthelityTests {
         createView.onSaveRoutine(sample)
         #expect(savedRecord?.name == "Created Routine")
     }
-
+    
     @Test func myRoutinesViewInitialization() throws {
         var backCalled = false
         let myRoutines = MyRoutinesView(initialEmptyDemo: false, onBack: { backCalled = true })
@@ -863,7 +863,7 @@ struct AesthelityTests {
         myRoutines.onBack()
         #expect(backCalled == true)
     }
-
+    
     @Test func addProductToRoutineViewInitialization() throws {
         let addView = AddProductToRoutineView(
             currentRoutineName: "AM Glow",
@@ -874,10 +874,10 @@ struct AesthelityTests {
     }
 
     // MARK: - Scan Error State Tests
-
+    
     @Test func scanErrorTypeProperties() throws {
         #expect(ScanErrorType.allCases.count == 2)
-
+        
         let labelError = ScanErrorType.unableToReadLabel
         #expect(labelError.title == "Unable to Read Label")
         #expect(labelError.badgeText == "Unreadable Label")
@@ -886,7 +886,7 @@ struct AesthelityTests {
         #expect(labelError.secondaryActionTitle == "Upload Photo Instead")
         #expect(labelError.tips.count == 3)
         #expect(labelError.tips[0].title == "Bright, Even Light")
-
+        
         let barcodeError = ScanErrorType.unableToReadBarcode
         #expect(barcodeError.title == "Unable to Read Barcode")
         #expect(barcodeError.badgeText == "Unreadable Barcode")
@@ -896,13 +896,13 @@ struct AesthelityTests {
         #expect(barcodeError.tips.count == 3)
         #expect(barcodeError.tips[0].title == "Align in Frame")
     }
-
+    
     @Test func scanErrorViewInitializationAndCallbacks() throws {
         var tryAgainCalled = false
         var secondaryCalled = false
         var dismissCalled = false
         var tabIndexSelected: Int? = nil
-
+        
         let errorView = ScanErrorView(
             errorType: .unableToReadLabel,
             showsTabBar: true,
@@ -911,36 +911,36 @@ struct AesthelityTests {
             onDismiss: { dismissCalled = true },
             onSelectTab: { tabIndexSelected = $0 }
         )
-
+        
         #expect(errorView.errorType == .unableToReadLabel)
         #expect(errorView.showsTabBar == true)
-
+        
         errorView.onTryAgain()
         #expect(tryAgainCalled == true)
-
+        
         errorView.onSecondaryAction()
         #expect(secondaryCalled == true)
-
+        
         errorView.onDismiss()
         #expect(dismissCalled == true)
-
+        
         errorView.onSelectTab?(2)
         #expect(tabIndexSelected == 2)
     }
-
+    
     @Test func scanViewErrorScreenStates() throws {
         #expect(ScanScreenState.unableToReadLabel.rawValue == "Unable to Read Label")
         #expect(ScanScreenState.unableToReadBarcode.rawValue == "Unable to Read Barcode")
-
+        
         let scanViewLabelError = ScanView(initialState: .unableToReadLabel, showsTabBar: true)
         #expect(scanViewLabelError.showsTabBar == true)
-
+        
         let scanViewBarcodeError = ScanView(initialState: .unableToReadBarcode, showsTabBar: false)
         #expect(scanViewBarcodeError.showsTabBar == false)
     }
 
     // MARK: - Startup & Authentication Screens Tests
-
+    
     @Test func startupScreenCases() throws {
         #expect(StartupScreen.allCases.count == 5)
         #expect(StartupScreen.welcome.rawValue == "Welcome")
@@ -949,7 +949,7 @@ struct AesthelityTests {
         #expect(StartupScreen.signInInvalid.rawValue == "Invalid Form")
         #expect(StartupScreen.signInFailed.rawValue == "Network Error")
     }
-
+    
     @Test func startupFlowViewInitialization() throws {
         var finished = false
         let flow = StartupFlowView(initialScreen: .welcome) {
@@ -958,15 +958,15 @@ struct AesthelityTests {
         #expect(flow.currentScreen == .welcome)
         flow.onFinish()
         #expect(finished)
-
+        
         let customFlow = StartupFlowView(initialScreen: .signInFailed)
         #expect(customFlow.currentScreen == .signInFailed)
     }
-
+    
     @Test func authSignInViewModesAndCredentials() throws {
         var successCalled = false
         var switchToSetupCalled = false
-
+        
         let normalAuth = AuthSignInView(
             initialMode: .normal,
             onSuccess: { successCalled = true },
@@ -979,49 +979,49 @@ struct AesthelityTests {
         #expect(successCalled == true)
         normalAuth.onSwitchToSetup()
         #expect(switchToSetupCalled == true)
-
+        
         let invalidAuth = AuthSignInView(initialMode: .invalid)
         #expect(invalidAuth.mode == .invalid)
         #expect(invalidAuth.email == "maya")
         #expect(invalidAuth.password == "")
-
+        
         let failedAuth = AuthSignInView(initialMode: .failed)
         #expect(failedAuth.mode == .failed)
         #expect(failedAuth.email == "maya@aesthelity.app")
     }
-
+    
     @Test func onboardingWelcomeViewCallbacks() throws {
         var startedCalled = false
         var signInCalled = false
         var skipCalled = false
-
+        
         let welcome = OnboardingWelcomeView(
             onGetStarted: { startedCalled = true },
             onSignIn: { signInCalled = true },
             onSkip: { skipCalled = true }
         )
-
+        
         welcome.onGetStarted()
         #expect(startedCalled == true)
-
+        
         welcome.onSignIn()
         #expect(signInCalled == true)
-
+        
         welcome.onSkip()
         #expect(skipCalled == true)
     }
-
+    
     @Test func onboardingConcernsSelection() throws {
         var selected = SkinProfileDraft(concerns: [.sensitivityAndRedness])
         var backCalled = false
         var continueCalled = false
         var skipCalled = false
-
+        
         let binding = SwiftUI.Binding<SkinProfileDraft>(
             get: { selected },
             set: { selected = $0 }
         )
-
+        
         let concernsView = OnboardingConcernsView(
             draft: binding,
             errors: [],
@@ -1031,16 +1031,16 @@ struct AesthelityTests {
             onContinue: { continueCalled = true },
             onSkip: { skipCalled = true }
         )
-
+        
         #expect(SkinProfile.Concern.allCases.count == 8)
         #expect(concernsView.draft.concerns.contains(.sensitivityAndRedness))
-
+        
         concernsView.onBack()
         #expect(backCalled == true)
-
+        
         concernsView.onContinue()
         #expect(continueCalled == true)
-
+        
         concernsView.onSkip()
         #expect(skipCalled == true)
     }
