@@ -422,6 +422,13 @@ struct AesthelityTests {
         #expect(settingsOpened == true)
     }
     
+    @Test func profileEditCallbackOpensSharedSetup() throws {
+        var opened = false
+        let profile = ProfileView(onEditSkinProfile: { opened = true })
+        profile.onEditSkinProfile?()
+        #expect(opened)
+    }
+
     // MARK: - Article Detail Tests
     
     @Test func articleDetailExampleData() throws {
@@ -535,6 +542,26 @@ struct AesthelityTests {
         #expect(normalSteps[3].title == "SPF 46")
     }
     
+    @Test func contentViewPopulatedRoutineHasNoEmptyMessage() throws {
+        #expect(ContentView(selectedPeriod: .am).emptyRoutineMessage == nil)
+        #expect(ContentView(selectedPeriod: .am, showClashDemo: false).emptyRoutineMessage == nil)
+        #expect(ContentView(selectedPeriod: .pm).emptyRoutineMessage == nil)
+    }
+
+    @Test func contentViewEmptySelectedRoutineShowsMessage() throws {
+        let sampleAM = ContentView(selectedPeriod: .am, showClashDemo: false).currentSteps
+
+        let emptyPM = ContentView(selectedPeriod: .pm, amSteps: sampleAM, amClashSteps: sampleAM, pmSteps: [])
+        #expect(emptyPM.currentSteps.isEmpty)
+        #expect(emptyPM.emptyRoutineMessage == "No PM routine steps to show yet.")
+
+        let populatedAM = ContentView(selectedPeriod: .am, amSteps: sampleAM, amClashSteps: sampleAM, pmSteps: [])
+        #expect(populatedAM.emptyRoutineMessage == nil)
+
+        let emptyClashAM = ContentView(selectedPeriod: .am, showClashDemo: true, amSteps: sampleAM, amClashSteps: [], pmSteps: [])
+        #expect(emptyClashAM.emptyRoutineMessage == "No AM routine steps to show yet.")
+    }
+
     @Test func contentViewClashDetailNavigationState() throws {
         let contentView = ContentView(showIngredientClashDetail: true)
         #expect(contentView.showIngredientClashDetail == true)
@@ -930,7 +957,7 @@ struct AesthelityTests {
         }
         #expect(flow.currentScreen == .welcome)
         flow.onFinish()
-        #expect(finished == true)
+        #expect(finished)
         
         let customFlow = StartupFlowView(initialScreen: .signInFailed)
         #expect(customFlow.currentScreen == .signInFailed)
@@ -985,25 +1012,28 @@ struct AesthelityTests {
     }
     
     @Test func onboardingConcernsSelection() throws {
-        var selected: Set<String> = ["Sensitivity & redness"]
+        var selected = SkinProfileDraft(concerns: [.sensitivityAndRedness])
         var backCalled = false
         var continueCalled = false
         var skipCalled = false
         
-        let binding = SwiftUI.Binding<Set<String>>(
+        let binding = SwiftUI.Binding<SkinProfileDraft>(
             get: { selected },
             set: { selected = $0 }
         )
         
         let concernsView = OnboardingConcernsView(
-            selectedConcerns: binding,
+            draft: binding,
+            errors: [],
+            saveError: nil,
+            normalizer: nil,
             onBack: { backCalled = true },
             onContinue: { continueCalled = true },
             onSkip: { skipCalled = true }
         )
         
-        #expect(concernsView.availableConcerns.count == 8)
-        #expect(concernsView.selectedConcerns.contains("Sensitivity & redness") == true)
+        #expect(SkinProfile.Concern.allCases.count == 8)
+        #expect(concernsView.draft.concerns.contains(.sensitivityAndRedness))
         
         concernsView.onBack()
         #expect(backCalled == true)

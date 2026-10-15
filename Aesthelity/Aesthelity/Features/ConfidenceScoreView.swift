@@ -17,6 +17,8 @@ public struct ConfidenceScoreView: View {
     public var amStepsCount: Int = 4
     public var pmStepsCount: Int = 5
     public var onDismiss: (() -> Void)? = nil
+    private let samples: [DemoAnalysisSample] = DemoAnalysis.bundledSamples
+    @State private var selectedSampleID: String = DemoAnalysis.scenarioChoices[0].scenarioID
     
     public init(
         score: Int = 82,
@@ -50,7 +52,7 @@ public struct ConfidenceScoreView: View {
                     // Score Breakdown Section
                     scoreBreakdownSection
                     
-                    // Synergies & Compatibility Findings (Sprint 1 AN-01)
+                    // Sample Findings from DATA-01 demo scenarios (Sprint 1 AN-01)
                     analysisFindingsSection
                     
                     // Layering & Timing Advice
@@ -170,26 +172,66 @@ public struct ConfidenceScoreView: View {
     // MARK: - Analysis Findings (Sprint 1 AN-01)
     private var analysisFindingsSection: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Compatibility Findings")
+            Text("Sample Findings")
                 .font(AppTheme.Typography.headline)
                 .foregroundStyle(AppTheme.Semantic.inkPrimary)
             
-            AnalysisFindingCard(
-                headline: "Vitamin C + SPF 46 Synergy",
-                explanation: "L-Ascorbic Acid neutralizes harmful free radicals and environmental stressors, dramatically boosting sunscreen photoprotection against UVA/UVB damage.",
-                tag: "High Synergy"
-            )
+            Text("Mocked results for sample scenarios built from demo products. They are not an analysis of your routine or profile.")
+                .font(AppTheme.Typography.caption)
+                .foregroundStyle(AppTheme.Semantic.inkSecondary)
+
+            Picker("Sample scenario", selection: $selectedSampleID) {
+                ForEach(samples) { sample in
+                    Text(sample.title).tag(sample.id)
+                }
+            }
+            .pickerStyle(.segmented)
             
+            if let sample = samples.first(where: { $0.id == selectedSampleID }) {
+                Text(sample.summary)
+                    .font(AppTheme.Typography.caption)
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+
+                sampleContent(sample.state)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sampleContent(_ state: DemoAnalysisState) -> some View {
+        switch state {
+        case .normal(let productNames):
             AnalysisFindingCard(
-                headline: "Safe Separation of Night Actives",
-                explanation: "Exfoliating acids and retinoids are kept exclusively in the PM routine, avoiding daytime photo-sensitization and direct pH clashing with Vitamin C.",
-                tag: "Clean Layering"
+                headline: "No findings in this sample",
+                explanation: "The demo rules flagged nothing for these sample products. This is not a safety guarantee.",
+                tag: "Normal · No findings",
+                tagIcon: "checkmark.circle",
+                details: [.init("Sample products", productNames.joined(separator: ", "))]
             )
-            
+        case .findings(let findings):
+            ForEach(Array(findings.enumerated()), id: \.offset) { _, finding in
+                AnalysisFindingCard(
+                    headline: "Sample finding",
+                    explanation: finding.explanation,
+                    tag: finding.status.label,
+                    tagIcon: finding.status == .unknown ? "questionmark.circle" : "exclamationmark.triangle",
+                    tagStyle: .neutral,
+                    details: [
+                        .init(finding.productNames.count == 1 ? "Affected product" : "Affected products", finding.productNames.joined(separator: ", ")),
+                        .init("Ingredient", finding.ingredientText),
+                        .init("Category", finding.category)
+                    ],
+                    reason: finding.reason,
+                    note: finding.limitation
+                )
+            }
+        case .unavailable(let message):
             AnalysisFindingCard(
-                headline: "Moisture Barrier Buffering",
-                explanation: "Applying Daily Moisturizer prior to SPF forms a balanced lipid film, locking in active hydration and minimizing any transepidermal water loss.",
-                tag: "Barrier Care"
+                headline: "Sample analysis unavailable",
+                explanation: message,
+                tag: "Unavailable",
+                tagIcon: "exclamationmark.circle",
+                tagStyle: .neutral
             )
         }
     }

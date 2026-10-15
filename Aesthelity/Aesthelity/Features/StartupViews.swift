@@ -25,22 +25,27 @@ public enum StartupScreen: String, CaseIterable, Identifiable {
 
 public struct StartupFlowView: View {
     @State public var currentScreen: StartupScreen
-    @State public var selectedConcerns: Set<String> = ["Sensitivity & redness", "Barrier repair"]
+    @EnvironmentObject private var profileStore: SkinProfileStore
+    @State private var draft = SkinProfileDraft()
+    @State private var loadedDraft = false
+    @State private var attemptedSubmit = false
+    @State private var saveError: String?
+    private let normalizer = try? IngredientNormalizer(catalog: .loadBundled())
     public var onFinish: () -> Void
+    public var onCancel: (() -> Void)?
     
     public init(
         initialScreen: StartupScreen = .welcome,
+        onCancel: (() -> Void)? = nil,
         onFinish: @escaping () -> Void = {}
     ) {
         self._currentScreen = State(initialValue: initialScreen)
         self.onFinish = onFinish
+        self.onCancel = onCancel
     }
     
     public var body: some View {
         ZStack(alignment: .top) {
-            // Background Sky Wallpaper (Shared across all startup screens)
-            startupBackground
-            
             // Screen Content
             VStack(spacing: 0) {
                 // Top Demo Switcher Toolbar for Quick State Inspection
@@ -64,25 +69,32 @@ public struct StartupFlowView: View {
                                     currentScreen = .signInNormal
                                 }
                             },
-                            onSkip: onFinish
+                            onSkip: skipProfile
                         )
                         
                     case .concerns:
                         OnboardingConcernsView(
-                            selectedConcerns: $selectedConcerns,
+                            draft: $draft,
+                            errors: attemptedSubmit ? draft.validationErrors() : [],
+                            saveError: saveError ?? profileStore.loadError,
+                            normalizer: normalizer,
                             onBack: {
+                                if let onCancel {
+                                    onCancel()
+                                    return
+                                }
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
                                 }
                             },
-                            onContinue: onFinish,
-                            onSkip: onFinish
+                            onContinue: submitProfile,
+                            onSkip: skipProfile
                         )
                         
                     case .signInNormal:
                         AuthSignInView(
                             initialMode: .normal,
-                            onSuccess: onFinish,
+                            onSuccess: finishSignIn,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -93,7 +105,7 @@ public struct StartupFlowView: View {
                     case .signInInvalid:
                         AuthSignInView(
                             initialMode: .invalid,
-                            onSuccess: onFinish,
+                            onSuccess: finishSignIn,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -104,7 +116,7 @@ public struct StartupFlowView: View {
                     case .signInFailed:
                         AuthSignInView(
                             initialMode: .failed,
-                            onSuccess: onFinish,
+                            onSuccess: finishSignIn,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -116,7 +128,52 @@ public struct StartupFlowView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .ignoresSafeArea(.all, edges: .all)
+        .background(startupBackground)
+        .ignoresSafeArea(.container, edges: .all)
+        .onAppear {
+            guard !loadedDraft else { return }
+            draft = SkinProfileDraft(skinType: profileStore.profile.skinType,
+                                     concerns: profileStore.profile.concerns,
+                                     avoidedIngredientInputs: profileStore.profile.avoidedIngredients.map(\.originalText))
+            loadedDraft = true
+        }
+        .alert("Profile could not be saved", isPresented: Binding(
+            get: { saveError != nil }, set: { if !$0 { saveError = nil } }
+        )) {
+            Button("OK") { saveError = nil }
+        } message: {
+            Text(saveError ?? "Please try again.")
+        }
+    }
+
+    private func submitProfile() {
+        attemptedSubmit = true
+        guard let normalizer else {
+            saveError = "Ingredient lookup is unavailable. Please try again."
+            return
+        }
+        if case .completed(let profile) = draft.submit(using: normalizer) {
+            saveAndFinish(profile)
+        }
+    }
+
+    private func skipProfile() { saveAndFinish(draft.skip()) }
+
+    private func finishSignIn() {
+        if profileStore.profile.setupStatus == .notStarted {
+            skipProfile()
+        } else {
+            onFinish()
+        }
+    }
+
+    private func saveAndFinish(_ profile: SkinProfile) {
+        do {
+            try profileStore.save(profile)
+            onFinish()
+        } catch {
+            saveError = "Your choices could not be saved. They are still here; please try again."
+        }
     }
     
     // Shared Background Wallpaper
@@ -178,7 +235,7 @@ public struct StartupFlowView: View {
                 }
                 
                 // Instant bypass button to enter app
-                Button(action: onFinish) {
+                Button(action: finishSignIn) {
                     HStack(spacing: 4) {
                         Text("Enter App")
                         Image(systemName: "arrow.right")
@@ -729,6 +786,8 @@ public struct OnboardingWelcomeView: View {
                 }
                 .buttonStyle(.plain)
                 
+                .accessibilityIdentifier("profile-get-started")
+
                 // Secondary: I already have an account
                 Button(action: onSignIn) {
                     Text("I already have an account")
@@ -763,157 +822,168 @@ public struct OnboardingWelcomeView: View {
 
 // MARK: - 3. Onboarding Concerns Selection Screen
 
-public struct OnboardingConcernsView: View {
-    @Binding public var selectedConcerns: Set<String>
-    public var onBack: () -> Void
-    public var onContinue: () -> Void
-    public var onSkip: () -> Void
-    
-    public let availableConcerns: [String] = [
-        "Acne prone",
-        "Sensitivity & redness",
-        "Barrier repair",
-        "Anti-aging / fine lines",
-        "Dryness & hydration",
-        "Hyperpigmentation & dark spots",
-        "Oil control & pores",
-        "Uneven texture"
-    ]
-    
-    public init(
-        selectedConcerns: Binding<Set<String>>,
-        onBack: @escaping () -> Void = {},
-        onContinue: @escaping () -> Void = {},
-        onSkip: @escaping () -> Void = {}
-    ) {
-        self._selectedConcerns = selectedConcerns
-        self.onBack = onBack
-        self.onContinue = onContinue
-        self.onSkip = onSkip
-    }
-    
-    public var body: some View {
+struct OnboardingConcernsView: View {
+    @Binding var draft: SkinProfileDraft
+    var errors: [SkinProfileDraft.IngredientInputError]
+    var saveError: String?
+    var normalizer: IngredientNormalizer?
+    var onBack: () -> Void
+    var onContinue: () -> Void
+    var onSkip: () -> Void
+    @FocusState private var focusedEntry: Int?
+
+    var body: some View {
         VStack(spacing: 0) {
-            // Header Bar with Back Button
             HStack {
-                Button(action: onBack) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "chevron.left")
-                        Text("Back")
-                    }
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(Color(hex: "#1A1628"))
-                }
-                .buttonStyle(.plain)
-                
+                Button("Back", systemImage: "chevron.left", action: onBack)
                 Spacer()
-                
-                Button(action: onSkip) {
-                    Text("Skip")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundStyle(Color(hex: "#625478"))
-                }
-                .buttonStyle(.plain)
+                Button("Skip", action: onSkip).accessibilityIdentifier("profile-skip")
             }
+            .font(.subheadline.weight(.medium))
             .padding(.horizontal, 24)
-            .padding(.top, 8)
-            .padding(.bottom, 16)
-            
-            ScrollView(.vertical, showsIndicators: false) {
+            .padding(.vertical, 16)
+
+            ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    // Step Indicator
-                    Text("Step 1 of 2 · Skin Profile")
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundStyle(Color(hex: "#6F4E37"))
-                        .textCase(.uppercase)
-                    
-                    // Title & Description
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("What are your skin priorities?")
-                            .font(.system(size: 26, weight: .bold))
-                            .foregroundStyle(Color(hex: "#1A1628"))
-                        
-                        Text("Select your primary goals. Aesthelity will use these to flag ingredient clashes and suggest safe layering.")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(Color(hex: "#625478"))
-                            .lineSpacing(3)
+                    Text("Your skin profile").font(.title.bold())
+                    Text("Choose what you want to share. You can leave any section empty or skip setup.")
+                        .font(.subheadline).foregroundStyle(Color(hex: "#625478"))
+                    if let saveError {
+                        Text(saveError).font(.subheadline).foregroundStyle(.red)
                     }
-                    
-                    // Concerns Selection Wrap
-                    concernChipsLayout
-                        .padding(.top, 8)
-                    
-                    Spacer(minLength: 40)
-                }
-                .padding(.horizontal, 24)
-            }
-            
-            // Bottom Action Area
-            VStack(spacing: 12) {
-                Button(action: onContinue) {
-                    HStack(spacing: 8) {
-                        Text("Continue")
-                        Image(systemName: "arrow.right")
-                    }
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.white)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 52)
-                    .background(Color(hex: "#7C83BC"))
-                    .clipShape(Capsule())
-                    .shadow(color: Color(hex: "#7C83BC").opacity(0.35), radius: 6, x: 0, y: 3)
-                }
-                .buttonStyle(.plain)
-                
-                Text("\(selectedConcerns.count) priorities selected")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: "#625478"))
-            }
-            .padding(.horizontal, 24)
-            .padding(.bottom, 36)
-        }
-    }
-    
-    // Concern Chips Grid Layout
-    private var concernChipsLayout: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(availableConcerns, id: \.self) { concern in
-                let isSelected = selectedConcerns.contains(concern)
-                Button(action: {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        if isSelected {
-                            selectedConcerns.remove(concern)
-                        } else {
-                            selectedConcerns.insert(concern)
+                    Text("Skin type").font(.headline)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(SkinProfile.SkinType.allCases, id: \.self) { type in
+                            choice(type.displayName, selected: draft.skinType == type, id: "skin-type-\(type.rawValue)") {
+                                draft.skinType = draft.skinType == type ? nil : type
+                            }
                         }
                     }
-                }) {
-                    HStack(spacing: 12) {
-                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundStyle(isSelected ? Color(hex: "#7C83BC") : Color(hex: "#A096AF"))
-                        
-                        Text(concern)
-                            .font(.system(size: 15, weight: isSelected ? .semibold : .regular))
-                            .foregroundStyle(Color(hex: "#1A1628"))
-                        
-                        Spacer()
+                    Text("Concerns").font(.headline)
+                    LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                        ForEach(SkinProfile.Concern.allCases, id: \.self) { concern in
+                            choice(concern.displayName, selected: draft.concerns.contains(concern), id: "concern-\(concern.rawValue)") {
+                                if draft.concerns.contains(concern) {
+                                    draft.concerns.remove(concern)
+                                } else {
+                                    draft.concerns.insert(concern)
+                                }
+                            }
+                        }
                     }
-                    .padding(.horizontal, 16)
-                    .frame(height: 50)
-                    .background(isSelected ? Color.white : Color.white.opacity(0.8))
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(
-                                isSelected ? Color(hex: "#7C83BC") : Color(hex: "#D8CFF0"),
-                                lineWidth: isSelected ? 1.5 : 1
-                            )
-                    )
-                    .shadow(color: Color.black.opacity(isSelected ? 0.08 : 0.03), radius: 4, x: 0, y: 2)
+                    Text("Ingredients you avoid").font(.headline)
+                    Text("These are your preferences, not recorded allergies. Add one ingredient per entry.")
+                        .font(.caption).foregroundStyle(Color(hex: "#625478"))
+                    ForEach(draft.avoidedIngredientInputs.indices, id: \.self) { index in
+                        ingredientEntry(index)
+                    }
+                    Button("Add ingredient", systemImage: "plus") {
+                        draft.avoidedIngredientInputs.append("")
+                    }
+                    .accessibilityIdentifier("add-ingredient")
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
             }
+            .scrollDismissesKeyboard(.interactively)
+            .accessibilityIdentifier("profile-setup-scroll")
+
+            Button(action: { focusedEntry = nil; onContinue() }) {
+                Text("Continue").font(.headline).foregroundStyle(.white)
+                    .frame(maxWidth: .infinity).frame(height: 52)
+                    .background(Color(hex: "#7C83BC")).clipShape(Capsule())
+            }
+            .accessibilityIdentifier("profile-continue")
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+            .padding(.bottom, 36)
+        }
+        .foregroundStyle(Color(hex: "#1A1628"))
+        .buttonStyle(.plain)
+    }
+
+    private func choice(_ title: String, selected: Bool, id: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                Text(title).frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .font(.subheadline)
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+            .background(Color.white.opacity(0.9))
+            .clipShape(RoundedRectangle(cornerRadius: 14))
+            .overlay(RoundedRectangle(cornerRadius: 14).stroke(selected ? Color(hex: "#7C83BC") : Color(hex: "#D8CFF0"), lineWidth: selected ? 2 : 1))
+        }
+        .accessibilityIdentifier(id)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    private func ingredientEntry(_ index: Int) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                TextField("Ingredient name", text: Binding(
+                    get: { draft.avoidedIngredientInputs.indices.contains(index) ? draft.avoidedIngredientInputs[index] : "" },
+                    set: { value in
+                        guard draft.avoidedIngredientInputs.indices.contains(index) else { return }
+                        draft.avoidedIngredientInputs[index] = value
+                    }
+                ))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.done)
+                    .focused($focusedEntry, equals: index)
+                    .onSubmit { focusedEntry = nil }
+                    .accessibilityIdentifier("ingredient-input-\(index)")
+                Button {
+                    focusedEntry = nil
+                    guard draft.avoidedIngredientInputs.indices.contains(index) else { return }
+                    draft.avoidedIngredientInputs.remove(at: index)
+                } label: {
+                    Image(systemName: "minus.circle").frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Remove ingredient \(index + 1)")
+            }
+            .padding(.leading, 12)
+            .background(.white.opacity(0.9))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            if let error = errors.first(where: { $0.entryIndex == index }) {
+                Text(error.message).font(.caption).foregroundStyle(.red)
+                    .accessibilityIdentifier("ingredient-error-\(index)")
+            }
+            if let ingredient = previewIngredient(index) {
+                if let warning = ingredient.warning {
+                    Text(warning.message).font(.caption).foregroundStyle(Color(hex: "#625478"))
+                        .accessibilityIdentifier("ingredient-warning-\(index)")
+                    ForEach(suggestionIDs(ingredient), id: \.self) { id in
+                        if let name = normalizer?.ingredient(withID: id)?.name {
+                            Button("Use \(name)") { draft.avoidedIngredientInputs[index] = name }
+                                .font(.subheadline.weight(.medium))
+                                .accessibilityIdentifier("ingredient-suggestion-\(index)-\(id)")
+                        }
+                    }
+                } else if let id = ingredient.ingredientID, let name = normalizer?.ingredient(withID: id)?.name {
+                    Text("Recognized as \(name)").font(.caption).foregroundStyle(Color(hex: "#625478"))
+                        .accessibilityIdentifier("ingredient-match-\(index)")
+                }
+            }
+        }
+    }
+
+    private func previewIngredient(_ index: Int) -> NormalizedIngredient? {
+        guard let normalizer else { return nil }
+        let entry = SkinProfileDraft(avoidedIngredientInputs: [draft.avoidedIngredientInputs[index]])
+        if case .completed(let profile) = entry.submit(using: normalizer) {
+            return profile.avoidedIngredients.first
+        }
+        return nil
+    }
+
+    private func suggestionIDs(_ ingredient: NormalizedIngredient) -> [String] {
+        switch ingredient.status {
+        case .uncertain(let id): return [id]
+        case .ambiguous(let ids): return ids
+        default: return []
         }
     }
 }
