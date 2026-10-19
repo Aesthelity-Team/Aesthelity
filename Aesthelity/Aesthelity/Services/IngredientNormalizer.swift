@@ -9,27 +9,31 @@ import Foundation
 
 struct IngredientNormalizer {
     private let ingredientsByID: [String: CanonicalIngredient]
-    private let idsByKey: [String: String]
+    private let idsByKey: [String: Set<String>]
     private let ambiguousTermsByKey: [String: AmbiguousIngredientTerm]
+    private let ambiguousCandidatesByKey: [String: Set<String>]
 
     init(catalog: IngredientAliasCatalog) {
         var ingredientsByID: [String: CanonicalIngredient] = [:]
-        var idsByKey: [String: String] = [:]
+        var idsByKey: [String: Set<String>] = [:]
         for ingredient in catalog.ingredients {
             ingredientsByID[ingredient.id] = ingredient
             for name in [ingredient.name] + ingredient.aliases {
                 let key = Self.key(for: name)
-                if !key.isEmpty && idsByKey[key] == nil {
-                    idsByKey[key] = ingredient.id
+                if !key.isEmpty {
+                    idsByKey[key, default: []].insert(ingredient.id)
                 }
             }
         }
 
         var ambiguousTermsByKey: [String: AmbiguousIngredientTerm] = [:]
+        var ambiguousCandidatesByKey: [String: Set<String>] = [:]
         for term in catalog.ambiguousTerms {
             for name in term.terms {
                 let key = Self.key(for: name)
-                if !key.isEmpty && ambiguousTermsByKey[key] == nil {
+                guard !key.isEmpty else { continue }
+                ambiguousCandidatesByKey[key, default: []].formUnion(term.candidateIDs)
+                if ambiguousTermsByKey[key] == nil {
                     ambiguousTermsByKey[key] = term
                 }
             }
@@ -38,6 +42,7 @@ struct IngredientNormalizer {
         self.ingredientsByID = ingredientsByID
         self.idsByKey = idsByKey
         self.ambiguousTermsByKey = ambiguousTermsByKey
+        self.ambiguousCandidatesByKey = ambiguousCandidatesByKey
     }
 
     func ingredient(withID id: String) -> CanonicalIngredient? {
@@ -58,19 +63,34 @@ struct IngredientNormalizer {
             return unmatched(text, message: "Ingredient text is empty.")
         }
 
-        let matchedIDs = Set(lookupKeys.compactMap { idsByKey[$0] })
-        if matchedIDs.count == 1, let id = matchedIDs.first {
-            return NormalizedIngredient(originalText: text, status: .matched(ingredientID: id), warning: nil)
+        let matchedIDs = Set(lookupKeys.flatMap { idsByKey[$0] ?? [] })
+        let ambiguousIDs = Set(lookupKeys.flatMap { ambiguousCandidatesByKey[$0] ?? [] })
+        let sameKeyConflict = lookupKeys.contains { idsByKey[$0] != nil && ambiguousCandidatesByKey[$0] != nil }
+        if sameKeyConflict {
+            let candidates = matchedIDs.union(ambiguousIDs).sorted()
+            return ambiguous(text, candidateIDs: candidates,
+                             message: "\"\(text)\" matches conflicting reference data: \(names(for: candidates)).")
         }
         if matchedIDs.count > 1 {
             let candidates = matchedIDs.sorted()
             return ambiguous(text, candidateIDs: candidates,
                              message: "\"\(text)\" names more than one known ingredient: \(names(for: candidates)).")
         }
-        if let term = lookupKeys.lazy.compactMap({ ambiguousTermsByKey[$0] }).first {
-            let candidates = term.candidateIDs.sorted()
+        if matchedIDs.count == 1, let id = matchedIDs.first {
+            // "Tocopherol (Vitamin E)" names one ingredient and its family. A different family does not.
+            if ambiguousIDs.isEmpty || ambiguousIDs.contains(id) {
+                return NormalizedIngredient(originalText: text, status: .matched(ingredientID: id), warning: nil)
+            }
+            let candidates = matchedIDs.union(ambiguousIDs).sorted()
             return ambiguous(text, candidateIDs: candidates,
-                             message: "\"\(text)\" could refer to \(names(for: candidates)). \(term.note)")
+                             message: "\"\(text)\" names more than one known ingredient: \(names(for: candidates)).")
+        }
+        if !ambiguousIDs.isEmpty {
+            let candidates = ambiguousIDs.sorted()
+            let note = lookupKeys.lazy.compactMap { ambiguousTermsByKey[$0]?.note }.first ?? ""
+            let detail = note.isEmpty ? "" : " \(note)"
+            return ambiguous(text, candidateIDs: candidates,
+                             message: "\"\(text)\" could refer to \(names(for: candidates)).\(detail)")
         }
 
         return closestMatch(for: text, key: primaryKey)
@@ -100,11 +120,11 @@ struct IngredientNormalizer {
             }
         }
 
-        for (candidateKey, id) in idsByKey {
-            consider(candidateKey, ids: [id], isAmbiguousTerm: false)
+        for (candidateKey, ids) in idsByKey {
+            consider(candidateKey, ids: Array(ids), isAmbiguousTerm: ids.count != 1)
         }
-        for (candidateKey, term) in ambiguousTermsByKey {
-            consider(candidateKey, ids: term.candidateIDs, isAmbiguousTerm: true)
+        for (candidateKey, ids) in ambiguousCandidatesByKey {
+            consider(candidateKey, ids: Array(ids), isAmbiguousTerm: true)
         }
 
         if bestIDs.count == 1, !bestIncludesAmbiguousTerm, let id = bestIDs.first {
@@ -213,17 +233,53 @@ struct IngredientNormalizer {
 // MARK: - Catalog
 
 extension IngredientAliasCatalog {
-    enum LoadError: Error {
+    enum LoadError: Error, Equatable, LocalizedError {
         case missingResource(String)
+        case unreadableResource(String, String)
+        case invalidJSON(String)
+        case inconsistent([String])
+
+        var errorDescription: String? {
+            switch self {
+            case .missingResource(let name):
+                return "Ingredient reference file \(name) is missing from the app bundle. Add it to the Aesthelity app target resources and rebuild."
+            case .unreadableResource(let name, let detail):
+                return "Ingredient reference file \(name) could not be read: \(detail)"
+            case .invalidJSON(let detail):
+                return "Ingredient reference file ingredient-aliases.json is not valid catalog JSON: \(detail)"
+            case .inconsistent(let issues):
+                return "Ingredient reference data is inconsistent and was not loaded: \(issues.joined(separator: " "))"
+            }
+        }
     }
 
     static let bundledResourceName = "ingredient-aliases"
 
     static func loadBundled(from bundle: Bundle = .main) throws -> IngredientAliasCatalog {
+        let filename = "\(bundledResourceName).json"
         guard let url = bundle.url(forResource: bundledResourceName, withExtension: "json") else {
-            throw LoadError.missingResource("\(bundledResourceName).json")
+            throw LoadError.missingResource(filename)
         }
-        return try JSONDecoder().decode(IngredientAliasCatalog.self, from: Data(contentsOf: url))
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch {
+            throw LoadError.unreadableResource(filename, error.localizedDescription)
+        }
+        return try load(data: data)
+    }
+
+    /// Decodes reference data and refuses catalogs whose identities conflict.
+    static func load(data: Data) throws -> IngredientAliasCatalog {
+        let catalog: IngredientAliasCatalog
+        do {
+            catalog = try JSONDecoder().decode(IngredientAliasCatalog.self, from: data)
+        } catch {
+            throw LoadError.invalidJSON(error.localizedDescription)
+        }
+        let issues = catalog.validationIssues()
+        guard issues.isEmpty else { throw LoadError.inconsistent(issues) }
+        return catalog
     }
 
     /// Problems that would make normalization unreliable, such as one alias pointing at two ingredients.
@@ -242,6 +298,17 @@ extension IngredientAliasCatalog {
             for ingredientClass in ingredient.classes where !Self.isSlug(ingredientClass) {
                 issues.append("\(ingredient.id) has class \"\(ingredientClass)\", which must be lowercase words joined by hyphens.")
             }
+            for reference in ingredient.references {
+                if reference.source.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    issues.append("\(ingredient.id) has a reference with no source.")
+                }
+                if reference.retrievedOn.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) == nil {
+                    issues.append("\(ingredient.id) has reference date \"\(reference.retrievedOn)\", which must be YYYY-MM-DD.")
+                }
+                if reference.reviewStatus != "reviewed" {
+                    issues.append("\(ingredient.id) has review status \"\(reference.reviewStatus)\". Only reviewed names can be approved exact-match aliases.")
+                }
+            }
             for name in [ingredient.name] + ingredient.aliases {
                 let key = IngredientNormalizer.key(for: name)
                 if key.isEmpty {
@@ -254,6 +321,7 @@ extension IngredientAliasCatalog {
             }
         }
 
+        var ambiguousCandidatesByKey: [String: [String]] = [:]
         for term in ambiguousTerms {
             for id in term.candidateIDs where !seenIDs.contains(id) {
                 issues.append("Ambiguous term \(term.terms.first ?? "?") lists unknown ingredient \(id).")
@@ -261,8 +329,17 @@ extension IngredientAliasCatalog {
             if term.candidateIDs.count < 2 {
                 issues.append("Ambiguous term \(term.terms.first ?? "?") needs at least two candidates.")
             }
+            let candidates = term.candidateIDs.sorted()
             for name in term.terms {
-                if let owner = ownerByKey[IngredientNormalizer.key(for: name)] {
+                let key = IngredientNormalizer.key(for: name)
+                if key.isEmpty {
+                    issues.append("Ambiguous term \(term.terms.first ?? "?") has an empty name.")
+                } else if let previous = ambiguousCandidatesByKey[key], previous != candidates {
+                    issues.append("\"\(name)\" is an ambiguous term for both \(previous.joined(separator: ", ")) and \(candidates.joined(separator: ", ")).")
+                } else {
+                    ambiguousCandidatesByKey[key] = candidates
+                }
+                if let owner = ownerByKey[key] {
                     issues.append("\"\(name)\" is both an ambiguous term and an alias of \(owner).")
                 }
             }

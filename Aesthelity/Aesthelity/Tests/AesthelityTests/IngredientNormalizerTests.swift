@@ -5,6 +5,7 @@
 //  Created by Gaurav Pandey on 10/8/26.
 //
 
+import Foundation
 import Testing
 @testable import Aesthelity
 
@@ -51,6 +52,8 @@ struct IngredientNormalizerTests {
         ("Aqua", "water"),
         ("Aqua/Water/Eau", "water"),
         ("Glycerine", "glycerin"),
+        ("Glycerol", "glycerin"),
+        ("Nicotinamide", "niacinamide"),
         ("NICOTINAMIDE", "niacinamide"),
         ("  niacinamide ", "niacinamide"),
         ("Parfum", "fragrance"),
@@ -110,6 +113,7 @@ struct IngredientNormalizerTests {
         ("BHA", ["butylated-hydroxyanisole", "salicylic-acid"]),
         ("Retinl", ["retinal", "retinol"]),
         ("Water (Glycerin)", ["glycerin", "water"]),
+        ("Water (Vitamin C)", ["ascorbic-acid", "ascorbyl-glucoside", "magnesium-ascorbyl-phosphate", "sodium-ascorbyl-phosphate", "water"]),
     ])
     func ambiguousInputsListCandidates(input: String, candidateIDs: [String]) {
         let result = normalizer.normalize(input)
@@ -135,4 +139,176 @@ struct IngredientNormalizerTests {
         #expect(results.map(\.ingredientID) == ["water", "glycerin", "retinol", "glycolic-acid", nil, nil])
         #expect(results.warnings.map(\.input) == ["Vitamin C", "Unobtainium Extract"])
     }
+
+    @Test func sampleOutputsKeepMatchStatusSeparate() {
+        let exact = normalizer.normalize("Glycerin")
+        let alias = normalizer.normalize("Glycerol")
+        let unknown = normalizer.normalize("Unobtainium Extract")
+        let ambiguous = normalizer.normalize("Vitamin C")
+        let typo = normalizer.normalize("Niacinimide")
+
+        #expect(exact.status == .matched(ingredientID: "glycerin"))
+        #expect(exact.warning == nil)
+        #expect(alias.status == .matched(ingredientID: "glycerin"))
+        #expect(alias.originalText == "Glycerol")
+        #expect(alias.ingredientID == "glycerin")
+        #expect(unknown.status == .unmatched)
+        #expect(unknown.ingredientID == nil)
+        #expect(unknown.needsReview)
+        #expect(ambiguous.ingredientID == nil)
+        #expect(ambiguous.status == .ambiguous(candidateIDs: [
+            "ascorbic-acid", "ascorbyl-glucoside", "magnesium-ascorbyl-phosphate", "sodium-ascorbyl-phosphate"
+        ]))
+        #expect(typo.status == .uncertain(suggestedID: "niacinamide"))
+        #expect(typo.ingredientID == nil)
+        #expect(typo.needsReview)
+    }
+
+    @Test func conflictingAliasIsAmbiguousInsteadOfTheFirstRecord() throws {
+        let data = Data("""
+        {"version":1,"ingredients":[
+          {"id":"water","name":"Water","aliases":["Aqua"],"classes":["solvent"]},
+          {"id":"aqua-extract","name":"Aqua Extract","aliases":["Aqua"],"classes":["extract"]}
+        ],"ambiguousTerms":[]}
+        """.utf8)
+        let decoded = try JSONDecoder().decode(IngredientAliasCatalog.self, from: data)
+        let result = IngredientNormalizer(catalog: decoded).normalize("Aqua")
+
+        #expect(result.ingredientID == nil)
+        #expect(result.status == .ambiguous(candidateIDs: ["aqua-extract", "water"]))
+        #expect(decoded.validationIssues().contains { $0.contains("both water and aqua-extract") })
+
+        do {
+            _ = try IngredientAliasCatalog.load(data: data)
+            Issue.record("Conflicting reference data should not load")
+        } catch let error as IngredientAliasCatalog.LoadError {
+            #expect(error.localizedDescription.contains("inconsistent"))
+            #expect(error.localizedDescription.contains("Aqua"))
+        }
+    }
+
+    @Test func unreviewedReferenceCannotBecomeAnApprovedAlias() throws {
+        let ingredient = CanonicalIngredient(
+            id: "squalene",
+            name: "Squalene",
+            aliases: ["Spinacene"],
+            classes: ["emollient"],
+            references: [IngredientReference(
+                source: "PubChem",
+                url: nil,
+                identifier: nil,
+                retrievedOn: "2026-10-18",
+                datasetVersion: nil,
+                reviewStatus: "unreviewed"
+            )]
+        )
+        let catalog = IngredientAliasCatalog(version: 1, ingredients: [ingredient], ambiguousTerms: [])
+        #expect(catalog.validationIssues().contains { $0.contains("unreviewed") })
+        let data = try JSONEncoder().encode(catalog)
+        do {
+            _ = try IngredientAliasCatalog.load(data: data)
+            Issue.record("Unreviewed reference data should not load")
+        } catch is IngredientAliasCatalog.LoadError {
+        } catch {
+            Issue.record("Unexpected error \(error)")
+        }
+    }
+
+    @Test func invalidCatalogJSONDoesNotLoadAnEmptyDictionary() {
+        do {
+            _ = try IngredientAliasCatalog.load(data: Data("{}".utf8))
+            Issue.record("Invalid JSON should not become a catalog")
+        } catch let error as IngredientAliasCatalog.LoadError {
+            #expect(error.localizedDescription.contains("ingredient-aliases.json"))
+            #expect(error.localizedDescription.contains("not valid catalog JSON"))
+        } catch {
+            Issue.record("Unexpected error \(error)")
+        }
+    }
+
+    @Test func missingReferenceFileNamesTheResource() {
+        do {
+            _ = try IngredientAliasCatalog.loadBundled(from: Bundle(for: AliasResourceProbe.self))
+            Issue.record("The unit-test bundle should not contain the ingredient catalog")
+        } catch let error as IngredientAliasCatalog.LoadError {
+            #expect(error.localizedDescription.contains("ingredient-aliases.json"))
+            #expect(error.localizedDescription.contains("missing"))
+        } catch {
+            Issue.record("Unexpected error \(error)")
+        }
+    }
+
+    @Test func curatedProductLabelsUseTheSameNormalizer() throws {
+        let products = try DemoCatalog.load().products
+        let occurrences = products.flatMap(\.ingredients)
+        let results = normalizer.normalize(occurrences)
+        var unique: [String] = []
+        var seen = Set<String>()
+        for name in occurrences where seen.insert(name).inserted {
+            unique.append(name)
+        }
+
+        #expect(occurrences.count == 62)
+        #expect(unique.count == 18)
+        #expect(results.map(\.originalText) == occurrences)
+        #expect(results.allSatisfy { if case .matched = $0.status { return true } else { return false } })
+        #expect(results.filter { $0.status == .unmatched }.map(\.originalText) == [])
+
+        let expectedIDs = [
+            "Cocamidopropyl Betaine": "cocamidopropyl-betaine",
+            "Sodium Chloride": "sodium-chloride",
+            "Caprylic/Capric Triglyceride": "caprylic-capric-triglyceride",
+            "Squalane": "squalane",
+            "Polysorbate 80": "polysorbate-80",
+            "Cetyl Alcohol": "cetyl-alcohol",
+            "Aqua": "water",
+            "Glycerol": "glycerin",
+            "Nicotinamide": "niacinamide"
+        ]
+        for (name, id) in expectedIDs {
+            #expect(normalizer.normalize(name).status == .matched(ingredientID: id))
+        }
+
+        let reviewedIDs = [
+            "cocamidopropyl-betaine", "sodium-chloride", "caprylic-capric-triglyceride",
+            "squalane", "polysorbate-80", "cetyl-alcohol"
+        ]
+        for id in reviewedIDs {
+            let references = normalizer.ingredient(withID: id)?.references ?? []
+            #expect(!references.isEmpty)
+            #expect(references.allSatisfy { $0.reviewStatus == "reviewed" && !$0.source.isEmpty && !$0.retrievedOn.isEmpty })
+        }
+
+        for product in products where !product.ingredients.isEmpty {
+            let label = product.ingredients.joined(separator: ", ")
+            let parsed = normalizer.normalize(label: label)
+            #expect(parsed.map(\.originalText) == product.ingredients)
+            #expect(parsed.map(\.ingredientID) == normalizer.normalize(product.ingredients).map(\.ingredientID))
+        }
+    }
+
+    @Test func similarIngredientsStayDistinct() {
+        let neighbors = [
+            "Squalene",
+            "Polysorbate 20",
+            "Cetearyl Alcohol",
+            "Caprylic Triglyceride",
+            "Cocamidopropyl Hydroxysultaine",
+            "Cetyl Palmitate"
+        ]
+        for name in neighbors {
+            let result = normalizer.normalize(name)
+            #expect(result.ingredientID == nil)
+            #expect(result.needsReview)
+        }
+        #expect(normalizer.normalize("Squalene").status == .uncertain(suggestedID: "squalane"))
+        #expect(normalizer.normalize("Polysorbate 20").status == .uncertain(suggestedID: "polysorbate-80"))
+        #expect(normalizer.normalize("Cetearyl Alcohol").status == .unmatched)
+        #expect(normalizer.normalize("Sodium Hyaluronate").status == .matched(ingredientID: "sodium-hyaluronate"))
+        #expect(normalizer.normalize("Hyaluronic Acid").status == .matched(ingredientID: "hyaluronic-acid"))
+        #expect(normalizer.normalize("1-Hexadecanol").status == .matched(ingredientID: "cetyl-alcohol"))
+        #expect(normalizer.normalize("Perhydrosqualene").status == .matched(ingredientID: "squalane"))
+    }
 }
+
+private final class AliasResourceProbe {}
