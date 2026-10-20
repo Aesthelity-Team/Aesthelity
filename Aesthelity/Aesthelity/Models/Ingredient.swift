@@ -77,12 +77,18 @@ struct NormalizationWarning: Codable, Equatable {
     let message: String
 }
 
-struct NormalizedIngredient: Codable, Equatable {
-    enum Status: Codable, Equatable {
+struct NormalizedIngredient: Equatable {
+    /// In-memory match state. JSON uses the explicit `mapping` fields below, not this enum's synthesized encoding.
+    enum Status: Equatable {
         case matched(ingredientID: String)
         case uncertain(suggestedID: String)
         case ambiguous(candidateIDs: [String])
         case unmatched
+    }
+
+    /// Storage values for `mapping`. `confirmed` is the only state that carries `ingredientID`.
+    enum Mapping: String, Codable {
+        case confirmed, uncertain, ambiguous, unmatched
     }
 
     let originalText: String
@@ -95,7 +101,148 @@ struct NormalizedIngredient: Codable, Equatable {
         return nil
     }
 
+    var suggestedID: String? {
+        if case .uncertain(let id) = status { return id }
+        return nil
+    }
+
+    var candidateIDs: [String] {
+        if case .ambiguous(let ids) = status { return ids }
+        return []
+    }
+
+    var mapping: Mapping {
+        switch status {
+        case .matched: .confirmed
+        case .uncertain: .uncertain
+        case .ambiguous: .ambiguous
+        case .unmatched: .unmatched
+        }
+    }
+
     var needsReview: Bool { ingredientID == nil }
+}
+
+extension NormalizedIngredient: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case originalText, mapping, ingredientID, suggestedID, candidateIDs, warning, status
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(originalText, forKey: .originalText)
+        try container.encode(mapping, forKey: .mapping)
+        switch status {
+        case .matched(let id):
+            try container.encode(id, forKey: .ingredientID)
+        case .uncertain(let id):
+            try container.encode(id, forKey: .suggestedID)
+        case .ambiguous(let ids):
+            try container.encode(ids, forKey: .candidateIDs)
+        case .unmatched:
+            break
+        }
+        try container.encodeIfPresent(warning, forKey: .warning)
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let originalText = try container.decode(String.self, forKey: .originalText)
+        let warning = try container.decodeIfPresent(NormalizationWarning.self, forKey: .warning)
+        let status: Status
+        if container.contains(.mapping) {
+            status = try Self.status(
+                mapping: try container.decode(Mapping.self, forKey: .mapping),
+                ingredientID: try container.decodeIfPresent(String.self, forKey: .ingredientID),
+                suggestedID: try container.decodeIfPresent(String.self, forKey: .suggestedID),
+                candidateIDs: try container.decodeIfPresent([String].self, forKey: .candidateIDs) ?? [],
+                codingPath: decoder.codingPath
+            )
+        } else if container.contains(.status) {
+            status = try container.decode(LegacyStatus.self, forKey: .status).value
+        } else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Ingredient mapping requires mapping or a legacy status value."
+            ))
+        }
+        self.init(originalText: originalText, status: status, warning: warning)
+    }
+
+    /// Rejects payloads that attach a confirmed ID to an unresolved row, or omit the ID a confirmed row requires.
+    private static func status(
+        mapping: Mapping,
+        ingredientID: String?,
+        suggestedID: String?,
+        candidateIDs: [String],
+        codingPath: [CodingKey]
+    ) throws -> Status {
+        func present(_ value: String?, field: String) throws -> String? {
+            guard let value else { return nil }
+            guard !value.isEmpty else {
+                throw DecodingError.dataCorrupted(.init(codingPath: codingPath, debugDescription: "\(field) must not be empty."))
+            }
+            return value
+        }
+
+        let confirmedID = try present(ingredientID, field: "ingredientID")
+        let suggestion = try present(suggestedID, field: "suggestedID")
+        if candidateIDs.contains(where: \.isEmpty) {
+            throw DecodingError.dataCorrupted(.init(codingPath: codingPath, debugDescription: "candidateIDs must not contain an empty ID."))
+        }
+
+        switch mapping {
+        case .confirmed:
+            guard let confirmedID, suggestion == nil, candidateIDs.isEmpty else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath,
+                    debugDescription: "A confirmed ingredient requires ingredientID and no suggestedID or candidateIDs."
+                ))
+            }
+            return .matched(ingredientID: confirmedID)
+        case .uncertain:
+            guard confirmedID == nil, let suggestion, candidateIDs.isEmpty else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath,
+                    debugDescription: "An uncertain ingredient requires suggestedID and must not include a confirmed ingredientID."
+                ))
+            }
+            return .uncertain(suggestedID: suggestion)
+        case .ambiguous:
+            guard confirmedID == nil, suggestion == nil, !candidateIDs.isEmpty else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath,
+                    debugDescription: "An ambiguous ingredient requires candidateIDs and must not include a confirmed ingredientID."
+                ))
+            }
+            return .ambiguous(candidateIDs: candidateIDs)
+        case .unmatched:
+            guard confirmedID == nil, suggestion == nil, candidateIDs.isEmpty else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath,
+                    debugDescription: "An unmatched ingredient must not include a confirmed, suggested, or candidate ID."
+                ))
+            }
+            return .unmatched
+        }
+    }
+
+    /// Files saved before the explicit mapping fields used Swift's associated-value enum encoding.
+    private enum LegacyStatus: Decodable {
+        case matched(ingredientID: String)
+        case uncertain(suggestedID: String)
+        case ambiguous(candidateIDs: [String])
+        case unmatched
+
+        var value: Status {
+            switch self {
+            case .matched(let id): .matched(ingredientID: id)
+            case .uncertain(let id): .uncertain(suggestedID: id)
+            case .ambiguous(let ids): .ambiguous(candidateIDs: ids)
+            case .unmatched: .unmatched
+            }
+        }
+    }
 }
 
 extension Array where Element == NormalizedIngredient {

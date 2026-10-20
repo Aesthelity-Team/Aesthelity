@@ -309,6 +309,149 @@ struct IngredientNormalizerTests {
         #expect(normalizer.normalize("1-Hexadecanol").status == .matched(ingredientID: "cetyl-alcohol"))
         #expect(normalizer.normalize("Perhydrosqualene").status == .matched(ingredientID: "squalane"))
     }
+
+    @Test func vitaminB3IsNotAConfirmedNiacinamideAlias() {
+        let result = normalizer.normalize("Vitamin B3")
+        #expect(result.ingredientID == nil)
+        #expect(result.needsReview)
+        #expect(result.mapping != .confirmed)
+        #expect(result.suggestedID != "niacinamide")
+        #expect(!result.candidateIDs.contains("niacinamide"))
+    }
+
+    @Test func aliasFormsStayDistinctRowsWithTheSameConfirmedID() {
+        let product = normalizer.normalizeStoredProduct(
+            id: "pd03-alias-pair",
+            ingredientTexts: ["Nicotinamide", "Niacinamide"],
+            listStatus: .complete
+        )
+        #expect(product.productID == "pd03-alias-pair")
+        #expect(product.ingredients.map(\.originalText) == ["Nicotinamide", "Niacinamide"])
+        #expect(product.confirmedIngredientIDs == ["niacinamide", "niacinamide"])
+        #expect(product.isFullyResolved)
+        #expect(!product.analysisInput.uncertaintyPreserved)
+    }
+
+    @Test func productExampleMatchesTheNormalizerAndRoundTrips() throws {
+        let fixture = try PD03ProductExample.load()
+        #expect(fixture.schemaVersion == 1)
+        #expect(fixture.contractStatus == "proposed")
+        #expect(fixture.productID == "pd03-example-serum")
+        #expect(fixture.displayName == "PD-03 Example Serum (Fictional)")
+
+        let product = normalizer.normalizeStoredProduct(
+            id: fixture.productID,
+            ingredientTexts: fixture.ingredients,
+            listStatus: fixture.listStatus
+        )
+        #expect(product.productID == fixture.productID)
+        #expect(product.listStatus == .complete)
+        #expect(product.ingredients.map(\.originalText) == fixture.ingredients)
+        #expect(product.ingredients.map(\.status) == fixture.expected.map(\.status))
+        #expect(product.confirmedIngredientIDs == ["niacinamide"])
+        #expect(product.ingredients[0].warning == nil)
+        #expect(product.ingredients[1].ingredientID == nil)
+        #expect(product.ingredients[1].candidateIDs == [
+            "ascorbic-acid", "ascorbyl-glucoside", "magnesium-ascorbyl-phosphate", "sodium-ascorbyl-phosphate"
+        ])
+        #expect(product.ingredients[2].status == .unmatched)
+        #expect(product.ingredients[2].ingredientID == nil)
+        #expect(product.ingredients.dropFirst().allSatisfy { $0.warning?.input == $0.originalText })
+        #expect(!product.isFullyResolved)
+
+        let analysis = product.analysisInput
+        #expect(analysis.confirmedIDs == ["niacinamide"])
+        #expect(analysis.uncertaintyPreserved)
+        #expect(analysis.listStatus == .complete)
+
+        let data = try JSONEncoder().encode(product)
+        let restored = try JSONDecoder().decode(NormalizedProductIngredients.self, from: data)
+        #expect(restored == product)
+
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let rows = try #require(object["ingredients"] as? [[String: Any]])
+        #expect(rows[0]["mapping"] as? String == "confirmed")
+        #expect(rows[0]["ingredientID"] as? String == "niacinamide")
+        #expect(rows[0]["suggestedID"] == nil)
+        #expect(rows[0]["status"] == nil)
+        #expect(rows[1]["mapping"] as? String == "ambiguous")
+        #expect(rows[1]["ingredientID"] == nil)
+        #expect(rows[1]["suggestedID"] == nil)
+        #expect(rows[2]["mapping"] as? String == "unmatched")
+        #expect(rows[2]["ingredientID"] == nil)
+        #expect(rows[2]["candidateIDs"] == nil)
+
+        let analysisData = try JSONEncoder().encode(analysis)
+        let analysisObject = try #require(JSONSerialization.jsonObject(with: analysisData) as? [String: Any])
+        #expect(analysisObject["confirmedIDs"] as? [String] == ["niacinamide"])
+        #expect(analysisObject["uncertaintyPreserved"] as? Bool == true)
+        #expect(analysisObject["suggestedID"] == nil)
+        #expect(analysisObject["ingredientID"] == nil)
+    }
+
+    @Test func suggestionsCannotDecodeAsConfirmedIDs() {
+        let payloads = [
+            #"{"originalText":"Niacinimide","mapping":"uncertain","suggestedID":"niacinamide","ingredientID":"niacinamide"}"#,
+            #"{"originalText":"Vitamin C","mapping":"ambiguous","candidateIDs":["ascorbic-acid"],"ingredientID":"ascorbic-acid"}"#,
+            #"{"originalText":"Nope","mapping":"unmatched","ingredientID":"water"}"#,
+            #"{"originalText":"Water","mapping":"confirmed"}"#,
+        ]
+        for payload in payloads {
+            #expect(throws: DecodingError.self) {
+                try JSONDecoder().decode(NormalizedIngredient.self, from: Data(payload.utf8))
+            }
+        }
+    }
+
+    @Test func legacyStatusEncodingStillDecodesWithoutConfirmingSuggestions() throws {
+        let payload = """
+        {"originalText":"Niacinimide","status":{"uncertain":{"suggestedID":"niacinamide"}},"warning":{"input":"Niacinimide","message":"review"}}
+        """
+        let ingredient = try JSONDecoder().decode(NormalizedIngredient.self, from: Data(payload.utf8))
+        #expect(ingredient.status == .uncertain(suggestedID: "niacinamide"))
+        #expect(ingredient.ingredientID == nil)
+        #expect(ingredient.suggestedID == "niacinamide")
+        #expect(ingredient.needsReview)
+    }
+
+    @Test func listStatusStaysSeparateFromRowMatches() throws {
+        let catalog = try DemoCatalog.load()
+        let serum = try #require(catalog.product(id: "serum_niacinamide"))
+        let partial = try #require(catalog.product(id: "mask_partial"))
+        let unavailable = try #require(catalog.product(id: "sunscreen_unknown"))
+
+        let mappedSerum = normalizer.normalizeCatalogProduct(serum)
+        #expect(mappedSerum.productID == "serum_niacinamide")
+        #expect(mappedSerum.ingredients.map(\.originalText) == serum.ingredients)
+        #expect(mappedSerum.confirmedIngredientIDs == ["water", "niacinamide", "glycerin", "phenoxyethanol"])
+        #expect(mappedSerum.isFullyResolved)
+        #expect(!mappedSerum.analysisInput.uncertaintyPreserved)
+
+        let mappedPartial = normalizer.normalizeCatalogProduct(partial)
+        #expect(mappedPartial.listStatus == .partial)
+        #expect(mappedPartial.ingredients.map(\.originalText) == ["Water", "Glycerin"])
+        #expect(mappedPartial.confirmedIngredientIDs == ["water", "glycerin"])
+        #expect(mappedPartial.listStatusAgreesWithRowCount)
+        #expect(!mappedPartial.isFullyResolved)
+        #expect(mappedPartial.analysisInput.uncertaintyPreserved)
+
+        let mappedUnavailable = normalizer.normalizeCatalogProduct(unavailable)
+        #expect(mappedUnavailable.listStatus == .unavailable)
+        #expect(mappedUnavailable.ingredients.isEmpty)
+        #expect(mappedUnavailable.confirmedIngredientIDs.isEmpty)
+        #expect(mappedUnavailable.analysisInput.uncertaintyPreserved)
+
+        let contradictory = normalizer.normalizeStoredProduct(
+            id: "missing-list",
+            ingredientTexts: ["Nicotinamide"],
+            listStatus: .unavailable
+        )
+        #expect(contradictory.ingredients.map(\.originalText) == ["Nicotinamide"])
+        #expect(contradictory.ingredients.map(\.ingredientID) == ["niacinamide"])
+        #expect(!contradictory.listStatusAgreesWithRowCount)
+        #expect(contradictory.analysisInput.uncertaintyPreserved)
+        #expect(!contradictory.isFullyResolved)
+    }
 }
 
 private final class AliasResourceProbe {}

@@ -76,6 +76,22 @@ struct SkinProfileTests {
         #expect(try roundTrip(profile) == profile)
     }
 
+    @Test func legacyIngredientStatusInASavedProfileDoesNotConfirmSuggestions() throws {
+        let json = """
+        {"schemaVersion":1,"skinType":"dry","concerns":["barrier-repair"],"setupStatus":"completed","avoidedIngredients":[
+          {"originalText":"Parfum","status":{"matched":{"ingredientID":"fragrance"}}},
+          {"originalText":"Niacinimide","status":{"uncertain":{"suggestedID":"niacinamide"}},"warning":{"input":"Niacinimide","message":"review"}},
+          {"originalText":"Vitamin C","status":{"ambiguous":{"candidateIDs":["ascorbic-acid","ascorbyl-glucoside"]}}},
+          {"originalText":"Nope","status":{"unmatched":{}}}
+        ]}
+        """
+        let profile = try JSONDecoder().decode(SkinProfile.self, from: Data(json.utf8))
+        #expect(profile.avoidedIngredients.map(\.originalText) == ["Parfum", "Niacinimide", "Vitamin C", "Nope"])
+        #expect(profile.avoidedIngredients.map(\.ingredientID) == ["fragrance", nil, nil, nil])
+        #expect(profile.avoidedIngredients.map(\.needsReview) == [false, true, true, true])
+        #expect(profile.avoidedIngredients[1].suggestedID == "niacinamide")
+    }
+
     @Test func profilesWithoutSchemaVersionDecodeAsVersionOne() throws {
         let profile = SkinProfile(skinType: .dry, concerns: [.barrierRepair], setupStatus: .completed)
         let data = try JSONEncoder().encode(profile)
