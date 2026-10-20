@@ -1,6 +1,6 @@
 # Testing pull requests
 
-The iOS CI workflow automatically builds the app and runs AesthelityTests on pull requests and pushes to main. Its Build and unit test check does not include UI validation.
+The iOS CI workflow automatically builds the app and runs AesthelityTests on pull requests and pushes to main. Its Build and unit test check does not include UI validation. The selected simulator is explicitly booted before building, and unit tests run with parallel testing disabled to avoid simulator clone startup overhead.
 
 Before merging, a reviewer should manually exercise the affected flows and record the tested commit, simulator/device, steps and results in the PR. For integration changes, check onboarding, saved profile persistence after relaunch, AM/PM routines, mocked findings and tab navigation. Document known limitations rather than treating unimplemented features as passing.
 

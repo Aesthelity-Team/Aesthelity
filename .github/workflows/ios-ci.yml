@@ -45,6 +45,10 @@ jobs:
           echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
           xcrun simctl list devices available | grep "$udid"
 
+      - name: Boot simulator and wait for readiness
+        timeout-minutes: 5
+        run: xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+
       - name: Build for testing
         run: |
           xcodebuild build-for-testing \
@@ -61,6 +65,7 @@ jobs:
             -destination "id=$SIMULATOR_UDID" \
             -derivedDataPath DerivedData \
             -only-testing:AesthelityTests \
+            -parallel-testing-enabled NO \
             -resultBundlePath TestResults.xcresult
 
       - name: Upload test results
