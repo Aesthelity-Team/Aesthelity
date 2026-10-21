@@ -72,6 +72,14 @@ struct IngredientAliasCatalog: Codable {
     let ambiguousTerms: [AmbiguousIngredientTerm]
 }
 
+/// Canonical ingredient IDs are lowercase alphanumeric words separated by single hyphens.
+/// Catalog loading and stored-record decoding share this check so the two cannot drift.
+enum CanonicalIngredientID {
+    static func isValid(_ value: String) -> Bool {
+        value.range(of: "^[a-z0-9]+(-[a-z0-9]+)*$", options: .regularExpression) != nil
+    }
+}
+
 struct NormalizationWarning: Codable, Equatable {
     let input: String
     let message: String
@@ -149,17 +157,32 @@ extension NormalizedIngredient: Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let originalText = try container.decode(String.self, forKey: .originalText)
         let warning = try container.decodeIfPresent(NormalizationWarning.self, forKey: .warning)
+        let hasMapping = container.contains(.mapping)
+        let hasStatus = container.contains(.status)
+        // Syntax only. Catalog membership is checked later, when a product becomes analysis input.
         let status: Status
-        if container.contains(.mapping) {
-            status = try Self.status(
+        if hasMapping && hasStatus {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: decoder.codingPath,
+                debugDescription: "Ingredient mapping must use either mapping or legacy status, not both."
+            ))
+        } else if hasMapping {
+            status = try Self.validatedStatus(
                 mapping: try container.decode(Mapping.self, forKey: .mapping),
                 ingredientID: try container.decodeIfPresent(String.self, forKey: .ingredientID),
                 suggestedID: try container.decodeIfPresent(String.self, forKey: .suggestedID),
                 candidateIDs: try container.decodeIfPresent([String].self, forKey: .candidateIDs) ?? [],
                 codingPath: decoder.codingPath
             )
-        } else if container.contains(.status) {
-            status = try container.decode(LegacyStatus.self, forKey: .status).value
+        } else if hasStatus {
+            let legacy = try container.decode(LegacyStatus.self, forKey: .status)
+            status = try Self.validatedStatus(
+                mapping: legacy.mapping,
+                ingredientID: legacy.ingredientID,
+                suggestedID: legacy.suggestedID,
+                candidateIDs: legacy.candidateIDs,
+                codingPath: decoder.codingPath
+            )
         } else {
             throw DecodingError.dataCorrupted(.init(
                 codingPath: decoder.codingPath,
@@ -169,31 +192,22 @@ extension NormalizedIngredient: Codable {
         self.init(originalText: originalText, status: status, warning: warning)
     }
 
-    /// Rejects payloads that attach a confirmed ID to an unresolved row, or omit the ID a confirmed row requires.
-    private static func status(
+    /// Shared rules for the explicit JSON fields and the legacy status object.
+    /// Malformed IDs are rejected. They are not trimmed or rewritten into a different identity.
+    private static func validatedStatus(
         mapping: Mapping,
         ingredientID: String?,
         suggestedID: String?,
         candidateIDs: [String],
         codingPath: [CodingKey]
     ) throws -> Status {
-        func present(_ value: String?, field: String) throws -> String? {
-            guard let value else { return nil }
-            guard !value.isEmpty else {
-                throw DecodingError.dataCorrupted(.init(codingPath: codingPath, debugDescription: "\(field) must not be empty."))
-            }
-            return value
-        }
-
-        let confirmedID = try present(ingredientID, field: "ingredientID")
-        let suggestion = try present(suggestedID, field: "suggestedID")
-        if candidateIDs.contains(where: \.isEmpty) {
-            throw DecodingError.dataCorrupted(.init(codingPath: codingPath, debugDescription: "candidateIDs must not contain an empty ID."))
-        }
+        let confirmedID = try canonicalID(ingredientID, field: "ingredientID", codingPath: codingPath)
+        let suggestion = try canonicalID(suggestedID, field: "suggestedID", codingPath: codingPath)
+        let candidates = try canonicalIDs(candidateIDs, field: "candidateIDs", codingPath: codingPath)
 
         switch mapping {
         case .confirmed:
-            guard let confirmedID, suggestion == nil, candidateIDs.isEmpty else {
+            guard let confirmedID, suggestion == nil, candidates.isEmpty else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: codingPath,
                     debugDescription: "A confirmed ingredient requires ingredientID and no suggestedID or candidateIDs."
@@ -201,23 +215,23 @@ extension NormalizedIngredient: Codable {
             }
             return .matched(ingredientID: confirmedID)
         case .uncertain:
-            guard confirmedID == nil, let suggestion, candidateIDs.isEmpty else {
+            guard confirmedID == nil, let suggestion, candidates.isEmpty else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: codingPath,
-                    debugDescription: "An uncertain ingredient requires suggestedID and must not include a confirmed ingredientID."
+                    debugDescription: "An uncertain ingredient requires suggestedID and must not include a confirmed ingredientID or candidateIDs."
                 ))
             }
             return .uncertain(suggestedID: suggestion)
         case .ambiguous:
-            guard confirmedID == nil, suggestion == nil, !candidateIDs.isEmpty else {
+            guard confirmedID == nil, suggestion == nil, candidates.count >= 2 else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: codingPath,
-                    debugDescription: "An ambiguous ingredient requires candidateIDs and must not include a confirmed ingredientID."
+                    debugDescription: "An ambiguous ingredient requires at least two distinct candidateIDs and must not include a confirmed ingredientID or suggestedID."
                 ))
             }
-            return .ambiguous(candidateIDs: candidateIDs)
+            return .ambiguous(candidateIDs: candidates)
         case .unmatched:
-            guard confirmedID == nil, suggestion == nil, candidateIDs.isEmpty else {
+            guard confirmedID == nil, suggestion == nil, candidates.isEmpty else {
                 throw DecodingError.dataCorrupted(.init(
                     codingPath: codingPath,
                     debugDescription: "An unmatched ingredient must not include a confirmed, suggested, or candidate ID."
@@ -227,6 +241,36 @@ extension NormalizedIngredient: Codable {
         }
     }
 
+    private static func canonicalID(_ value: String?, field: String, codingPath: [CodingKey]) throws -> String? {
+        guard let value else { return nil }
+        guard CanonicalIngredientID.isValid(value) else {
+            throw DecodingError.dataCorrupted(.init(
+                codingPath: codingPath,
+                debugDescription: "\(field) \"\(value)\" must be lowercase alphanumeric words separated by single hyphens."
+            ))
+        }
+        return value
+    }
+
+    private static func canonicalIDs(_ values: [String], field: String, codingPath: [CodingKey]) throws -> [String] {
+        var seen = Set<String>()
+        for value in values {
+            guard CanonicalIngredientID.isValid(value) else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath,
+                    debugDescription: "\(field) \"\(value)\" must be lowercase alphanumeric words separated by single hyphens."
+                ))
+            }
+            guard seen.insert(value).inserted else {
+                throw DecodingError.dataCorrupted(.init(
+                    codingPath: codingPath,
+                    debugDescription: "\(field) repeats \"\(value)\". Repeated IDs do not count as distinct candidates."
+                ))
+            }
+        }
+        return values
+    }
+
     /// Files saved before the explicit mapping fields used Swift's associated-value enum encoding.
     private enum LegacyStatus: Decodable {
         case matched(ingredientID: String)
@@ -234,13 +278,28 @@ extension NormalizedIngredient: Codable {
         case ambiguous(candidateIDs: [String])
         case unmatched
 
-        var value: Status {
+        var mapping: Mapping {
             switch self {
-            case .matched(let id): .matched(ingredientID: id)
-            case .uncertain(let id): .uncertain(suggestedID: id)
-            case .ambiguous(let ids): .ambiguous(candidateIDs: ids)
+            case .matched: .confirmed
+            case .uncertain: .uncertain
+            case .ambiguous: .ambiguous
             case .unmatched: .unmatched
             }
+        }
+
+        var ingredientID: String? {
+            if case .matched(let id) = self { return id }
+            return nil
+        }
+
+        var suggestedID: String? {
+            if case .uncertain(let id) = self { return id }
+            return nil
+        }
+
+        var candidateIDs: [String] {
+            if case .ambiguous(let ids) = self { return ids }
+            return []
         }
     }
 }

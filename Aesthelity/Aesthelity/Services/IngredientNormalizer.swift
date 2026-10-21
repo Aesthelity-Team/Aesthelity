@@ -8,12 +8,15 @@
 import Foundation
 
 struct IngredientNormalizer {
+    /// Content version of the catalog this normalizer was built from. Not a safety judgment.
+    let catalogVersion: Int
     private let ingredientsByID: [String: CanonicalIngredient]
     private let idsByKey: [String: Set<String>]
     private let ambiguousTermsByKey: [String: AmbiguousIngredientTerm]
     private let ambiguousCandidatesByKey: [String: Set<String>]
 
     init(catalog: IngredientAliasCatalog) {
+        catalogVersion = catalog.version
         var ingredientsByID: [String: CanonicalIngredient] = [:]
         var idsByKey: [String: Set<String>] = [:]
         for ingredient in catalog.ingredients {
@@ -292,10 +295,10 @@ extension IngredientAliasCatalog {
             if !seenIDs.insert(ingredient.id).inserted {
                 issues.append("Duplicate ingredient ID \(ingredient.id).")
             }
-            if !Self.isSlug(ingredient.id) {
+            if !CanonicalIngredientID.isValid(ingredient.id) {
                 issues.append("Ingredient ID \"\(ingredient.id)\" must be lowercase words joined by hyphens.")
             }
-            for ingredientClass in ingredient.classes where !Self.isSlug(ingredientClass) {
+            for ingredientClass in ingredient.classes where !CanonicalIngredientID.isValid(ingredientClass) {
                 issues.append("\(ingredient.id) has class \"\(ingredientClass)\", which must be lowercase words joined by hyphens.")
             }
             for reference in ingredient.references {
@@ -345,9 +348,5 @@ extension IngredientAliasCatalog {
             }
         }
         return issues
-    }
-
-    private static func isSlug(_ value: String) -> Bool {
-        value.range(of: "^[a-z0-9]+(-[a-z0-9]+)*$", options: .regularExpression) != nil
     }
 }

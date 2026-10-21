@@ -36,10 +36,20 @@ struct SkinProfileStoreTests {
 
     @Test func invalidAndFutureFilesRemainIntactUntilAnExplicitSave() throws {
         try withFile { url in
-            for data in [Data("invalid json".utf8), try JSONEncoder().encode(SkinProfile(schemaVersion: 2))] {
+            let malformedIngredientID = Data("""
+            {"schemaVersion":1,"skinType":"dry","concerns":["barrier-repair"],"setupStatus":"completed","avoidedIngredients":[
+              {"originalText":"Water","mapping":"confirmed","ingredientID":"   "}
+            ]}
+            """.utf8)
+            let payloads = [
+                Data("invalid json".utf8),
+                try JSONEncoder().encode(SkinProfile(schemaVersion: 2)),
+                malformedIngredientID,
+            ]
+            for data in payloads {
                 try data.write(to: url)
                 let store = SkinProfileStore(fileURL: url)
-                #expect(store.loadError != nil)
+                #expect(store.loadError == "Your saved profile could not be loaded. You can complete setup again.")
                 #expect(store.profile.setupStatus == .notStarted)
                 #expect(try Data(contentsOf: url) == data)
                 try store.save(.skipped)
