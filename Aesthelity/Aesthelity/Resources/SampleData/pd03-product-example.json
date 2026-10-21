@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "productID": "pd03-example-serum",
+  "displayName": "PD-03 Example Serum (Fictional)",
+  "listStatus": "complete",
+  "ingredients": [
+    "Nicotinamide",
+    "Vitamin C",
+    "Unobtainium Extract"
+  ],
+  "expected": [
+    {
+      "originalText": "Nicotinamide",
+      "mapping": "confirmed",
+      "ingredientID": "niacinamide"
+    },
+    {
+      "originalText": "Vitamin C",
+      "mapping": "ambiguous",
+      "candidateIDs": [
+        "ascorbic-acid",
+        "ascorbyl-glucoside",
+        "magnesium-ascorbyl-phosphate",
+        "sodium-ascorbyl-phosphate"
+      ]
+    },
+    {
+      "originalText": "Unobtainium Extract",
+      "mapping": "unmatched"
+    }
+  ]
+}
