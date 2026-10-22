@@ -28,6 +28,13 @@ struct AesthelityApp: App {
         }
         _hasCompletedStartup = AppStorage(wrappedValue: false, "hasCompletedStartup", store: defaults)
         _profileStore = StateObject(wrappedValue: SkinProfileStore(fileURL: fileURL))
+
+        if arguments.contains("--seed-routines") {
+            try? RoutineStore.shared.seedDefaults()
+        }
+        if arguments.contains("--reset-routines") {
+            try? RoutineStore.shared.resetToEmpty()
+        }
     }
     
     var body: some Scene {
