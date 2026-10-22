@@ -59,7 +59,7 @@ public enum NotificationLeadTime: String, CaseIterable, Identifiable, Codable {
     public var id: String { rawValue }
 }
 
-public struct RoutineRecord: Identifiable, Equatable {
+public struct RoutineRecord: Identifiable, Equatable, Codable {
     public let id: UUID
     public var name: String
     public var period: RoutinePeriod
@@ -97,6 +97,40 @@ public struct RoutineRecord: Identifiable, Equatable {
         self.leadTime = leadTime
         self.quietHoursEnabled = quietHoursEnabled
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, period, status, frequency, reminderTime, activeDays, steps, pushRemindersEnabled, leadTime, quietHoursEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.name = try container.decode(String.self, forKey: .name)
+        self.period = try container.decodeIfPresent(RoutinePeriod.self, forKey: .period) ?? .am
+        self.status = try container.decodeIfPresent(RoutineStatus.self, forKey: .status) ?? .active
+        self.frequency = try container.decodeIfPresent(RoutineFrequency.self, forKey: .frequency) ?? .everyDay
+        self.reminderTime = try container.decodeIfPresent(String.self, forKey: .reminderTime) ?? "7:00 AM"
+        self.activeDays = try container.decodeIfPresent(Set<RoutineWeekday>.self, forKey: .activeDays) ?? [.mon, .tue, .wed, .thu, .fri, .sat, .sun]
+        self.steps = try container.decodeIfPresent([RoutineStepItem].self, forKey: .steps) ?? []
+        self.pushRemindersEnabled = try container.decodeIfPresent(Bool.self, forKey: .pushRemindersEnabled) ?? true
+        self.leadTime = try container.decodeIfPresent(NotificationLeadTime.self, forKey: .leadTime) ?? .atTime
+        self.quietHoursEnabled = try container.decodeIfPresent(Bool.self, forKey: .quietHoursEnabled) ?? true
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(name, forKey: .name)
+        try container.encode(period, forKey: .period)
+        try container.encode(status, forKey: .status)
+        try container.encode(frequency, forKey: .frequency)
+        try container.encode(reminderTime, forKey: .reminderTime)
+        try container.encode(activeDays, forKey: .activeDays)
+        try container.encode(steps, forKey: .steps)
+        try container.encode(pushRemindersEnabled, forKey: .pushRemindersEnabled)
+        try container.encode(leadTime, forKey: .leadTime)
+        try container.encode(quietHoursEnabled, forKey: .quietHoursEnabled)
+    }
     
     public var scheduleSummary: String {
         switch frequency {
@@ -115,63 +149,6 @@ public struct RoutineRecord: Identifiable, Equatable {
         case .onceAMonth:
             return "Once a month · \(reminderTime)"
         }
-    }
-}
-
-// MARK: - Default Repository for Routines
-
-public class RoutineRepository: ObservableObject {
-    public static let shared = RoutineRepository()
-    
-    @Published public var routines: [RoutineRecord] = []
-    
-    public init() {
-        seedDefaults()
-    }
-    
-    public func seedDefaults() {
-        routines = [
-            RoutineRecord(
-                name: "AM Glow",
-                period: .am,
-                status: .paused,
-                frequency: .everyDay,
-                reminderTime: "7:00 AM",
-                steps: [
-                    RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Purifying · Step 1", state: .active),
-                    RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Brightening · Step 2", state: .incomplete),
-                    RoutineStepItem(stepNumber: 3, title: "Daily Moisturizer", subtitle: "Hydration · Step 3", state: .incomplete),
-                    RoutineStepItem(stepNumber: 4, title: "SPF 46", subtitle: "Protection · Step 4", state: .incomplete)
-                ]
-            ),
-            RoutineRecord(
-                name: "PM Repair",
-                period: .pm,
-                status: .paused,
-                frequency: .everyOtherDay,
-                reminderTime: "9:00 PM",
-                steps: [
-                    RoutineStepItem(stepNumber: 1, title: "Micellar Pre-Cleanse", subtitle: "Dissolve makeup · Step 1", state: .active),
-                    RoutineStepItem(stepNumber: 2, title: "Gentle Foaming Wash", subtitle: "Deep cleanse · Step 2", state: .incomplete),
-                    RoutineStepItem(stepNumber: 3, title: "Hyaluronic Acid", subtitle: "Hydrate · Step 3", state: .incomplete),
-                    RoutineStepItem(stepNumber: 4, title: "Barrier Night Cream", subtitle: "Barrier seal · Step 4", state: .incomplete),
-                    RoutineStepItem(stepNumber: 5, title: "Lip Sleep Mask", subtitle: "Nourish · Step 5", state: .incomplete)
-                ]
-            ),
-            RoutineRecord(
-                name: "Weekly Exfoliate",
-                period: .pm,
-                status: .active,
-                frequency: .twoTimesAWeek,
-                reminderTime: "8:30 PM",
-                activeDays: [.tue, .fri],
-                steps: [
-                    RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Prep surface · Step 1", state: .active),
-                    RoutineStepItem(stepNumber: 2, title: "AHA/BHA Solution", subtitle: "Chemical exfoliation · Step 2", state: .incomplete),
-                    RoutineStepItem(stepNumber: 3, title: "Cica Soothing Gel", subtitle: "Calm and hydrate · Step 3", state: .incomplete)
-                ]
-            )
-        ]
     }
 }
 

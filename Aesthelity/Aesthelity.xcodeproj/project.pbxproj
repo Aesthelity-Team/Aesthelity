@@ -38,14 +38,14 @@
 				Tests/AesthelityTests/DemoCatalogTests.swift,
 				Tests/AesthelityTests/IngredientLabelParserTests.swift,
 				Tests/AesthelityTests/IngredientNormalizerTests.swift,
-				Tests/AesthelityTests/SkinProfileTests.swift,
 				Tests/AesthelityTests/SkinProfileDraftTests.swift,
 				Tests/AesthelityTests/SkinProfileStoreTests.swift,
+				Tests/AesthelityTests/SkinProfileTests.swift,
 				Tests/AesthelityUITests/AesthelityUITests.swift,
+				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 				Tests/AesthelityUITests/OnboardingUITests.swift,
 				Tests/AesthelityUITests/ProfileUITests.swift,
 				Tests/AesthelityUITests/Sprint1DemoUITests.swift,
-				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
 			target = 6E315A7B3076EC58002817B4 /* Aesthelity */;
 		};
@@ -57,9 +57,9 @@
 				Tests/AesthelityTests/DemoCatalogTests.swift,
 				Tests/AesthelityTests/IngredientLabelParserTests.swift,
 				Tests/AesthelityTests/IngredientNormalizerTests.swift,
-				Tests/AesthelityTests/SkinProfileTests.swift,
 				Tests/AesthelityTests/SkinProfileDraftTests.swift,
 				Tests/AesthelityTests/SkinProfileStoreTests.swift,
+				Tests/AesthelityTests/SkinProfileTests.swift,
 			);
 			target = 6E315A8B3076EC59002817B4 /* AesthelityTests */;
 		};
@@ -67,10 +67,10 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityUITests/AesthelityUITests.swift,
+				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 				Tests/AesthelityUITests/OnboardingUITests.swift,
 				Tests/AesthelityUITests/ProfileUITests.swift,
 				Tests/AesthelityUITests/Sprint1DemoUITests.swift,
-				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 			);
 			target = 6E315A953076EC59002817B4 /* AesthelityUITests */;
 		};

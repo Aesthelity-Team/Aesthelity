@@ -49,26 +49,51 @@ public enum RoutinePeriod: String, CaseIterable, Identifiable, Codable {
     public var id: String { rawValue }
 }
 
-public enum StepState: Equatable {
+public enum StepState: String, Codable, Equatable {
     case complete
     case active
     case incomplete
 }
 
-public struct RoutineStepItem: Identifiable {
-    public let id = UUID()
+public struct RoutineStepItem: Identifiable, Codable {
+    public let id: UUID
     public let stepNumber: Int
     public let title: String
     public let subtitle: String
     public var state: StepState
-    public var hasClash: Bool = false
+    public var hasClash: Bool
     
-    public init(stepNumber: Int, title: String, subtitle: String, state: StepState, hasClash: Bool = false) {
+    public init(id: UUID = UUID(), stepNumber: Int, title: String, subtitle: String, state: StepState, hasClash: Bool = false) {
+        self.id = id
         self.stepNumber = stepNumber
         self.title = title
         self.subtitle = subtitle
         self.state = state
         self.hasClash = hasClash
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, stepNumber, title, subtitle, state, hasClash
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.stepNumber = try container.decode(Int.self, forKey: .stepNumber)
+        self.title = try container.decode(String.self, forKey: .title)
+        self.subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
+        self.state = try container.decodeIfPresent(StepState.self, forKey: .state) ?? .incomplete
+        self.hasClash = try container.decodeIfPresent(Bool.self, forKey: .hasClash) ?? false
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(stepNumber, forKey: .stepNumber)
+        try container.encode(title, forKey: .title)
+        try container.encode(subtitle, forKey: .subtitle)
+        try container.encode(state, forKey: .state)
+        try container.encode(hasClash, forKey: .hasClash)
     }
 }
 
@@ -190,8 +215,9 @@ struct ContentView: View {
                                     showEditRoutineView = false
                                 }
                             },
-                            onSave: { _ in
+                            onSave: { updatedRoutine in
                                 withAnimation(.easeInOut(duration: 0.2)) {
+                                    try? RoutineRepository.shared.save(updatedRoutine)
                                     showEditRoutineView = false
                                 }
                             }
