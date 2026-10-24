@@ -2,7 +2,7 @@ import Foundation
 
 // Raw values must match the strings in Resources/DemoData/*.json; an unrecognized value fails decoding.
 
-enum DemoProductCategory: String, Decodable, CaseIterable {
+enum DemoProductCategory: String, Codable, CaseIterable {
     case cleanser, serum, treatment, moisturizer, sunscreen, toner, mist, mask
 }
 
