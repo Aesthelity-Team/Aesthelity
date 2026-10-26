@@ -85,6 +85,118 @@ struct ManualProductTests {
 }
 
 struct ManualProductDraftTests {
+    private func submitted(_ draft: ManualProductDraft) throws -> ManualProduct {
+        let normalizer = IngredientNormalizer(catalog: try .loadBundled())
+        guard case .completed(let product) = draft.submit(using: normalizer) else {
+            Issue.record("Expected a valid product")
+            throw NSError(domain: "ManualProductDraftTests", code: 1)
+        }
+        return product
+    }
+
+    @Test func missingFieldsAreReportedTogether() throws {
+        let draft = ManualProductDraft()
+        #expect(draft.validationErrors().map(\.field) == [.name, .ingredientList])
+        let normalizer = IngredientNormalizer(catalog: try .loadBundled())
+        #expect(draft.submit(using: normalizer) == .invalid(draft.validationErrors()))
+        #expect(draft.validationErrors().allSatisfy { !$0.message.isEmpty })
+    }
+
+    @Test func submissionTrimsMetadataAndPreservesLabelOrderAndDuplicates() throws {
+        let label = "Ingredients: Aqua, Glycerin\nWater, Water"
+        let product = try submitted(ManualProductDraft(name: "  Serum  ", brand: " Brand ", category: .serum, rawIngredientList: label))
+        #expect(product.name == "Serum")
+        #expect(product.brand == "Brand")
+        #expect(product.category == .serum)
+        #expect(product.rawIngredientList == label)
+        #expect(product.ingredients.map(\.ingredientID) == ["water", "glycerin", "water", "water"])
+    }
+
+    @Test func optionalMetadataStaysAbsent() throws {
+        let product = try submitted(ManualProductDraft(name: "Serum", brand: "   ", rawIngredientList: "Water"))
+        #expect(product.brand == nil)
+        #expect(product.category == nil)
+    }
+
+    @Test func unresolvedEntriesKeepTheirStatusesAndWarnings() throws {
+        let product = try submitted(ManualProductDraft(name: "Serum", rawIngredientList: "Niacinimide, Vitamin C, Unobtainium Extract, Vitamin C"))
+        #expect(product.ingredients[0].status == .uncertain(suggestedID: "niacinamide"))
+        guard case .ambiguous = product.ingredients[1].status else {
+            Issue.record("Vitamin C must remain ambiguous")
+            return
+        }
+        #expect(product.ingredients[2].status == .unmatched)
+        #expect(product.ingredients[3] == product.ingredients[1])
+        #expect(product.ingredients.warnings.count == 4)
+        #expect(product.ingredients.allSatisfy { $0.ingredientID == nil })
+    }
+
+    @Test(arguments: ["!!!", "123", "2%", "***", ":"])
+    func malformedEntryCannotDisappear(input: String) throws {
+        let draft = ManualProductDraft(name: "Serum", rawIngredientList: "Water, \(input), Glycerin")
+        let error = try #require(draft.validationErrors().first)
+        #expect(error.field == .ingredientList)
+        #expect(error.entryIndex == 1)
+        #expect(error.input == " \(input)")
+        #expect(error.reason == .missingLetters)
+        let normalizer = IngredientNormalizer(catalog: try .loadBundled())
+        #expect(draft.submit(using: normalizer) == .invalid(draft.validationErrors()))
+    }
+
+    @Test(arguments: ["", " \n ", ",,;\n", "Ingredients:", "\u{200B}"])
+    func emptyIngredientListsAreRejected(label: String) {
+        let errors = ManualProductDraft(name: "Serum", rawIngredientList: label).validationErrors()
+        #expect(errors.contains { $0.field == .ingredientList && $0.reason == .required })
+    }
+
+    @Test func ingredientLengthUsesCleanedText() throws {
+        let name = String(repeating: "a", count: 120)
+        let product = try submitted(ManualProductDraft(name: "Serum", rawIngredientList: "  \(name)  "))
+        #expect(product.ingredients.first?.originalText == name)
+        let invalid = ManualProductDraft(name: "Serum", rawIngredientList: name + "a")
+        #expect(invalid.validationErrors().map(\.reason) == [.tooLong])
+    }
+
+    @Test func pastedFormatCharactersAreRemovedOnlyFromPreparedValues() throws {
+        let draft = ManualProductDraft(name: "Serum\u{200B}", rawIngredientList: "Retinol\u{200B}, Wa\u{00AD}ter")
+        let product = try submitted(draft)
+        #expect(product.name == "Serum")
+        #expect(product.ingredients.map(\.ingredientID) == ["retinol", "water"])
+        #expect(product.rawIngredientList == draft.rawIngredientList)
+    }
+
+    @Test(arguments: ["Water\u{0000}", "Water\tGlycerin", "Water\u{0007}"])
+    func realControlsAreRejected(label: String) {
+        let errors = ManualProductDraft(name: "Serum", rawIngredientList: label).validationErrors()
+        #expect(errors.contains { $0.reason == .controlCharacters })
+    }
+
+    @Test func metadataControlsAreRejected() {
+        let errors = ManualProductDraft(name: "Serum\nName", brand: "Brand\tName", rawIngredientList: "Water").validationErrors()
+        #expect(errors.map(\.field) == [.name, .brand])
+        #expect(errors.allSatisfy { $0.reason == .controlCharacters })
+    }
+
+    @Test func bracketedNamesAndNumericCommasRemainWhole() throws {
+        let product = try submitted(ManualProductDraft(name: "Serum", rawIngredientList: "Water (Aqua, Eau), 1,3-Butylene Glycol, Niacinamide 10%"))
+        #expect(product.ingredients.map(\.originalText) == ["Water (Aqua, Eau)", "1,3-Butylene Glycol", "Niacinamide"])
+    }
+
+    @Test(arguments: ["Water (Aqua", "Water], Glycerin", "Water ([Aqua)]"])
+    func unbalancedBracketsAreReported(label: String) {
+        let errors = ManualProductDraft(name: "Serum", rawIngredientList: label).validationErrors()
+        #expect(errors.contains { $0.reason == .unbalancedBrackets })
+    }
+
+    @Test func correctingInputAllowsResubmission() throws {
+        var draft = ManualProductDraft(name: "Serum", rawIngredientList: "Water, !!!")
+        #expect(!draft.validationErrors().isEmpty)
+        draft.rawIngredientList = "Water, Glycerin"
+        let product = try submitted(draft)
+        #expect(product.ingredients.map(\.ingredientID) == ["water", "glycerin"])
+        #expect(draft.rawIngredientList == "Water, Glycerin")
+    }
+
     @Test func newDraftStartsWithoutProductInformation() {
         let draft = ManualProductDraft()
         #expect(draft.name.isEmpty)
