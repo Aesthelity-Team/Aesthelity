@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "fixtureRole": "structural-proposal",
+  "fixtureID": "an02-stale-catalog-version",
+  "summary": "Retinol and glycolic acid rows stored under catalog version 2 are not confirmed matches against active catalog version 3.",
+  "catalogNotes": [
+    "Proposal example. Not an engine test and not a stored historical catalog.",
+    "The ingredient rows match serum_retinol and treatment_exfoliant in Resources/DemoData/products.json.",
+    "Those demo records do not store catalogVersion. Version 2 is only a different integer. This repository's alias catalog version is 3. There is no version 2 file.",
+    "The same rows at version 3 are the example-id-class-match fixture and do match the example rule. This fixture must not.",
+    "categoryLabel, explanation, reason, and limitations are sample copy pending review."
+  ],
+  "input": {
+    "period": "pm",
+    "activeCatalogVersion": 3,
+    "products": [
+      {
+        "productID": "serum_retinol",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Squalane",
+            "mapping": "confirmed",
+            "ingredientID": "squalane"
+          },
+          {
+            "originalText": "Retinol",
+            "mapping": "confirmed",
+            "ingredientID": "retinol"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      },
+      {
+        "productID": "treatment_exfoliant",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycolic Acid",
+            "mapping": "confirmed",
+            "ingredientID": "glycolic-acid"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 3,
+    "outcome": "findings",
+    "completeness": "incomplete",
+    "productIDs": [
+      "serum_retinol",
+      "treatment_exfoliant"
+    ],
+    "findings": [
+      {
+        "ruleID": "coverage.stale-catalog",
+        "ruleStatus": "proposed",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "categoryLabel": "Coverage gap",
+        "productIDs": [
+          "serum_retinol"
+        ],
+        "ingredientIDs": [],
+        "explanation": "Sample copy pending review. serum_retinol was stored with catalog version 2. The active catalog is version 3, so its ingredient IDs were not used as confirmed matches.",
+        "reason": "Sample copy pending review. catalogVersion does not equal activeCatalogVersion.",
+        "limitations": [
+          "Sample copy pending review. Member IDs in a stale record are not confirmed matches. This is not a safety result."
+        ]
+      },
+      {
+        "ruleID": "coverage.stale-catalog",
+        "ruleStatus": "proposed",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "categoryLabel": "Coverage gap",
+        "productIDs": [
+          "treatment_exfoliant"
+        ],
+        "ingredientIDs": [],
+        "explanation": "Sample copy pending review. treatment_exfoliant was stored with catalog version 2. The active catalog is version 3, so its ingredient IDs were not used as confirmed matches.",
+        "reason": "Sample copy pending review. catalogVersion does not equal activeCatalogVersion.",
+        "limitations": [
+          "Sample copy pending review. Member IDs in a stale record are not confirmed matches. This is not a safety result."
+        ]
+      }
+    ],
+    "limitations": [
+      "Sample copy pending review. The example rule did not match because the stored catalog version is not the active version. This is not a safety assessment."
+    ]
+  }
+}

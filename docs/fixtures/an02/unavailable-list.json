@@ -1,0 +1,56 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "fixtureRole": "structural-proposal",
+  "fixtureID": "an02-unavailable-list",
+  "summary": "An unavailable ingredient list produces unknown coverage and does not produce noFindings.",
+  "catalogNotes": [
+    "Proposal example. Not an engine test.",
+    "sunscreen_unknown matches Resources/DemoData/products.json: ingredient list empty and ingredient_list_status unavailable.",
+    "Demo scenario unknown_sunscreen uses this product in the AM period. This fixture does not copy that demo finding.",
+    "catalogVersion 3 is the version a PD-03 normalization of the empty list would record. DemoData itself does not store catalogVersion.",
+    "categoryLabel, explanation, reason, and limitations are sample copy pending review."
+  ],
+  "input": {
+    "period": "am",
+    "activeCatalogVersion": 3,
+    "products": [
+      {
+        "productID": "sunscreen_unknown",
+        "listStatus": "unavailable",
+        "catalogVersion": 3,
+        "ingredients": []
+      }
+    ]
+  },
+  "expected": {
+    "period": "am",
+    "activeCatalogVersion": 3,
+    "outcome": "findings",
+    "completeness": "incomplete",
+    "productIDs": [
+      "sunscreen_unknown"
+    ],
+    "findings": [
+      {
+        "ruleID": "coverage.unavailable-list",
+        "ruleStatus": "proposed",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "categoryLabel": "Coverage gap",
+        "productIDs": [
+          "sunscreen_unknown"
+        ],
+        "ingredientIDs": [],
+        "explanation": "Sample copy pending review. sunscreen_unknown has no ingredient rows, so no ingredient could be checked.",
+        "reason": "Sample copy pending review. listStatus is unavailable and the ingredient array is empty.",
+        "limitations": [
+          "Sample copy pending review. An unavailable list is not a safety result."
+        ]
+      }
+    ],
+    "limitations": [
+      "Sample copy pending review. Missing ingredient data is unknown coverage. It is not noFindings and it is not a safety assessment."
+    ]
+  }
+}

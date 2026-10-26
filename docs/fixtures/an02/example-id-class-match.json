@@ -1,0 +1,117 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "fixtureRole": "illustrative-example-only",
+  "fixtureID": "an02-example-id-class-match",
+  "summary": "Complete PM routine. Example-only match of ingredient ID retinol and class exfoliant. This expected output illustrates the contract. It is not clinical validation.",
+  "catalogNotes": [
+    "Proposal example. The rule example.retinol-with-exfoliant-class is example-only and is not approved.",
+    "serum_retinol and treatment_exfoliant match Resources/DemoData/products.json, including ingredient text, order, and complete list status.",
+    "Demo scenario caution_pm uses this product pair and routine_time pm. The demo finding is a subtype rule. This fixture does not copy that finding and does not include subtype.",
+    "glycolic-acid also has class aha. aha is not the match key. retinol has class retinoid. retinoid is not the match key.",
+    "categoryLabel, explanation, reason, and limitations are sample copy pending review."
+  ],
+  "input": {
+    "period": "pm",
+    "activeCatalogVersion": 3,
+    "products": [
+      {
+        "productID": "serum_retinol",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Squalane",
+            "mapping": "confirmed",
+            "ingredientID": "squalane"
+          },
+          {
+            "originalText": "Retinol",
+            "mapping": "confirmed",
+            "ingredientID": "retinol"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      },
+      {
+        "productID": "treatment_exfoliant",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycolic Acid",
+            "mapping": "confirmed",
+            "ingredientID": "glycolic-acid"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 3,
+    "outcome": "findings",
+    "completeness": "complete",
+    "productIDs": [
+      "serum_retinol",
+      "treatment_exfoliant"
+    ],
+    "findings": [
+      {
+        "ruleID": "example.retinol-with-exfoliant-class",
+        "ruleStatus": "example-only",
+        "outcome": "caution",
+        "categoryID": "ingredient-combination",
+        "categoryLabel": "Ingredient combination",
+        "productIDs": [
+          "serum_retinol",
+          "treatment_exfoliant"
+        ],
+        "ingredientIDs": [
+          "retinol",
+          "glycolic-acid"
+        ],
+        "matchedClassIDs": [
+          "exfoliant"
+        ],
+        "explanation": "Sample copy pending review. Confirmed ingredient retinol in serum_retinol and class exfoliant on confirmed glycolic-acid in treatment_exfoliant matched example rule example.retinol-with-exfoliant-class.",
+        "reason": "Sample copy pending review. The rule requires ingredient ID retinol and class exfoliant. Product subtype was not used. Catalog classes other than exfoliant were not match keys.",
+        "limitations": [
+          "Sample copy pending review. Example only. This is not an approved rule, not a determination that the ingredients are unsafe, and not layering guidance."
+        ]
+      }
+    ],
+    "limitations": [
+      "Sample copy pending review. This result illustrates an example-only rule. It is not a safety assessment."
+    ]
+  }
+}

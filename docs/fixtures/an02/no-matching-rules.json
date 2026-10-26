@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "fixtureRole": "structural-proposal",
+  "fixtureID": "an02-no-matching-rules",
+  "summary": "Complete AM routine whose confirmed ingredients do not match the example rule. noFindings is not a safety assessment.",
+  "catalogNotes": [
+    "Proposal example. Not an engine test and not a demo scenario.",
+    "serum_hydrating and moisturizer_gel match Resources/DemoData/products.json, including ingredient text, order, and complete list status.",
+    "Both products appear in demo scenario normal_am, with the serum before the moisturizer. This fixture does not include the other normal_am products.",
+    "Confirmed IDs are exact names in ingredient-aliases.json version 3.",
+    "categoryLabel, explanation, reason, and limitations are sample copy pending review."
+  ],
+  "input": {
+    "period": "am",
+    "activeCatalogVersion": 3,
+    "products": [
+      {
+        "productID": "serum_hydrating",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Sodium Hyaluronate",
+            "mapping": "confirmed",
+            "ingredientID": "sodium-hyaluronate"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      },
+      {
+        "productID": "moisturizer_gel",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Squalane",
+            "mapping": "confirmed",
+            "ingredientID": "squalane"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "am",
+    "activeCatalogVersion": 3,
+    "outcome": "noFindings",
+    "completeness": "complete",
+    "productIDs": [
+      "serum_hydrating",
+      "moisturizer_gel"
+    ],
+    "findings": [],
+    "limitations": [
+      "Sample copy pending review. No approved rule matched the checked ingredients. This is not a safety assessment."
+    ]
+  }
+}

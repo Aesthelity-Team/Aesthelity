@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "fixtureRole": "structural-proposal",
+  "fixtureID": "an02-unresolved-rows",
+  "summary": "Ambiguous candidates, an uncertain suggestion, unmatched text, and a stored ID absent from the catalog do not satisfy the example rule.",
+  "catalogNotes": [
+    "Proposal example. Not an engine test.",
+    "treatment_exfoliant matches Resources/DemoData/products.json, including ingredient text, order, and complete list status. Its confirmed glycolic-acid does not match the example rule without confirmed retinol.",
+    "The first three pd03-example-serum rows match Resources/SampleData/pd03-product-example.json: Nicotinamide, Vitamin C, and Unobtainium Extract.",
+    "Niacinimide is added after those rows from the normalizer test that expects suggestedID niacinamide. It is not a line in pd03-product-example.json.",
+    "The nonexistent-id row is a stored-record shape from the PD-03 contract, placed last. The normalizer does not emit it. Decoding accepts the slug. Catalog membership fails.",
+    "Vitamin C candidateIDs are the normalizer's sorted order, which matches the PD-03 example and not the declaration order in ambiguousTerms.",
+    "This file does not change pd03-product-example.json or products.json.",
+    "categoryLabel, explanation, reason, and limitations are sample copy pending review."
+  ],
+  "input": {
+    "period": "pm",
+    "activeCatalogVersion": 3,
+    "products": [
+      {
+        "productID": "treatment_exfoliant",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycolic Acid",
+            "mapping": "confirmed",
+            "ingredientID": "glycolic-acid"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      },
+      {
+        "productID": "pd03-example-serum",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Nicotinamide",
+            "mapping": "confirmed",
+            "ingredientID": "niacinamide"
+          },
+          {
+            "originalText": "Vitamin C",
+            "mapping": "ambiguous",
+            "candidateIDs": [
+              "ascorbic-acid",
+              "ascorbyl-glucoside",
+              "magnesium-ascorbyl-phosphate",
+              "sodium-ascorbyl-phosphate"
+            ]
+          },
+          {
+            "originalText": "Unobtainium Extract",
+            "mapping": "unmatched"
+          },
+          {
+            "originalText": "Niacinimide",
+            "mapping": "uncertain",
+            "suggestedID": "niacinamide"
+          },
+          {
+            "originalText": "Not a catalog ingredient",
+            "mapping": "confirmed",
+            "ingredientID": "nonexistent-id"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 3,
+    "outcome": "findings",
+    "completeness": "incomplete",
+    "productIDs": [
+      "treatment_exfoliant",
+      "pd03-example-serum"
+    ],
+    "findings": [
+      {
+        "ruleID": "coverage.unresolved-row",
+        "ruleStatus": "proposed",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "categoryLabel": "Coverage gap",
+        "productIDs": [
+          "pd03-example-serum"
+        ],
+        "ingredientIDs": [],
+        "originalText": "Vitamin C",
+        "rowIndex": 1,
+        "reasonCode": "ambiguous",
+        "explanation": "Sample copy pending review. The label text Vitamin C has more than one candidate and no confirmed ingredient ID.",
+        "reason": "Sample copy pending review. mapping is ambiguous. candidateIDs are not confirmed matches.",
+        "limitations": [
+          "Sample copy pending review. This unresolved row is not a safety result and does not satisfy a confirmed match."
+        ]
+      },
+      {
+        "ruleID": "coverage.unresolved-row",
+        "ruleStatus": "proposed",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "categoryLabel": "Coverage gap",
+        "productIDs": [
+          "pd03-example-serum"
+        ],
+        "ingredientIDs": [],
+        "originalText": "Unobtainium Extract",
+        "rowIndex": 2,
+        "reasonCode": "unmatched",
+        "explanation": "Sample copy pending review. The label text Unobtainium Extract did not match a catalog ingredient.",
+        "reason": "Sample copy pending review. mapping is unmatched.",
+        "limitations": [
+          "Sample copy pending review. This unresolved row is not a safety result and does not satisfy a confirmed match."
+        ]
+      },
+      {
+        "ruleID": "coverage.unresolved-row",
+        "ruleStatus": "proposed",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "categoryLabel": "Coverage gap",
+        "productIDs": [
+          "pd03-example-serum"
+        ],
+        "ingredientIDs": [],
+        "originalText": "Niacinimide",
+        "rowIndex": 3,
+        "reasonCode": "uncertain",
+        "explanation": "Sample copy pending review. The label text Niacinimide is an uncertain spelling and has no confirmed ingredient ID.",
+        "reason": "Sample copy pending review. mapping is uncertain. suggestedID is not a confirmed match.",
+        "limitations": [
+          "Sample copy pending review. This unresolved row is not a safety result and does not satisfy a confirmed match."
+        ]
+      },
+      {
+        "ruleID": "coverage.unresolved-row",
+        "ruleStatus": "proposed",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "categoryLabel": "Coverage gap",
+        "productIDs": [
+          "pd03-example-serum"
+        ],
+        "ingredientIDs": [],
+        "originalText": "Not a catalog ingredient",
+        "rowIndex": 4,
+        "reasonCode": "absent-catalog-id",
+        "explanation": "Sample copy pending review. The stored ingredient ID nonexistent-id is not in the active catalog.",
+        "reason": "Sample copy pending review. A slug can be stored without being a catalog member. It is not a confirmed identity.",
+        "limitations": [
+          "Sample copy pending review. This unresolved row is not a safety result and does not satisfy a confirmed match."
+        ]
+      }
+    ],
+    "limitations": [
+      "Sample copy pending review. Suggestions, candidates, unmatched text, and unknown stored IDs were not treated as confirmed. This is not a safety assessment."
+    ]
+  }
+}

@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "fixtureRole": "needs-decision",
+  "summary": "Ticket topics that stay open. This file is not an analysis input and has no expected findings.",
+  "notAnEngineCase": true,
+  "severityScale": {
+    "status": "proposed-vocabulary-not-assigned",
+    "values": ["low", "moderate", "high"],
+    "meaning": "Proposed interface emphasis. Not a medical grade and not a percentage.",
+    "assignedOnRules": [],
+    "effect": "The other fixtures omit severity. They do not satisfy issue #22 scenario 3."
+  },
+  "conflict": {
+    "status": "proposed-distinction-not-implementable-yet",
+    "proposedMeaning": "Two approved rules match the same products and cannot both be followed.",
+    "alternativeToDecide": "If conflict only means a stronger caution, severity should carry that strength and conflict should not be a separate outcome.",
+    "approvedRulesAvailable": [],
+    "futureFixtureNeeds": [
+      "At least two approved rules",
+      "A routine of existing fictional products in which both rules match the same products",
+      "A team decision that those rules cannot both be followed",
+      "An assigned severity if issue #22 scenario 3 applies"
+    ]
+  },
+  "allergen": {
+    "status": "input-not-available",
+    "demoOnlyScenario": "allergen_mist",
+    "demoProfile": "profile_limonene_allergy",
+    "demoProduct": "mist_fragranced",
+    "demoIngredientText": "Limonene",
+    "catalogIngredientID": "limonene",
+    "productionAllergyRecordOnSkinProfile": false,
+    "futureFixtureNeeds": [
+      "A recorded-allergy input that is not SkinProfile.avoidedIngredients",
+      "A confirmed ingredient ID on that allergy",
+      "An approved matcher from that ID to confirmed product rows",
+      "Agreement that catalog class fragrance-allergen is not itself an allergy rule"
+    ]
+  },
+  "layering": {
+    "status": "boundary-proposed",
+    "preserveOrder": "The routine array order is kept on productIDs and is used to sort findings.",
+    "doNotEvaluateOrder": "No rule in this draft changes a match because of position or returns a recommended sequence.",
+    "an06Issue": 26,
+    "futureFixtureNeeds": [
+      "An approved layering rule",
+      "The product facts that rule needs",
+      "Agreement that position may be a condition without becoming an ingredient identity",
+      "AN-06's recommended-sequence output, which this draft does not define"
+    ]
+  }
+}
