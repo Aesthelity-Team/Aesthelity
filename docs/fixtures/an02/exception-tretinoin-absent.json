@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "exception",
+  "fixtureID": "an02-exception-tretinoin-absent",
+  "summary": "A stored tretinoin ID against the shipped catalog is absent-catalog-id, not a conflict.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "pm",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": []
+    },
+    "products": [
+      {
+        "productID": "example-benzoyl-peroxide",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Benzoyl Peroxide",
+            "mapping": "confirmed",
+            "ingredientID": "benzoyl-peroxide"
+          }
+        ]
+      },
+      {
+        "productID": "example-tretinoin",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Tretinoin",
+            "mapping": "confirmed",
+            "ingredientID": "tretinoin"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 2,
+    "outcome": "findings",
+    "completeness": "incomplete",
+    "productIDs": [
+      "example-benzoyl-peroxide",
+      "example-tretinoin"
+    ],
+    "findings": [
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. tretinoin is not in the bundled version 2 catalog, so the benzoyl peroxide conflict does not fire.",
+        "reason": "Proposed. A slug can be stored without being a catalog member.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "coverage.unresolved-row",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "productIDs": [
+          "example-tretinoin"
+        ],
+        "ingredientIDs": [],
+        "originalText": "Tretinoin",
+        "rowIndex": 0,
+        "reasonCode": "absent-catalog-id"
+      }
+    ],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}

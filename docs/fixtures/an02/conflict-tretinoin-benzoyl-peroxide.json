@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "conflict",
+  "fixtureID": "an02-conflict-tretinoin",
+  "summary": "Conflict only for tretinoin 0.025% conventional gel mixed with benzoyl peroxide 10% lotion.",
+  "catalogMode": "bundled-plus-tretinoin",
+  "input": {
+    "period": "pm",
+    "coapplication": "mixed",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": []
+    },
+    "products": [
+      {
+        "productID": "example-benzoyl-peroxide",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Benzoyl Peroxide",
+            "mapping": "confirmed",
+            "ingredientID": "benzoyl-peroxide",
+            "formulation": {
+              "vehicle": "lotion",
+              "concentrationPercent": 10
+            }
+          }
+        ]
+      },
+      {
+        "productID": "example-tretinoin",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Tretinoin",
+            "mapping": "confirmed",
+            "ingredientID": "tretinoin",
+            "formulation": {
+              "vehicle": "conventional-gel",
+              "concentrationPercent": 0.025
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 2,
+    "outcome": "findings",
+    "completeness": "complete",
+    "productIDs": [
+      "example-benzoyl-peroxide",
+      "example-tretinoin"
+    ],
+    "findings": [
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. Martin and colleagues mixed equal volumes of tretinoin 0.025% gel and benzoyl peroxide 10% lotion. With benzoyl peroxide and light, more than 50% of the tretinoin was gone in about two hours and 95% in 24 hours. This routine states that conventional gel, that lotion, and mixed coapplication.",
+        "reason": "Proposed. Conflict means that studied mixture changed the tretinoin. It does not mean every tretinoin formula conflicts with benzoyl peroxide.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "interaction.benzoyl-peroxide-with-tretinoin",
+        "outcome": "conflict",
+        "categoryID": "ingredient-interaction",
+        "severity": "high",
+        "productIDs": [
+          "example-benzoyl-peroxide",
+          "example-tretinoin"
+        ],
+        "ingredientIDs": [
+          "benzoyl-peroxide",
+          "tretinoin"
+        ]
+      }
+    ],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "caution",
+  "fixtureID": "an02-caution-retinol-exfoliant",
+  "summary": "Repeated confirmed retinol rows plus glycolic acid. One caution, severity moderate.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "pm",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": []
+    },
+    "products": [
+      {
+        "productID": "example-retinol",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Retinol",
+            "mapping": "confirmed",
+            "ingredientID": "retinol"
+          },
+          {
+            "originalText": "Retinol",
+            "mapping": "confirmed",
+            "ingredientID": "retinol"
+          },
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          }
+        ]
+      },
+      {
+        "productID": "example-glycolic",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Glycolic Acid",
+            "mapping": "confirmed",
+            "ingredientID": "glycolic-acid"
+          },
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 2,
+    "outcome": "findings",
+    "completeness": "complete",
+    "productIDs": [
+      "example-retinol",
+      "example-glycolic"
+    ],
+    "findings": [
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. The American Academy of Dermatology says products containing retinol or benzoyl peroxide may make skin more sensitive, and exfoliating while using them may worsen dryness or cause breakouts. Confirmed retinol and confirmed glycolic acid, class exfoliant, are both in this routine.",
+        "reason": "Proposed. The rule matches retinol, benzoyl peroxide, or tretinoin with class exfoliant. Repeated retinol rows are one identity. Order is not a match condition.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "irritation.retinol-benzoyl-peroxide-with-exfoliant",
+        "outcome": "caution",
+        "categoryID": "ingredient-combination",
+        "severity": "moderate",
+        "productIDs": [
+          "example-retinol",
+          "example-glycolic"
+        ],
+        "ingredientIDs": [
+          "retinol",
+          "glycolic-acid"
+        ],
+        "matchedClassIDs": [
+          "exfoliant"
+        ]
+      }
+    ],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}

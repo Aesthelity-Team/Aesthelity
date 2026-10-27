@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "caution",
+  "fixtureID": "an02-partial-known-caution",
+  "summary": "A partial list can still produce the retinol caution. Coverage stays incomplete.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "pm",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": []
+    },
+    "products": [
+      {
+        "productID": "example-retinol",
+        "listStatus": "partial",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Retinol",
+            "mapping": "confirmed",
+            "ingredientID": "retinol"
+          }
+        ]
+      },
+      {
+        "productID": "example-glycolic",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Glycolic Acid",
+            "mapping": "confirmed",
+            "ingredientID": "glycolic-acid"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 2,
+    "outcome": "findings",
+    "completeness": "incomplete",
+    "productIDs": [
+      "example-retinol",
+      "example-glycolic"
+    ],
+    "findings": [
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. Confirmed retinol is still rule-eligible on a partial list. Confirmed glycolic acid has class exfoliant. The American Academy of Dermatology caution still applies to the rows that are present.",
+        "reason": "Proposed. A partial list does not erase a confirmed row, and it does not make the missing rows known.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "irritation.retinol-benzoyl-peroxide-with-exfoliant",
+        "outcome": "caution",
+        "categoryID": "ingredient-combination",
+        "severity": "moderate",
+        "productIDs": [
+          "example-retinol",
+          "example-glycolic"
+        ],
+        "ingredientIDs": [
+          "retinol",
+          "glycolic-acid"
+        ],
+        "matchedClassIDs": [
+          "exfoliant"
+        ]
+      },
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. example-retinol is marked partial. Rows that are absent were not checked.",
+        "reason": "Proposed. listStatus is partial and the stored rows are only the known portion.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "coverage.partial-list",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "productIDs": [
+          "example-retinol"
+        ],
+        "ingredientIDs": []
+      }
+    ],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}

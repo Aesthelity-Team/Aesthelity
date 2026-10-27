@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "allergen",
+  "fixtureID": "an02-allergen-limonene",
+  "summary": "Known recorded limonene allergy and the demo mist's confirmed limonene row.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "am",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": [
+        "limonene"
+      ]
+    },
+    "products": [
+      {
+        "productID": "mist_fragranced",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Water",
+            "mapping": "confirmed",
+            "ingredientID": "water"
+          },
+          {
+            "originalText": "Glycerin",
+            "mapping": "confirmed",
+            "ingredientID": "glycerin"
+          },
+          {
+            "originalText": "Limonene",
+            "mapping": "confirmed",
+            "ingredientID": "limonene"
+          },
+          {
+            "originalText": "Phenoxyethanol",
+            "mapping": "confirmed",
+            "ingredientID": "phenoxyethanol"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "am",
+    "activeCatalogVersion": 2,
+    "outcome": "findings",
+    "completeness": "complete",
+    "productIDs": [
+      "mist_fragranced"
+    ],
+    "findings": [
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. The recorded allergy list names limonene, and mist_fragranced has a confirmed limonene row. EU Annex III entry 88 requires limonene to be named on the label above a concentration threshold so a sensitised person can see it. A name on a label is not itself an allergy.",
+        "reason": "Proposed. The match is exact confirmed ID equality. Class fragrance-allergen is not the match key.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "allergy.recorded-ingredient",
+        "outcome": "allergen",
+        "categoryID": "recorded-allergy",
+        "severity": "high",
+        "productIDs": [
+          "mist_fragranced"
+        ],
+        "ingredientIDs": [
+          "limonene"
+        ]
+      }
+    ],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}

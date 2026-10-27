@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "negative",
+  "fixtureID": "an02-negative-retinal",
+  "summary": "Retinal plus glycolic acid does not fire the retinol caution.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "pm",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": []
+    },
+    "products": [
+      {
+        "productID": "example-retinal",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Retinal",
+            "mapping": "confirmed",
+            "ingredientID": "retinal"
+          }
+        ]
+      },
+      {
+        "productID": "example-glycolic",
+        "listStatus": "complete",
+        "catalogVersion": 2,
+        "ingredients": [
+          {
+            "originalText": "Glycolic Acid",
+            "mapping": "confirmed",
+            "ingredientID": "glycolic-acid"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "pm",
+    "activeCatalogVersion": 2,
+    "outcome": "noFindings",
+    "completeness": "complete",
+    "productIDs": [
+      "example-retinal",
+      "example-glycolic"
+    ],
+    "findings": [],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}
