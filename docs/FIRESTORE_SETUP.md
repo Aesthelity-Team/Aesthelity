@@ -18,7 +18,7 @@ Run from the repository root:
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-python -m pip install -r backend/requirements.txt
+python -m pip install -r Backend/requirements.txt
 ```
 
 ## Credentials and environment configuration
@@ -31,7 +31,7 @@ Set these variables in the terminal used to run the scripts:
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/outside/repo/credential.json"
 export FIREBASE_PROJECT_ID="aesthelity-2026"
-export FIRESTORE_DATABASE_ID="odgb"
+export FIRESTORE_DATABASE_ID="ogdb"
 ```
 
 ## Verify the connection
