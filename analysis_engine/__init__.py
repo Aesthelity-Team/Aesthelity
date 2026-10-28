@@ -1,6 +1,6 @@
 """Rule-based product analysis primitives for Aesthelity."""
 
-#lets other python files import the useful pieces from this modeule
+from .evaluate import AnalysisInputError, evaluate_routine
 from .product_input import (
     PreparedProductAnalysisInput,
     ProductInputError,
@@ -9,11 +9,12 @@ from .product_input import (
     prepare_analysis_input,
 )
 
-#need to name all the functions and data types this package will make available for other files
 __all__ = [
+    "AnalysisInputError",
     "PreparedProductAnalysisInput",
     "ProductInputError",
     "UnresolvedIngredient",
+    "evaluate_routine",
     "load_alias_catalog",
     "prepare_analysis_input",
 ]
