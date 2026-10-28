@@ -50,3 +50,9 @@ DerivedData/
 
 # Python
 __pycache__/
+.venv/
+venv/
+
+# Local Firebase server credentials
+credentials/
+*-firebase-adminsdk-*.json
