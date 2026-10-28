@@ -40,7 +40,7 @@ def bundled_catalog():
 
 def invalid_routines():
     known = {"status": "known", "ingredientIDs": []}
-    product = {"productID": "x", "listStatus": "unavailable", "catalogVersion": 2, "ingredients": []}
+    product = {"productID": "x", "listStatus": "unavailable", "catalogVersion": 3, "ingredients": []}
     return {
         "missing-period": {"recordedAllergies": known, "products": [product]},
         "missing-recorded-allergies": {"period": "am", "products": [product]},
@@ -77,7 +77,7 @@ def invalid_routines():
             "products": [{
                 "productID": "x",
                 "listStatus": "complete",
-                "catalogVersion": 2,
+                "catalogVersion": 3,
                 "ingredients": [{
                     "originalText": "Water",
                     "mapping": "confirmed",
@@ -92,7 +92,7 @@ def invalid_routines():
             "products": [{
                 "productID": "x",
                 "listStatus": "complete",
-                "catalogVersion": 2,
+                "catalogVersion": 3,
                 "ingredients": [{"originalText": "Water", "mapping": "confirmed", "ingredientID": "Water"}],
             }],
         },
@@ -102,7 +102,7 @@ def invalid_routines():
             "products": [{
                 "productID": "x",
                 "listStatus": "complete",
-                "catalogVersion": 2,
+                "catalogVersion": 3,
                 "ingredients": [{
                     "originalText": "Tretinoin",
                     "mapping": "confirmed",
@@ -133,7 +133,7 @@ class FixtureInventory(unittest.TestCase):
         )
 
     def test_files_match_the_contract_shape(self):
-        self.assertEqual(self.catalog["version"], 2)
+        self.assertEqual(self.catalog["version"], 3)
         self.assertNotIn("tretinoin", self.ids)
         self.assertEqual(
             self.classes["glycolic-acid"] & {"exfoliant"},

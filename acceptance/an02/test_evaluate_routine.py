@@ -50,7 +50,7 @@ def catalog_for(fixture, bundled):
 
 def invalid_routines():
     known = {"status": "known", "ingredientIDs": []}
-    product = {"productID": "x", "listStatus": "unavailable", "catalogVersion": 2, "ingredients": []}
+    product = {"productID": "x", "listStatus": "unavailable", "catalogVersion": 3, "ingredients": []}
     return {
         "missing-period": {"recordedAllergies": known, "products": [product]},
         "missing-recorded-allergies": {"period": "am", "products": [product]},
@@ -87,7 +87,7 @@ def invalid_routines():
             "products": [{
                 "productID": "x",
                 "listStatus": "complete",
-                "catalogVersion": 2,
+                "catalogVersion": 3,
                 "ingredients": [{
                     "originalText": "Water",
                     "mapping": "confirmed",
@@ -102,7 +102,7 @@ def invalid_routines():
             "products": [{
                 "productID": "x",
                 "listStatus": "complete",
-                "catalogVersion": 2,
+                "catalogVersion": 3,
                 "ingredients": [{"originalText": "Water", "mapping": "confirmed", "ingredientID": "Water"}],
             }],
         },
@@ -112,7 +112,7 @@ def invalid_routines():
             "products": [{
                 "productID": "x",
                 "listStatus": "complete",
-                "catalogVersion": 2,
+                "catalogVersion": 3,
                 "ingredients": [{
                     "originalText": "Tretinoin",
                     "mapping": "confirmed",

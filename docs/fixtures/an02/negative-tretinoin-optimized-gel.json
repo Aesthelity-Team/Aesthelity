@@ -16,7 +16,7 @@
       {
         "productID": "example-benzoyl-peroxide",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Benzoyl Peroxide",
@@ -28,7 +28,7 @@
       {
         "productID": "example-tretinoin",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Tretinoin",
@@ -45,7 +45,7 @@
   },
   "expected": {
     "period": "pm",
-    "activeCatalogVersion": 2,
+    "activeCatalogVersion": 3,
     "outcome": "noFindings",
     "completeness": "complete",
     "productIDs": [

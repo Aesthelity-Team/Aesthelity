@@ -3,7 +3,7 @@
   "contractStatus": "proposed",
   "caseRole": "normal",
   "fixtureID": "an02-normal",
-  "summary": "Complete version-2 hydrating serum, known empty allergies, no proposed rule matches.",
+  "summary": "Complete version-3 hydrating serum, known empty allergies, no proposed rule matches.",
   "catalogMode": "bundled",
   "input": {
     "period": "am",
@@ -15,7 +15,7 @@
       {
         "productID": "serum_hydrating",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Water",
@@ -43,7 +43,7 @@
   },
   "expected": {
     "period": "am",
-    "activeCatalogVersion": 2,
+    "activeCatalogVersion": 3,
     "outcome": "noFindings",
     "completeness": "complete",
     "productIDs": [

@@ -15,7 +15,7 @@
       {
         "productID": "example-benzoyl-peroxide",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Benzoyl Peroxide",
@@ -27,7 +27,7 @@
       {
         "productID": "example-tretinoin",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Tretinoin",
@@ -40,7 +40,7 @@
   },
   "expected": {
     "period": "pm",
-    "activeCatalogVersion": 2,
+    "activeCatalogVersion": 3,
     "outcome": "findings",
     "completeness": "incomplete",
     "productIDs": [
@@ -50,7 +50,7 @@
     "findings": [
       {
         "ruleStatus": "proposed",
-        "explanation": "Proposed. tretinoin is not in the bundled version 2 catalog, so the benzoyl peroxide conflict does not fire.",
+        "explanation": "Proposed. tretinoin is not in the bundled version 3 catalog, so the benzoyl peroxide conflict does not fire.",
         "reason": "Proposed. A slug can be stored without being a catalog member.",
         "limitations": [
           "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."

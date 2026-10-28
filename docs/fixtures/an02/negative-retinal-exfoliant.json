@@ -15,7 +15,7 @@
       {
         "productID": "example-retinal",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Retinal",
@@ -27,7 +27,7 @@
       {
         "productID": "example-glycolic",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Glycolic Acid",
@@ -40,7 +40,7 @@
   },
   "expected": {
     "period": "pm",
-    "activeCatalogVersion": 2,
+    "activeCatalogVersion": 3,
     "outcome": "noFindings",
     "completeness": "complete",
     "productIDs": [

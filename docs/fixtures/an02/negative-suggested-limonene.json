@@ -17,7 +17,7 @@
       {
         "productID": "example-suggestion",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Limonene",
@@ -30,7 +30,7 @@
   },
   "expected": {
     "period": "am",
-    "activeCatalogVersion": 2,
+    "activeCatalogVersion": 3,
     "outcome": "findings",
     "completeness": "incomplete",
     "productIDs": [

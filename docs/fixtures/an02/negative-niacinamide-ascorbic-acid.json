@@ -15,7 +15,7 @@
       {
         "productID": "example-niacinamide",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Niacinamide",
@@ -27,7 +27,7 @@
       {
         "productID": "example-ascorbic-acid",
         "listStatus": "complete",
-        "catalogVersion": 2,
+        "catalogVersion": 3,
         "ingredients": [
           {
             "originalText": "Ascorbic Acid",
@@ -40,7 +40,7 @@
   },
   "expected": {
     "period": "am",
-    "activeCatalogVersion": 2,
+    "activeCatalogVersion": 3,
     "outcome": "noFindings",
     "completeness": "complete",
     "productIDs": [
