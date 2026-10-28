@@ -15,8 +15,26 @@ public enum ProductCategory: String, CaseIterable, Identifiable {
     case toner = "Toner"
     case serum = "Serum"
     case spf = "SPF"
+    case moisturizer = "Moisturizer"
+    case treatment = "Treatment"
+    case oil = "Oil"
+    case mask = "Mask"
+    case mist = "Mist"
     
     public var id: String { rawValue }
+
+    public init(demoCategory: DemoProductCategory) {
+        switch demoCategory {
+        case .cleanser: self = .cleanser
+        case .serum: self = .serum
+        case .treatment: self = .treatment
+        case .moisturizer: self = .moisturizer
+        case .sunscreen: self = .spf
+        case .toner: self = .toner
+        case .mist: self = .mist
+        case .mask: self = .mask
+        }
+    }
 }
 
 public struct LibraryProductItem: Identifiable, Equatable {
@@ -72,33 +90,30 @@ public struct ProductTubeThumbnailView: View {
     
     public var body: some View {
         ZStack {
-            // Creamy cosmetic textured background
-            LinearGradient(
-                colors: [
-                    Color(red: 0.96, green: 0.94, blue: 0.91),
-                    Color(red: 0.91, green: 0.88, blue: 0.83),
-                    Color(red: 0.87, green: 0.82, blue: 0.76)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            
-            // Soft cosmetic cream swirl
-            CosmeticSwirlShape()
+            // Creamy Swirl Background
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .fill(
                     LinearGradient(
-                        colors: [
-                            Color.white.opacity(0.50),
-                            Color(red: 0.93, green: 0.89, blue: 0.83).opacity(0.65)
-                        ],
+                        colors: [Color(red: 0.96, green: 0.93, blue: 0.89), Color(red: 0.92, green: 0.88, blue: 0.83)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
                 )
             
-            // Minimalist white skincare tube tilted diagonally
+            // Soft cosmetic swirl accent
+            CosmeticSwirlShape()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(red: 0.99, green: 0.96, blue: 0.92), Color(red: 0.94, green: 0.90, blue: 0.84)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .opacity(0.85)
+            
+            // Minimalist Modern Tube Graphic
             VStack(spacing: 0) {
-                // Top crimp seam
+                // Tube crimp
                 Capsule()
                     .fill(Color(white: 0.92))
                     .frame(width: 25, height: 2.5)
@@ -161,14 +176,13 @@ public struct LibraryProductCard: View {
             ProductTubeThumbnailView()
             
             Text(product.title)
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(size: 15, weight: .bold))
                 .foregroundStyle(Color(red: 0.26, green: 0.16, blue: 0.11))
-                .lineLimit(product.title.contains("Collagen") ? 3 : 1)
-                .truncationMode(.tail)
+                .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
             
             Text(product.brand)
-                .font(.system(size: 11, weight: .regular))
+                .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
                 .lineLimit(1)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -249,6 +263,9 @@ public struct LibraryView: View {
     // Product Detail Navigation State
     @State public var selectedProductDetail: ProductDetailItem?
     
+    // Product Catalog Navigation State
+    @State public var showCatalogView: Bool = false
+    
     // Data Sources
     @State public var products: [LibraryProductItem] = [
         LibraryProductItem(id: ProductDatabase.sunBlockPostCareID, title: "Sun Block For...", brand: "HistoLab", category: .spf),
@@ -280,11 +297,32 @@ public struct LibraryView: View {
         selectedProductDetail: ProductDetailItem? = nil,
         onSelectTab: ((Int) -> Void)? = nil
     ) {
+        self.init(
+            initialCategory: initialCategory,
+            initialSearchText: initialSearchText,
+            showsTabBar: showsTabBar,
+            fullScreenFrame: fullScreenFrame,
+            selectedProductDetail: selectedProductDetail,
+            showCatalogView: false,
+            onSelectTab: onSelectTab
+        )
+    }
+
+    public init(
+        initialCategory: ProductCategory = .all,
+        initialSearchText: String = "",
+        showsTabBar: Bool = true,
+        fullScreenFrame: Bool = true,
+        selectedProductDetail: ProductDetailItem? = nil,
+        showCatalogView: Bool,
+        onSelectTab: ((Int) -> Void)? = nil
+    ) {
         self._selectedCategory = State(wrappedValue: initialCategory)
         self._searchText = State(wrappedValue: initialSearchText)
         self.showsTabBar = showsTabBar
         self.fullScreenFrame = fullScreenFrame
         self._selectedProductDetail = State(wrappedValue: selectedProductDetail)
+        self._showCatalogView = State(wrappedValue: showCatalogView)
         self.onSelectTab = onSelectTab
     }
     
@@ -353,6 +391,18 @@ public struct LibraryView: View {
                 },
                 onSelectTab: onSelectTab
             )
+        } else if showCatalogView {
+            ProductCatalogView(
+                onBack: {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        showCatalogView = false
+                    }
+                },
+                showsBackButton: true,
+                showsTabBar: showsTabBar,
+                fullScreenFrame: fullScreenFrame,
+                onSelectTab: onSelectTab
+            )
         } else {
             if fullScreenFrame {
                 mainContentVStack
@@ -376,6 +426,7 @@ public struct LibraryView: View {
                     // Top Section (Canvas surface)
                     VStack(alignment: .leading, spacing: 14) {
                         headerSection
+                        catalogBannerButton
                         categoryFilterRow
                         searchBar
                     }
@@ -418,6 +469,51 @@ public struct LibraryView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+
+    // MARK: - 1b. Catalog Banner Button
+    private var catalogBannerButton: some View {
+        Button(action: {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                showCatalogView = true
+            }
+        }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color(hex: "#7C83BC").opacity(0.18))
+                        .frame(width: 38, height: 38)
+                    Image(systemName: "square.grid.2x2.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#50578F"))
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Product Catalog")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#1A1628"))
+                    Text("Browse all skincare formulas & ingredient guidance")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color(hex: "#625478"))
+                }
+                
+                Spacer()
+                
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#7C83BC"))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(Color.white)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("library.browseCatalogButton")
+    }
     
     // MARK: - 2. Category Filter Row (Clickable buttons)
     private var categoryFilterRow: some View {
@@ -449,99 +545,107 @@ public struct LibraryView: View {
                                         lineWidth: 1
                                     )
                             )
-                            .shadow(color: Color.black.opacity(0.06), radius: 3, x: 0, y: 2)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("library.categoryChip.\(category.rawValue)")
                 }
             }
             .padding(.vertical, 2)
         }
+        .accessibilityIdentifier("library.categoryFilterRow")
     }
     
     // MARK: - 3. Search Bar
     private var searchBar: some View {
-        HStack(spacing: 10) {
+        HStack(spacing: 8) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.16))
+                .foregroundStyle(Color(red: 0.44, green: 0.31, blue: 0.22).opacity(0.6))
             
-            TextField("Search your library...", text: $searchText)
-                .font(.system(size: 15, weight: .regular))
-                .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.16))
+            TextField("Search your products...", text: $searchText)
+                .font(.system(size: 14, weight: .regular))
+                .foregroundStyle(Color(red: 0.26, green: 0.16, blue: 0.11))
+                .accessibilityIdentifier("library.searchField")
             
             if !searchText.isEmpty {
-                Button(action: { searchText = "" }) {
+                Button(action: {
+                    searchText = ""
+                }) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 16))
-                        .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
+                        .foregroundStyle(Color(red: 0.44, green: 0.31, blue: 0.22).opacity(0.6))
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("library.clearSearch")
             }
         }
         .padding(.horizontal, 14)
-        .frame(height: 48)
+        .padding(.vertical, 10)
         .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color(red: 0.85, green: 0.81, blue: 0.94), lineWidth: 1.5)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color(red: 0.85, green: 0.81, blue: 0.94), lineWidth: 1)
         )
     }
     
-    // MARK: - 4. Want to Try Section
+    // MARK: - 4. Want to Try Section (Scrollable Horizontal Carousel)
     private var wantToTrySection: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
             Text("Want to try")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundStyle(Color(red: 0.26, green: 0.16, blue: 0.11))
             
             if filteredProducts.isEmpty {
-                Text("No products found for \(selectedCategory.rawValue).")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
+                Text("No products match the selected filter.")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Color(red: 0.44, green: 0.31, blue: 0.22).opacity(0.7))
                     .padding(.vertical, 16)
             } else {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10),
-                        GridItem(.flexible(), spacing: 10)
-                    ],
-                    spacing: 12
-                ) {
-                    ForEach(filteredProducts) { product in
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                selectedProductDetail = ProductDatabase.shared.detail(for: product)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(filteredProducts) { product in
+                            Button(action: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    selectedProductDetail = ProductDatabase.shared.detail(for: product)
+                                }
+                            }) {
+                                LibraryProductCard(product: product)
+                                    .frame(width: 140)
                             }
-                        }) {
-                            LibraryProductCard(product: product)
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("library.productCard.\(product.title)")
                         }
-                        .buttonStyle(.plain)
                     }
+                    .padding(.vertical, 4)
                 }
             }
         }
     }
     
-    // MARK: - 5. Recent Saves Section
+    // MARK: - 5. Recent Saves Section (Vertical Stack of Full-Width Cards)
     private var recentSavesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
+            Text("Recent saves")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color(red: 0.26, green: 0.16, blue: 0.11))
+            
             if filteredRecentSaves.isEmpty {
-                Text("No recent saves for \(selectedCategory.rawValue).")
-                    .font(.system(size: 13, weight: .regular))
-                    .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
-                    .padding(.vertical, 8)
+                Text("No saved products match the selected filter.")
+                    .font(.system(size: 14, weight: .regular))
+                    .foregroundStyle(Color(red: 0.44, green: 0.31, blue: 0.22).opacity(0.7))
+                    .padding(.vertical, 16)
             } else {
-                ForEach(filteredRecentSaves) { save in
-                    Button(action: {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            selectedProductDetail = ProductDatabase.shared.detail(for: save)
+                VStack(spacing: 10) {
+                    ForEach(filteredRecentSaves) { save in
+                        Button(action: {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                selectedProductDetail = ProductDatabase.shared.detail(for: save)
+                            }
+                        }) {
+                            RecentSaveCard(save: save)
                         }
-                    }) {
-                        RecentSaveCard(save: save)
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("library.recentSaveCard.\(save.title)")
                     }
-                    .buttonStyle(.plain)
                 }
             }
         }
@@ -554,7 +658,7 @@ public struct LibraryView: View {
                 // Tab 0: Home
                 tabButton(title: "Home", systemImage: "house", isSelected: false, index: 0)
                 
-                // Tab 1: Library (Selected)
+                // Tab 1: Library (Active)
                 tabButton(title: "Library", systemImage: "books.vertical.fill", isSelected: true, index: 1)
                 
                 // Tab 2: Scan (Center Elevated Button)
@@ -562,7 +666,7 @@ public struct LibraryView: View {
                     VStack(spacing: 4) {
                         ZStack {
                             Circle()
-                                .fill(Color(red: 0.49, green: 0.51, blue: 0.74)) // semanticSurfaceAccent
+                                .fill(Color(red: 0.49, green: 0.51, blue: 0.74))
                                 .frame(width: 56, height: 56)
                                 .shadow(color: Color.black.opacity(0.15), radius: 4, x: 0, y: 2)
                             
@@ -595,7 +699,7 @@ public struct LibraryView: View {
         }
         .frame(height: 88)
         .frame(maxWidth: .infinity)
-        .background(Color(red: 0.97, green: 0.95, blue: 0.93)) // semanticSurfaceBase
+        .background(Color(red: 0.97, green: 0.95, blue: 0.93))
         .overlay(
             Rectangle()
                 .frame(height: 1)

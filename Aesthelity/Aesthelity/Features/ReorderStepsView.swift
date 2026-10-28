@@ -185,7 +185,8 @@ public struct ReorderStepsView: View {
                     title: s.title,
                     subtitle: s.subtitle,
                     state: s.state,
-                    hasClash: s.hasClash
+                    hasClash: s.hasClash,
+                    productId: s.productId
                 )
             }
             steps = reordered
