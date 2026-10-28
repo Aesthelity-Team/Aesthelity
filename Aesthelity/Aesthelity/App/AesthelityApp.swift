@@ -11,6 +11,7 @@ import SwiftUI
 struct AesthelityApp: App {
     @AppStorage("hasCompletedStartup") private var hasCompletedStartup: Bool = false
     @StateObject private var profileStore: SkinProfileStore
+    @StateObject private var manualProductStore = ManualProductStore()
 
     init() {
         let arguments = ProcessInfo.processInfo.arguments
@@ -51,6 +52,7 @@ struct AesthelityApp: App {
                 }
             }
             .environmentObject(profileStore)
+            .environmentObject(manualProductStore)
         }
     }
 }

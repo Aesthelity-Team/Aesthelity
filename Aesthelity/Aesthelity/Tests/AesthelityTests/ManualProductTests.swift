@@ -218,3 +218,117 @@ struct ManualProductDraftTests {
         #expect(draft.rawIngredientList == " Aqua, !!!\nVitamin C\u{200B}\nWater, Water ")
     }
 }
+
+@MainActor
+struct ManualProductStoreTests {
+    private func withFile(_ test: (URL) throws -> Void) throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        try test(directory.appendingPathComponent("products.json"))
+    }
+
+    private func product(name: String = "Serum") throws -> ManualProduct {
+        let normalizer = IngredientNormalizer(catalog: try .loadBundled())
+        return ManualProduct(name: name, rawIngredientList: " Aqua, Niacinimide\nVitamin C, Unobtainium, Water ",
+                             ingredients: normalizer.normalize(["Aqua", "Niacinimide", "Vitamin C", "Unobtainium", "Water"]))
+    }
+
+    @Test func newStoreStartsEmptyWithoutWritingAFile() throws {
+        try withFile { url in
+            let store = ManualProductStore(fileURL: url)
+            #expect(store.products.isEmpty)
+            #expect(store.loadError == nil)
+            #expect(!FileManager.default.fileExists(atPath: url.path))
+        }
+    }
+
+    @Test func savedProductsReloadWithIdentityOrderRawLabelAndWarnings() throws {
+        try withFile { url in
+            let first = try product()
+            let second = try product(name: "Cleanser")
+            let store = ManualProductStore(fileURL: url)
+            try store.save(first)
+            try store.save(second)
+            let restored = ManualProductStore(fileURL: url)
+            #expect(restored.loadError == nil)
+            #expect(restored.products == [first, second])
+            #expect(restored.products[0].ingredients.warnings.count == 3)
+            #expect(restored.products[0].ingredients.map(\.ingredientID) == ["water", nil, nil, nil, "water"])
+        }
+    }
+
+    @Test func savingSameIDUpdatesInPlaceWhileSameNamesRemainDistinct() throws {
+        try withFile { url in
+            let store = ManualProductStore(fileURL: url)
+            var first = try product()
+            let second = try product()
+            try store.save(first)
+            try store.save(second)
+            first.brand = "Updated brand"
+            try store.save(first)
+            #expect(store.products == [first, second])
+            #expect(ManualProductStore(fileURL: url).products == [first, second])
+        }
+    }
+
+    @Test func failedWritePreservesPublishedProductsAndPriorFile() throws {
+        try withFile { url in
+            let store = ManualProductStore(fileURL: url)
+            let first = try product()
+            try store.save(first)
+            let data = try Data(contentsOf: url)
+            let directory = url.deletingLastPathComponent()
+            let backup = directory.appendingPathExtension("backup")
+            try FileManager.default.moveItem(at: directory, to: backup)
+            defer { try? FileManager.default.removeItem(at: backup) }
+            try Data("not a directory".utf8).write(to: directory)
+            #expect(throws: (any Error).self) { try store.save(try product(name: "Second")) }
+            #expect(store.products == [first])
+            #expect(try Data(contentsOf: directory) == Data("not a directory".utf8))
+            try FileManager.default.removeItem(at: directory)
+            #expect(try Data(contentsOf: backup.appendingPathComponent("products.json")) == data)
+            try FileManager.default.moveItem(at: backup, to: directory)
+            let second = try product(name: "Second")
+            try store.save(second)
+            #expect(ManualProductStore(fileURL: url).products == [first, second])
+        }
+    }
+
+    @Test func corruptAndUnsupportedArchivesArePreservedAndCannotBeOverwritten() throws {
+        try withFile { url in
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let record = try product()
+            let encoded = try JSONEncoder().encode(record)
+            let object = try JSONSerialization.jsonObject(with: encoded)
+            var future = try #require(object as? [String: Any])
+            future["schemaVersion"] = 2
+            let archives = [
+                Data("invalid json".utf8),
+                try JSONSerialization.data(withJSONObject: ["schemaVersion": 2, "products": [object]]),
+                try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "products": [future]]),
+                try JSONSerialization.data(withJSONObject: ["schemaVersion": 1, "products": [object, object]])
+            ]
+            for data in archives {
+                try data.write(to: url)
+                let store = ManualProductStore(fileURL: url)
+                #expect(store.products.isEmpty)
+                #expect(store.loadError != nil)
+                #expect(throws: ManualProductStore.StoreError.unreadableExistingStore) { try store.save(record) }
+                #expect(try Data(contentsOf: url) == data)
+            }
+        }
+    }
+
+    @Test func unsupportedProductCannotReplaceValidSavedData() throws {
+        try withFile { url in
+            let store = ManualProductStore(fileURL: url)
+            var record = try product()
+            try store.save(record)
+            let data = try Data(contentsOf: url)
+            record.schemaVersion = 2
+            #expect(throws: ManualProductStore.StoreError.unsupportedSchemaVersion) { try store.save(record) }
+            #expect(try Data(contentsOf: url) == data)
+            #expect(store.products.first?.schemaVersion == 1)
+        }
+    }
+}
