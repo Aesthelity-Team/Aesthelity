@@ -17,7 +17,8 @@ let names = scenario?.productIds.compactMap { catalog.product(id: $0)?.name }
 ## Python usage
 
 ```python
-from scripts.demo_catalog import load, validate, evaluate
+from tests.backend.demo_catalog import load, validate, evaluate
+
 catalog = validate(load())
 products = {p['id']: p for p in catalog['products']}
 profiles = {p['id']: p for p in catalog['profiles']}

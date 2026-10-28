@@ -36,7 +36,12 @@ extension SkinProfile {
 
 struct SkinProfileSummaryView: View {
     let profile: SkinProfile
-    private let normalizer = try? IngredientNormalizer(catalog: .loadBundled())
+    private let ingredientLookup = Result { try IngredientNormalizer(catalog: .loadBundled()) }
+    private var normalizer: IngredientNormalizer? { try? ingredientLookup.get() }
+    private var ingredientLookupError: String? {
+        if case .failure(let error) = ingredientLookup { return error.localizedDescription }
+        return nil
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -46,13 +51,25 @@ struct SkinProfileSummaryView: View {
             summaryRow("Skin type", value: profile.skinType?.displayName ?? "Not provided", id: "skin-type")
             summaryRow("Concerns", value: profile.concernSummary, id: "concerns")
             Text("Ingredients you avoid").font(.subheadline.weight(.semibold))
+            if let ingredientLookupError {
+                Text(ingredientLookupError)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .accessibilityIdentifier("ingredient-lookup-error")
+            }
             if profile.avoidedIngredients.isEmpty {
                 Text("None provided").accessibilityIdentifier("profile-summary-ingredients")
             }
             ForEach(Array(profile.avoidedIngredients.enumerated()), id: \.offset) { index, ingredient in
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(ingredient.ingredientID.flatMap { normalizer?.ingredient(withID: $0)?.name } ?? ingredient.originalText)
+                    let canonicalName = ingredient.ingredientID.flatMap { normalizer?.ingredient(withID: $0)?.name }
+                    Text(canonicalName ?? ingredient.originalText)
                         .accessibilityIdentifier("profile-summary-ingredient-\(index)")
+                    if let canonicalName, canonicalName.caseInsensitiveCompare(ingredient.originalText) != .orderedSame {
+                        Text("Entered as \(ingredient.originalText)")
+                            .font(.caption)
+                            .accessibilityIdentifier("profile-summary-original-\(index)")
+                    }
                     if let warning = ingredient.warning {
                         Text(warning.message).font(.caption).foregroundStyle(Constants.semanticInkSecondary)
                     }
