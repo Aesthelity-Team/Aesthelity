@@ -197,6 +197,8 @@ public final class RoutineStore: ObservableObject {
 
     /// Internal persistence helper using atomic write.
     private func persist(routines: [RoutineRecord]) throws {
+        // Preserve unreadable or newer-version data until it is recovered explicitly.
+        guard loadError == nil else { throw StoreError.corruptedData }
         let doc = RoutineStorageDocument(schemaVersion: 1, routines: routines)
         let data = try JSONEncoder().encode(doc)
         let directory = fileURL.deletingLastPathComponent()

@@ -1223,12 +1223,11 @@ struct AesthelityTests {
             // Verify corrupt file was NOT overwritten on load
             #expect(try Data(contentsOf: url) == invalidData)
             
-            // When user saves a new routine, it recovers and clears the error
-            let recoveryRoutine = RoutineRecord(name: "Recovery Routine")
-            try store.save(recoveryRoutine)
-            #expect(store.loadError == nil)
-            #expect(store.routines.count == 1)
-            #expect(store.routines[0].name == "Recovery Routine")
+            // An ordinary save must not destroy unreadable data.
+            #expect(throws: RoutineStore.StoreError.corruptedData) {
+                try store.save(RoutineRecord(name: "Recovery Routine"))
+            }
+            #expect(try Data(contentsOf: url) == invalidData)
         }
     }
     
@@ -1244,6 +1243,10 @@ struct AesthelityTests {
             #expect(store.loadError != nil)
             
             // File remains intact until explicit save
+            #expect(try Data(contentsOf: url) == futureData)
+            #expect(throws: RoutineStore.StoreError.corruptedData) {
+                try store.save(RoutineRecord(name: "New"))
+            }
             #expect(try Data(contentsOf: url) == futureData)
         }
     }
@@ -1291,11 +1294,10 @@ struct AesthelityTests {
             #expect(store.routines.isEmpty)
             #expect(store.loadError != nil)
             
-            // User can still save a new routine to recover
-            let valid = RoutineRecord(name: "Recovered")
-            try store.save(valid)
-            #expect(store.loadError == nil)
-            #expect(store.routines.count == 1)
+            #expect(throws: RoutineStore.StoreError.corruptedData) {
+                try store.save(RoutineRecord(name: "Recovered"))
+            }
+            #expect(try Data(contentsOf: url).isEmpty)
         }
     }
     
