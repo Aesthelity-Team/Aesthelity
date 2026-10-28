@@ -2,87 +2,186 @@ import Foundation
 
 // Raw values must match the strings in Resources/DemoData/*.json; an unrecognized value fails decoding.
 
-enum DemoProductCategory: String, Decodable, CaseIterable {
+public enum DemoProductCategory: String, Decodable, CaseIterable {
     case cleanser, serum, treatment, moisturizer, sunscreen, toner, mist, mask
+    
+    public var displayName: String {
+        switch self {
+        case .cleanser: return "Cleansers"
+        case .serum: return "Serums"
+        case .treatment: return "Treatments"
+        case .moisturizer: return "Moisturizers"
+        case .sunscreen: return "Sunscreens"
+        case .toner: return "Toners"
+        case .mist: return "Mists"
+        case .mask: return "Masks"
+        }
+    }
 }
 
-enum IngredientListStatus: String, Decodable, CaseIterable {
+public enum IngredientListStatus: String, Codable, Equatable, CaseIterable {
     case complete, partial, unavailable
 }
 
-enum DemoFindingKind: String, Decodable, CaseIterable {
+public enum DemoFindingKind: String, Decodable, CaseIterable {
     case caution, allergen, unknown
 }
 
-enum DemoScenarioType: String, Decodable, CaseIterable {
+public enum DemoScenarioType: String, Decodable, CaseIterable {
     case normal, caution, allergen, unknown
 }
 
-enum DemoRoutineTime: String, Decodable, CaseIterable {
+public enum DemoRoutineTime: String, Decodable, CaseIterable {
     case am, pm
 }
 
-struct DemoProduct: Decodable, Identifiable {
-    let id: String
-    let name: String
-    let brand: String
-    let category: DemoProductCategory
-    let subtype: String
-    let ingredients: [String]
-    let ingredientListStatus: IngredientListStatus
-    let isFictional: Bool
-    let sourceUrl: String
-    let sourceRef: String
-    let verifiedOn: String
-    let provenance: Provenance
-    let spf: Int?
-    struct Provenance: Decodable {
-        let kind: String
-        let verificationMethod: String
-        let note: String
+public struct DemoProduct: Decodable, Identifiable, Equatable {
+    public let id: String
+    public let name: String
+    public let brand: String
+    public let category: DemoProductCategory
+    public let subtype: String
+    public let ingredients: [String]
+    public let ingredientListStatus: IngredientListStatus
+    public let isFictional: Bool
+    public let sourceUrl: String
+    public let sourceRef: String
+    public let verifiedOn: String
+    public let provenance: Provenance
+    public let spf: Int?
+
+    public struct Provenance: Decodable, Equatable {
+        public let kind: String
+        public let verificationMethod: String
+        public let note: String
+
+        public init(kind: String = "fixture", verificationMethod: String = "manual", note: String = "") {
+            self.kind = kind
+            self.verificationMethod = verificationMethod
+            self.note = note
+        }
+    }
+
+    public init(
+        id: String,
+        name: String,
+        brand: String,
+        category: DemoProductCategory,
+        subtype: String,
+        ingredients: [String] = [],
+        ingredientListStatus: IngredientListStatus = .complete,
+        isFictional: Bool = true,
+        sourceUrl: String = "",
+        sourceRef: String = "",
+        verifiedOn: String = "",
+        provenance: Provenance = Provenance(),
+        spf: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.brand = brand
+        self.category = category
+        self.subtype = subtype
+        self.ingredients = ingredients
+        self.ingredientListStatus = ingredientListStatus
+        self.isFictional = isFictional
+        self.sourceUrl = sourceUrl
+        self.sourceRef = sourceRef
+        self.verifiedOn = verifiedOn
+        self.provenance = provenance
+        self.spf = spf
     }
 }
 
-struct DemoProfile: Decodable, Identifiable {
-    let id: String
-    let recordedAllergens: [String]
+public struct DemoProfile: Decodable, Identifiable {
+    public let id: String
+    public let recordedAllergens: [String]
+    
+    public init(id: String, recordedAllergens: [String] = []) {
+        self.id = id
+        self.recordedAllergens = recordedAllergens
+    }
 }
 
-struct DemoFinding: Decodable {
-    let kind: DemoFindingKind
-    let productIds: [String]
-    let ingredient: String?
-    let message: String
-    let category: String
-    let explanation: String
-    let reason: String
+public struct DemoFinding: Decodable {
+    public let kind: DemoFindingKind
+    public let productIds: [String]
+    public let ingredient: String?
+    public let message: String
+    public let category: String
+    public let explanation: String
+    public let reason: String
+    
+    public init(
+        kind: DemoFindingKind,
+        productIds: [String],
+        ingredient: String? = nil,
+        message: String,
+        category: String,
+        explanation: String,
+        reason: String
+    ) {
+        self.kind = kind
+        self.productIds = productIds
+        self.ingredient = ingredient
+        self.message = message
+        self.category = category
+        self.explanation = explanation
+        self.reason = reason
+    }
 }
 
-struct DemoScenario: Decodable, Identifiable {
-    let id: String
-    let scenarioType: DemoScenarioType
-    let productIds: [String]
-    let profileId: String
-    let routineTime: DemoRoutineTime
-    let expectedFindings: [DemoFinding]
+public struct DemoScenario: Decodable, Identifiable {
+    public let id: String
+    public let scenarioType: DemoScenarioType
+    public let productIds: [String]
+    public let profileId: String
+    public let routineTime: DemoRoutineTime
+    public let expectedFindings: [DemoFinding]
+    
+    public init(
+        id: String,
+        scenarioType: DemoScenarioType,
+        productIds: [String],
+        profileId: String,
+        routineTime: DemoRoutineTime,
+        expectedFindings: [DemoFinding] = []
+    ) {
+        self.id = id
+        self.scenarioType = scenarioType
+        self.productIds = productIds
+        self.profileId = profileId
+        self.routineTime = routineTime
+        self.expectedFindings = expectedFindings
+    }
 }
 
-struct DemoCatalog {
-    let products: [DemoProduct]
-    let profiles: [DemoProfile]
-    let scenarios: [DemoScenario]
+public struct DemoCatalog {
+    public let products: [DemoProduct]
+    public let profiles: [DemoProfile]
+    public let scenarios: [DemoScenario]
 
-    enum LoadError: Error { case missingResource(String), unsupportedVersion, duplicateIDs(String) }
+    public init(
+        products: [DemoProduct] = [],
+        profiles: [DemoProfile] = [],
+        scenarios: [DemoScenario] = []
+    ) {
+        self.products = products
+        self.profiles = profiles
+        self.scenarios = scenarios
+    }
 
-    func product(id: String) -> DemoProduct? {
+    public enum LoadError: Error { case missingResource(String), unsupportedVersion, duplicateIDs(String) }
+
+    public func product(id: String) -> DemoProduct? {
         products.first { $0.id == id }
     }
 
-    func profile(id: String) -> DemoProfile? {
+    public func profile(id: String) -> DemoProfile? {
         profiles.first { $0.id == id }
     }
 
-    static func load(bundle: Bundle = .main) throws -> DemoCatalog {
+    public static func load(bundle: Bundle = .main) throws -> DemoCatalog {
         let products = try decode(ProductsFile.self, named: "products", from: bundle)
         let profiles = try decode(ProfilesFile.self, named: "profiles", from: bundle)
         let scenarios = try decode(ScenariosFile.self, named: "scenarios", from: bundle)

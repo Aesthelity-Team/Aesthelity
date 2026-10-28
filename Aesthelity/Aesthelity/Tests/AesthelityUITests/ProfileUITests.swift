@@ -156,6 +156,49 @@ final class ProfileUITests: XCTestCase {
     }
 
     @MainActor
+    func testAliasUnknownAndAmbiguousEntriesStayDistinct() throws {
+        let app = launchFresh()
+        let entries = [
+            ("Aqua", "Recognized as Water"),
+            ("Glycerol", "Recognized as Glycerin"),
+            ("Nicotinamide", "Recognized as Niacinamide")
+        ]
+        for (index, entry) in entries.enumerated() {
+            addIngredient(entry.0, index: index, in: app)
+            let match = app.staticTexts["ingredient-match-\(index)"]
+            reveal(match, in: app)
+            XCTAssertEqual(match.label, entry.1)
+        }
+        addIngredient("Unobtainium Extract", index: 3, in: app)
+        let unknown = app.staticTexts["ingredient-warning-3"]
+        reveal(unknown, in: app)
+        XCTAssertTrue(unknown.label.contains("does not match"))
+        addIngredient("Vitamin C", index: 4, in: app)
+        let ambiguous = app.staticTexts["ingredient-warning-4"]
+        reveal(ambiguous, in: app)
+        XCTAssertTrue(ambiguous.label.contains("could refer"))
+        addIngredient("Niacinimide", index: 5, in: app)
+        let suggestion = app.buttons["ingredient-suggestion-5-niacinamide"]
+        reveal(suggestion, in: app)
+        XCTAssertTrue(app.staticTexts["ingredient-warning-5"].exists)
+        XCTAssertNotEqual(app.textFields["ingredient-input-5"].value as? String, "Niacinamide")
+
+        app.buttons["profile-continue"].tap()
+        openProfile(in: app)
+        reveal(app.staticTexts["profile-summary-ingredient-5"], in: app)
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-0"].label, "Water")
+        XCTAssertEqual(app.staticTexts["profile-summary-original-0"].label, "Entered as Aqua")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-1"].label, "Glycerin")
+        XCTAssertEqual(app.staticTexts["profile-summary-original-1"].label, "Entered as Glycerol")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-2"].label, "Niacinamide")
+        XCTAssertEqual(app.staticTexts["profile-summary-original-2"].label, "Entered as Nicotinamide")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-3"].label, "Unobtainium Extract")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-4"].label, "Vitamin C")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-5"].label, "Niacinimide")
+        XCTAssertFalse(app.staticTexts["profile-summary-original-5"].exists)
+    }
+
+    @MainActor
     func testEmptyOptionalProfileCompletesWithoutInventingChoices() throws {
         let app = launchFresh()
         app.buttons["profile-continue"].tap()
@@ -164,17 +207,5 @@ final class ProfileUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["profile-summary-skin-type"].label, "Not provided")
         reveal(app.staticTexts["profile-summary-concerns"], in: app)
         XCTAssertEqual(app.staticTexts["profile-summary-concerns"].label, "None provided")
-    }
-
-    @MainActor
-    func testExample() throws {
-        XCUIApplication().launch()
-    }
-
-    @MainActor
-    func testLaunchPerformance() throws {
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
     }
 }

@@ -32,5 +32,15 @@ final class SkinProfileStore: ObservableObject {
         try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
         self.profile = profile
         loadError = nil
+        enqueueCloudSave(profile)
+    }
+
+    private func enqueueCloudSave(_ profile: SkinProfile) {
+        guard CloudSyncConfiguration.isEnabled else { return }
+        CloudSyncConfiguration.noteSyncInvocation()
+        guard let userId = FirebaseAuthService.shared.userId else { return }
+        Task {
+            await FirestoreSyncService.shared.saveSkinProfile(profile, for: userId)
+        }
     }
 }

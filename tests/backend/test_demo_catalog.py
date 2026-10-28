@@ -1,6 +1,6 @@
 import copy
 import unittest
-from scripts.demo_catalog import load, validate, evaluate
+from tests.backend.demo_catalog import load, validate, evaluate
 class CatalogTests(unittest.TestCase):
     def setUp(self): self.c=load()
     def test_dataset(self): validate(self.c)
@@ -40,7 +40,7 @@ class CatalogTests(unittest.TestCase):
         p['ingredients']=['Water']
         with self.assertRaises(ValueError): validate(self.c)
     def test_provenance_matches_authored_lists(self):
-        from scripts.demo_catalog import ROOT
+        from tests.backend.demo_catalog import ROOT
         text=(ROOT/'docs/PROVENANCE.md').read_text()
         for p in self.c['products']:
             section=text.split('## '+p['id']+'\n')[1].split('\n## ')[0]
