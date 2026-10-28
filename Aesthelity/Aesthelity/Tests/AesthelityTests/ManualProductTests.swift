@@ -332,3 +332,56 @@ struct ManualProductStoreTests {
         }
     }
 }
+
+struct ManualProductAnalysisInputTests {
+    @Test func encodedPayloadMatchesPythonRowContractWithoutPromotingSuggestions() throws {
+        let normalizer = IngredientNormalizer(catalog: try .loadBundled())
+        let product = ManualProduct(name: "Serum", rawIngredientList: "Aqua, Niacinimide, Vitamin C, Unobtainium, Water",
+                                    ingredients: normalizer.normalize(["Aqua", "Niacinimide", "Vitamin C", "Unobtainium", "Water"]))
+        let payload = ManualProductAnalysisInput(product: product, listStatus: .partial, catalogVersion: 1)
+        let data = try JSONEncoder().encode(payload)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["productID"] as? String == product.id.uuidString)
+        #expect(object["listStatus"] as? String == "partial")
+        #expect(object["catalogVersion"] as? Int == 1)
+        let rows = try #require(object["ingredients"] as? [[String: Any]])
+        #expect(rows.compactMap { $0["mapping"] as? String } == ["confirmed", "uncertain", "ambiguous", "unmatched", "confirmed"])
+        #expect(rows.compactMap { $0["originalText"] as? String } == product.ingredients.map(\.originalText))
+        #expect(rows[0]["ingredientID"] as? String == "water")
+        #expect(rows[1]["ingredientID"] == nil)
+        #expect(rows[1]["suggestedID"] as? String == "niacinamide")
+        #expect(rows[2]["ingredientID"] == nil)
+        #expect(rows[2]["candidateIDs"] as? [String] == payload.ingredients[2].candidateIDs)
+        #expect(payload.ingredients[2].candidateIDs.count >= 2)
+        #expect(rows[3]["ingredientID"] == nil)
+        #expect(rows[3]["suggestedID"] == nil)
+        #expect(rows.allSatisfy { $0["status"] == nil })
+        #expect(payload.ingredients.map(\.warning) == product.ingredients.map(\.warning))
+        let warning = try #require(rows[1]["warning"] as? [String: String])
+        #expect(warning["input"] == product.ingredients[1].warning?.input)
+        #expect(warning["message"] == product.ingredients[1].warning?.message)
+    }
+
+    @Test(arguments: ManualProductAnalysisInput.ListStatus.allCases)
+    func completenessIsExplicitAndMissingCatalogVersionRemainsUnknown(status: ManualProductAnalysisInput.ListStatus) throws {
+        let product = ManualProduct(name: "Serum", rawIngredientList: "", ingredients: [])
+        let payload = ManualProductAnalysisInput(product: product, listStatus: status, catalogVersion: nil)
+        let data = try JSONEncoder().encode(payload)
+        let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        #expect(object["listStatus"] as? String == status.rawValue)
+        #expect(object["catalogVersion"] == nil)
+        #expect(payload.ingredients.isEmpty)
+    }
+
+    @Test func storedProductsCanBeAdaptedWithoutChangingIdentityOrRecords() throws {
+        let normalizer = IngredientNormalizer(catalog: try .loadBundled())
+        let product = ManualProduct(name: "Serum", rawIngredientList: "Water, Water", ingredients: normalizer.normalize(["Water", "Water"]))
+        let restored = try JSONDecoder().decode(ManualProduct.self, from: JSONEncoder().encode(product))
+        let payload = ManualProductAnalysisInput(product: restored, listStatus: .partial, catalogVersion: nil)
+        #expect(payload.productID == product.id.uuidString)
+        #expect(payload.ingredients.count == 2)
+        #expect(payload.ingredients[0] == payload.ingredients[1])
+        #expect(payload.catalogVersion == nil)
+        #expect(restored == product)
+    }
+}
