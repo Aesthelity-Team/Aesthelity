@@ -188,3 +188,153 @@ public final class RoutineStore: ObservableObject {
 }
 
 public typealias RoutineRepository = RoutineStore
+public typealias RoutinePersistenceModel = RoutineStorageDocument
+
+// MARK: - Routine Database Service Protocol
+
+/// Abstract database service protocol for routine persistence operations.
+/// Conforming types support local disk database storage or remote databases (such as Firebase Firestore).
+public protocol RoutineDatabaseService: AnyObject {
+    func fetchRoutines() throws -> [RoutineRecord]
+    func saveRoutine(_ routine: RoutineRecord) throws
+    func updateRoutine(_ routine: RoutineRecord) throws
+    func deleteRoutine(id: UUID) throws
+    func resetRoutines() throws
+}
+
+extension RoutineStore: RoutineDatabaseService {
+    public func fetchRoutines() throws -> [RoutineRecord] {
+        load()
+        if let error = loadError {
+            throw StoreError.corruptedData
+        }
+        return routines
+    }
+
+    public func saveRoutine(_ routine: RoutineRecord) throws {
+        try save(routine)
+    }
+
+    public func updateRoutine(_ routine: RoutineRecord) throws {
+        try update(routine)
+    }
+
+    public func deleteRoutine(id: UUID) throws {
+        try delete(id: id)
+    }
+
+    public func resetRoutines() throws {
+        try resetToEmpty()
+    }
+}
+
+// MARK: - Database / Document Mapping
+
+extension RoutineStepItem {
+    /// Serializes routine step item to database/document dictionary (Firestore-compatible).
+    public func toDatabaseDictionary() -> [String: Any] {
+        var dict: [String: Any] = [
+            "id": id.uuidString,
+            "stepNumber": stepNumber,
+            "title": title,
+            "subtitle": subtitle,
+            "state": state.rawValue,
+            "hasClash": hasClash
+        ]
+        if let productId = productId {
+            dict["productId"] = productId.uuidString
+        }
+        return dict
+    }
+
+    /// Deserializes routine step item from database/document dictionary.
+    public init?(fromDatabaseDictionary dict: [String: Any]) {
+        guard let idString = dict["id"] as? String,
+              let id = UUID(uuidString: idString),
+              let stepNumber = dict["stepNumber"] as? Int,
+              let title = dict["title"] as? String,
+              let subtitle = dict["subtitle"] as? String,
+              let stateString = dict["state"] as? String,
+              let state = StepState(rawValue: stateString) else {
+            return nil
+        }
+        let hasClash = dict["hasClash"] as? Bool ?? false
+        var productId: UUID? = nil
+        if let prodString = dict["productId"] as? String {
+            productId = UUID(uuidString: prodString)
+        }
+        self.init(
+            id: id,
+            stepNumber: stepNumber,
+            title: title,
+            subtitle: subtitle,
+            state: state,
+            hasClash: hasClash,
+            productId: productId
+        )
+    }
+}
+
+extension RoutineRecord {
+    /// Serializes routine record to database/document dictionary (Firestore-compatible).
+    public func toDatabaseDictionary() -> [String: Any] {
+        [
+            "id": id.uuidString,
+            "name": name,
+            "period": period.rawValue,
+            "status": status.rawValue,
+            "frequency": frequency.rawValue,
+            "reminderTime": reminderTime,
+            "activeDays": Array(activeDays.map { $0.rawValue }),
+            "steps": steps.map { $0.toDatabaseDictionary() },
+            "pushRemindersEnabled": pushRemindersEnabled,
+            "leadTime": leadTime.rawValue,
+            "quietHoursEnabled": quietHoursEnabled
+        ]
+    }
+
+    /// Deserializes routine record from database/document dictionary.
+    public init?(fromDatabaseDictionary dict: [String: Any]) {
+        guard let idString = dict["id"] as? String,
+              let id = UUID(uuidString: idString),
+              let name = dict["name"] as? String else {
+            return nil
+        }
+        let periodString = dict["period"] as? String ?? RoutinePeriod.am.rawValue
+        let period = RoutinePeriod(rawValue: periodString) ?? .am
+        
+        let statusString = dict["status"] as? String ?? RoutineStatus.active.rawValue
+        let status = RoutineStatus(rawValue: statusString) ?? .active
+        
+        let freqString = dict["frequency"] as? String ?? RoutineFrequency.everyDay.rawValue
+        let frequency = RoutineFrequency(rawValue: freqString) ?? .everyDay
+        
+        let reminderTime = dict["reminderTime"] as? String ?? "7:00 AM"
+        
+        let daysStrings = dict["activeDays"] as? [String] ?? []
+        let activeDays = Set(daysStrings.compactMap { RoutineWeekday(rawValue: $0) })
+        
+        let stepDicts = dict["steps"] as? [[String: Any]] ?? []
+        let steps = stepDicts.compactMap { RoutineStepItem(fromDatabaseDictionary: $0) }
+            .sorted { $0.stepNumber < $1.stepNumber }
+        
+        let pushRemindersEnabled = dict["pushRemindersEnabled"] as? Bool ?? true
+        let leadTimeString = dict["leadTime"] as? String ?? NotificationLeadTime.atTime.rawValue
+        let leadTime = NotificationLeadTime(rawValue: leadTimeString) ?? .atTime
+        let quietHoursEnabled = dict["quietHoursEnabled"] as? Bool ?? true
+
+        self.init(
+            id: id,
+            name: name,
+            period: period,
+            status: status,
+            frequency: frequency,
+            reminderTime: reminderTime,
+            activeDays: activeDays.isEmpty ? [.mon, .tue, .wed, .thu, .fri, .sat, .sun] : activeDays,
+            steps: steps,
+            pushRemindersEnabled: pushRemindersEnabled,
+            leadTime: leadTime,
+            quietHoursEnabled: quietHoursEnabled
+        )
+    }
+}

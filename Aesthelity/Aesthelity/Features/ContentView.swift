@@ -62,18 +62,28 @@ public struct RoutineStepItem: Identifiable, Codable {
     public let subtitle: String
     public var state: StepState
     public var hasClash: Bool
+    public var productId: UUID?
     
-    public init(id: UUID = UUID(), stepNumber: Int, title: String, subtitle: String, state: StepState, hasClash: Bool = false) {
+    public init(
+        id: UUID = UUID(),
+        stepNumber: Int,
+        title: String,
+        subtitle: String,
+        state: StepState,
+        hasClash: Bool = false,
+        productId: UUID? = nil
+    ) {
         self.id = id
         self.stepNumber = stepNumber
         self.title = title
         self.subtitle = subtitle
         self.state = state
         self.hasClash = hasClash
+        self.productId = productId
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, stepNumber, title, subtitle, state, hasClash
+        case id, stepNumber, title, subtitle, state, hasClash, productId
     }
 
     public init(from decoder: Decoder) throws {
@@ -84,6 +94,7 @@ public struct RoutineStepItem: Identifiable, Codable {
         self.subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
         self.state = try container.decodeIfPresent(StepState.self, forKey: .state) ?? .incomplete
         self.hasClash = try container.decodeIfPresent(Bool.self, forKey: .hasClash) ?? false
+        self.productId = try container.decodeIfPresent(UUID.self, forKey: .productId)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -94,7 +105,47 @@ public struct RoutineStepItem: Identifiable, Codable {
         try container.encode(subtitle, forKey: .subtitle)
         try container.encode(state, forKey: .state)
         try container.encode(hasClash, forKey: .hasClash)
+        try container.encodeIfPresent(productId, forKey: .productId)
     }
+}
+
+final class ContentViewStepModel: ObservableObject {
+    @Published var amSteps: [RoutineStepItem]
+    @Published var amClashSteps: [RoutineStepItem]
+    @Published var pmSteps: [RoutineStepItem]
+    
+    init(
+        amSteps: [RoutineStepItem] = ContentViewStepModel.defaultAMSteps,
+        amClashSteps: [RoutineStepItem] = ContentViewStepModel.defaultAMClashSteps,
+        pmSteps: [RoutineStepItem] = ContentViewStepModel.defaultPMSteps
+    ) {
+        self.amSteps = amSteps
+        self.amClashSteps = amClashSteps
+        self.pmSteps = pmSteps
+    }
+    
+    static let defaultAMSteps: [RoutineStepItem] = [
+        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete),
+        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active),
+        RoutineStepItem(stepNumber: 3, title: "Daily Moisturizer", subtitle: "Pending · Step 3", state: .incomplete),
+        RoutineStepItem(stepNumber: 4, title: "SPF 46", subtitle: "Pending · Step 4", state: .incomplete)
+    ]
+    
+    static let defaultAMClashSteps: [RoutineStepItem] = [
+        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete, hasClash: false),
+        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active, hasClash: true),
+        RoutineStepItem(stepNumber: 3, title: "Retinol Night Cream", subtitle: "Ready · Step 3", state: .active, hasClash: true),
+        RoutineStepItem(stepNumber: 4, title: "Daily Moisturizer", subtitle: "Pending · Step 4", state: .incomplete, hasClash: false),
+        RoutineStepItem(stepNumber: 5, title: "SPF 46", subtitle: "Pending · Step 5", state: .incomplete, hasClash: false)
+    ]
+    
+    static let defaultPMSteps: [RoutineStepItem] = [
+        RoutineStepItem(stepNumber: 1, title: "Oil Cleanser", subtitle: "Completed · Step 1", state: .complete),
+        RoutineStepItem(stepNumber: 2, title: "Gentle Cleanser", subtitle: "Ready · Step 2", state: .active),
+        RoutineStepItem(stepNumber: 3, title: "Niacinamide Serum", subtitle: "Pending · Step 3", state: .incomplete),
+        RoutineStepItem(stepNumber: 4, title: "Night Recovery Cream", subtitle: "Pending · Step 4", state: .incomplete),
+        RoutineStepItem(stepNumber: 5, title: "Hydrating Eye Balm", subtitle: "Pending · Step 5", state: .incomplete)
+    ]
 }
 
 // MARK: - Main ContentView / Home Screen
@@ -114,6 +165,22 @@ struct ContentView: View {
     @State private var showSkinProfileSetupSheet = false
     public var onResetStartup: (() -> Void)? = nil
     
+    let stepModel: ContentViewStepModel
+    @ObservedObject private var observedStepModel: ContentViewStepModel
+    
+    var amSteps: [RoutineStepItem] {
+        get { stepModel.amSteps }
+        nonmutating set { stepModel.amSteps = newValue }
+    }
+    var amClashSteps: [RoutineStepItem] {
+        get { stepModel.amClashSteps }
+        nonmutating set { stepModel.amClashSteps = newValue }
+    }
+    var pmSteps: [RoutineStepItem] {
+        get { stepModel.pmSteps }
+        nonmutating set { stepModel.pmSteps = newValue }
+    }
+
     public init(
         selectedPeriod: RoutinePeriod = .am,
         selectedTab: Int = 0,
@@ -136,6 +203,9 @@ struct ContentView: View {
         self._showManageRoutinesView = State(initialValue: showManageRoutinesView)
         self._showEditRoutineView = State(initialValue: showEditRoutineView)
         self.onResetStartup = onResetStartup
+        let model = ContentViewStepModel()
+        self.stepModel = model
+        self._observedStepModel = ObservedObject(wrappedValue: model)
     }
     
     init(
@@ -145,43 +215,26 @@ struct ContentView: View {
         amClashSteps: [RoutineStepItem],
         pmSteps: [RoutineStepItem]
     ) {
-        self.init(selectedPeriod: selectedPeriod, showClashDemo: showClashDemo)
-        self._amSteps = State(initialValue: amSteps)
-        self._amClashSteps = State(initialValue: amClashSteps)
-        self._pmSteps = State(initialValue: pmSteps)
+        self._selectedPeriod = State(initialValue: selectedPeriod)
+        self._selectedTab = State(initialValue: 0)
+        self._showAnalysisSheet = State(initialValue: false)
+        self._showClashDemo = State(initialValue: showClashDemo)
+        self._showJournalSheet = State(initialValue: false)
+        self._showCalendarSheet = State(initialValue: false)
+        self._showIngredientClashDetail = State(initialValue: false)
+        self._showManageRoutinesView = State(initialValue: false)
+        self._showEditRoutineView = State(initialValue: false)
+        self.onResetStartup = nil
+        let model = ContentViewStepModel(amSteps: amSteps, amClashSteps: amClashSteps, pmSteps: pmSteps)
+        self.stepModel = model
+        self._observedStepModel = ObservedObject(wrappedValue: model)
     }
-
-    // AM Steps (Normal)
-    @State private var amSteps: [RoutineStepItem] = [
-        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete),
-        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active),
-        RoutineStepItem(stepNumber: 3, title: "Daily Moisturizer", subtitle: "Pending · Step 3", state: .incomplete),
-        RoutineStepItem(stepNumber: 4, title: "SPF 46", subtitle: "Pending · Step 4", state: .incomplete)
-    ]
-    
-    // AM Steps (Clash Demo State)
-    @State private var amClashSteps: [RoutineStepItem] = [
-        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete, hasClash: false),
-        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active, hasClash: true),
-        RoutineStepItem(stepNumber: 3, title: "Retinol Night Cream", subtitle: "Ready · Step 3", state: .active, hasClash: true),
-        RoutineStepItem(stepNumber: 4, title: "Daily Moisturizer", subtitle: "Pending · Step 4", state: .incomplete, hasClash: false),
-        RoutineStepItem(stepNumber: 5, title: "SPF 46", subtitle: "Pending · Step 5", state: .incomplete, hasClash: false)
-    ]
-    
-    // PM Steps
-    @State private var pmSteps: [RoutineStepItem] = [
-        RoutineStepItem(stepNumber: 1, title: "Oil Cleanser", subtitle: "Completed · Step 1", state: .complete),
-        RoutineStepItem(stepNumber: 2, title: "Gentle Cleanser", subtitle: "Ready · Step 2", state: .active),
-        RoutineStepItem(stepNumber: 3, title: "Niacinamide Serum", subtitle: "Pending · Step 3", state: .incomplete),
-        RoutineStepItem(stepNumber: 4, title: "Night Recovery Cream", subtitle: "Pending · Step 4", state: .incomplete),
-        RoutineStepItem(stepNumber: 5, title: "Hydrating Eye Balm", subtitle: "Pending · Step 5", state: .incomplete)
-    ]
     
     var currentSteps: [RoutineStepItem] {
         if selectedPeriod == .am {
-            return showClashDemo ? amClashSteps : amSteps
+            return showClashDemo ? stepModel.amClashSteps : stepModel.amSteps
         } else {
-            return pmSteps
+            return stepModel.pmSteps
         }
     }
     
@@ -217,7 +270,11 @@ struct ContentView: View {
                             },
                             onSave: { updatedRoutine in
                                 withAnimation(.easeInOut(duration: 0.2)) {
-                                    try? RoutineRepository.shared.save(updatedRoutine)
+                                    do {
+                                        try RoutineRepository.shared.update(updatedRoutine)
+                                    } catch {
+                                        try? RoutineRepository.shared.save(updatedRoutine)
+                                    }
                                     showEditRoutineView = false
                                 }
                             }
@@ -268,6 +325,9 @@ struct ContentView: View {
                 onCancel: { showSkinProfileSetupSheet = false },
                 onFinish: { showSkinProfileSetupSheet = false }
             )
+        }
+        .onAppear {
+            RoutineRepository.shared.load()
         }
     }
     

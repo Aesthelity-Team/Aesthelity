@@ -327,7 +327,8 @@ public struct AddProductToRoutineView: View {
             stepNumber: existingStepTitles.count + 1,
             title: product.title,
             subtitle: "\(product.brand) · Step \(existingStepTitles.count + 1)",
-            state: .incomplete
+            state: .incomplete,
+            productId: product.id
         )
         addedStepItem = newStep
         withAnimation {

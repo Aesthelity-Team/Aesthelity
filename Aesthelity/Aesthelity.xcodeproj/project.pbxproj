@@ -34,6 +34,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/CreateRoutineStepBuilderTests.swift,
 				Tests/AesthelityTests/DemoAnalysisTests.swift,
 				Tests/AesthelityTests/DemoCatalogTests.swift,
 				Tests/AesthelityTests/IngredientLabelParserTests.swift,
@@ -53,6 +54,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/CreateRoutineStepBuilderTests.swift,
 				Tests/AesthelityTests/DemoAnalysisTests.swift,
 				Tests/AesthelityTests/DemoCatalogTests.swift,
 				Tests/AesthelityTests/IngredientLabelParserTests.swift,

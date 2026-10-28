@@ -422,7 +422,8 @@ public struct EditRoutineView: View {
                     title: current.title,
                     subtitle: current.subtitle,
                     state: current.state,
-                    hasClash: current.hasClash
+                    hasClash: current.hasClash,
+                    productId: current.productId
                 )
             }
             steps = updatedSteps
@@ -441,7 +442,8 @@ public struct EditRoutineView: View {
                 title: newStep.title,
                 subtitle: newStep.subtitle,
                 state: newStep.state,
-                hasClash: newStep.hasClash
+                hasClash: newStep.hasClash,
+                productId: newStep.productId
             )
             steps.append(item)
         }

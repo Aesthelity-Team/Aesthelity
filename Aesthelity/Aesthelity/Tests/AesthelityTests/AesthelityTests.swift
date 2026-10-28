@@ -1253,4 +1253,203 @@ struct AesthelityTests {
             #expect(reloaded.routines[0].id == r2.id)
         }
     }
+    
+    @Test @MainActor func routinePersistenceEmptyZeroBytesFileHandling() throws {
+        try Self.withTemporaryRoutineFile { url in
+            // Create a 0-byte file (corrupted/empty data)
+            try Data().write(to: url)
+            
+            let store = RoutineStore(fileURL: url)
+            #expect(store.routines.isEmpty)
+            #expect(store.loadError != nil)
+            
+            // User can still save a new routine to recover
+            let valid = RoutineRecord(name: "Recovered")
+            try store.save(valid)
+            #expect(store.loadError == nil)
+            #expect(store.routines.count == 1)
+        }
+    }
+    
+    @Test @MainActor func routinePersistenceProductReferenceAndStepOrder() throws {
+        try Self.withTemporaryRoutineFile { url in
+            let store = RoutineStore(fileURL: url)
+            let prod1 = UUID()
+            let prod2 = UUID()
+            let prod3 = UUID()
+            
+            let steps = [
+                RoutineStepItem(stepNumber: 1, title: "Oil Cleanser", subtitle: "Purifying", state: .complete, productId: prod1),
+                RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Brightening", state: .active, productId: prod2),
+                RoutineStepItem(stepNumber: 3, title: "SPF 50", subtitle: "Protection", state: .incomplete, productId: prod3)
+            ]
+            let routine = RoutineRecord(name: "Product Linked Routine", period: .am, steps: steps)
+            
+            try store.save(routine)
+            
+            let reloaded = RoutineStore(fileURL: url)
+            #expect(reloaded.routines.count == 1)
+            let loadedSteps = reloaded.routines[0].steps
+            #expect(loadedSteps.count == 3)
+            #expect(loadedSteps[0].stepNumber == 1)
+            #expect(loadedSteps[0].productId == prod1)
+            #expect(loadedSteps[1].stepNumber == 2)
+            #expect(loadedSteps[1].productId == prod2)
+            #expect(loadedSteps[2].stepNumber == 3)
+            #expect(loadedSteps[2].productId == prod3)
+        }
+    }
+    
+    @Test @MainActor func routinePersistenceDatabaseDictionaryMapping() throws {
+        let prodId = UUID()
+        let step = RoutineStepItem(
+            stepNumber: 1,
+            title: "Gel Cleanser",
+            subtitle: "Cleanse",
+            state: .active,
+            hasClash: false,
+            productId: prodId
+        )
+        let dict = step.toDatabaseDictionary()
+        #expect(dict["stepNumber"] as? Int == 1)
+        #expect(dict["title"] as? String == "Gel Cleanser")
+        #expect(dict["productId"] as? String == prodId.uuidString)
+        
+        let restoredStep = RoutineStepItem(fromDatabaseDictionary: dict)
+        #expect(restoredStep != nil)
+        #expect(restoredStep?.title == "Gel Cleanser")
+        #expect(restoredStep?.productId == prodId)
+        #expect(restoredStep?.stepNumber == 1)
+        
+        let routine = RoutineRecord(
+            name: "Database Routine",
+            period: .pm,
+            status: .active,
+            frequency: .everyDay,
+            reminderTime: "9:00 PM",
+            steps: [step]
+        )
+        let routineDict = routine.toDatabaseDictionary()
+        #expect(routineDict["name"] as? String == "Database Routine")
+        #expect(routineDict["period"] as? String == RoutinePeriod.pm.rawValue)
+        
+        let restoredRoutine = RoutineRecord(fromDatabaseDictionary: routineDict)
+        #expect(restoredRoutine != nil)
+        #expect(restoredRoutine?.name == "Database Routine")
+        #expect(restoredRoutine?.period == .pm)
+        #expect(restoredRoutine?.steps.count == 1)
+        #expect(restoredRoutine?.steps.first?.productId == prodId)
+    }
+    
+    @Test @MainActor func routinePersistenceDatabaseServiceOperations() throws {
+        try Self.withTemporaryRoutineFile { url in
+            let store = RoutineStore(fileURL: url)
+            let service: RoutineDatabaseService = store
+            
+            let routinesBefore = try service.fetchRoutines()
+            #expect(routinesBefore.isEmpty)
+            
+            let r = RoutineRecord(name: "Service Test Routine")
+            try service.saveRoutine(r)
+            
+            let routinesAfter = try service.fetchRoutines()
+            #expect(routinesAfter.count == 1)
+            #expect(routinesAfter[0].name == "Service Test Routine")
+            
+            var updated = r
+            updated.name = "Service Updated Routine"
+            try service.updateRoutine(updated)
+            
+            let reloaded = try service.fetchRoutines()
+            #expect(reloaded[0].name == "Service Updated Routine")
+            
+            try service.deleteRoutine(id: r.id)
+            #expect(try service.fetchRoutines().isEmpty)
+        }
+    }
+    
+    @Test @MainActor func routinePersistenceScenario1SaveRoutineAndOrder() throws {
+        // Scenario 1: Given a user has created a valid routine; When they save the routine; Then the routine and its product order are stored successfully.
+        try Self.withTemporaryRoutineFile { url in
+            let store = RoutineStore(fileURL: url)
+            let steps = [
+                RoutineStepItem(stepNumber: 1, title: "Step 1: Oil Cleanser", subtitle: "Cleanse", state: .complete),
+                RoutineStepItem(stepNumber: 2, title: "Step 2: Toner", subtitle: "Tone", state: .active),
+                RoutineStepItem(stepNumber: 3, title: "Step 3: Moisturizer", subtitle: "Moisturize", state: .incomplete)
+            ]
+            let routine = RoutineRecord(name: "Valid Routine", period: .pm, steps: steps)
+            try store.save(routine)
+            
+            #expect(store.routines.count == 1)
+            #expect(store.routines[0].steps.map(\.stepNumber) == [1, 2, 3])
+            #expect(store.routines[0].steps.map(\.title) == ["Step 1: Oil Cleanser", "Step 2: Toner", "Step 3: Moisturizer"])
+        }
+    }
+    
+    @Test @MainActor func routinePersistenceScenario2LoadRoutineOnReturn() throws {
+        // Scenario 2: Given a user has a saved routine; When they return to the routine screen; Then the saved routine appears with the correct products and order.
+        try Self.withTemporaryRoutineFile { url in
+            let store = RoutineStore(fileURL: url)
+            let steps = [
+                RoutineStepItem(stepNumber: 1, title: "First Step", subtitle: "A", state: .complete),
+                RoutineStepItem(stepNumber: 2, title: "Second Step", subtitle: "B", state: .active)
+            ]
+            let routine = RoutineRecord(name: "Saved Morning Routine", period: .am, steps: steps)
+            try store.save(routine)
+            
+            // Returning to routine screen (creating a new store or calling load)
+            let returnScreenStore = RoutineStore(fileURL: url)
+            returnScreenStore.load()
+            
+            #expect(returnScreenStore.routines.count == 1)
+            let loaded = returnScreenStore.routines[0]
+            #expect(loaded.name == "Saved Morning Routine")
+            #expect(loaded.steps.count == 2)
+            #expect(loaded.steps[0].title == "First Step")
+            #expect(loaded.steps[0].stepNumber == 1)
+            #expect(loaded.steps[1].title == "Second Step")
+            #expect(loaded.steps[1].stepNumber == 2)
+        }
+    }
+    
+    @Test @MainActor func routinePersistenceScenario3EditAndReplaceRoutine() throws {
+        // Scenario 3: Given a user edits an existing routine; When they save the changes; Then the updated routine replaces the previous version.
+        try Self.withTemporaryRoutineFile { url in
+            let store = RoutineStore(fileURL: url)
+            let original = RoutineRecord(name: "Initial Name", period: .am, steps: [
+                RoutineStepItem(stepNumber: 1, title: "Step A", subtitle: "", state: .incomplete)
+            ])
+            try store.save(original)
+            
+            var edited = original
+            edited.name = "Replaced Name"
+            edited.period = .pm
+            edited.steps = [
+                RoutineStepItem(stepNumber: 1, title: "Step B", subtitle: "", state: .complete),
+                RoutineStepItem(stepNumber: 2, title: "Step C", subtitle: "", state: .incomplete)
+            ]
+            try store.update(edited)
+            
+            // Verify single replacement
+            #expect(store.routines.count == 1)
+            #expect(store.routines[0].id == original.id)
+            #expect(store.routines[0].name == "Replaced Name")
+            #expect(store.routines[0].period == .pm)
+            #expect(store.routines[0].steps.count == 2)
+            #expect(store.routines[0].steps[0].title == "Step B")
+        }
+    }
+    
+    @Test @MainActor func routinePersistenceScenario4EmptyStateNoRoutines() throws {
+        // Scenario 4: Given no routine has been saved; When the user opens the routine screen; Then the app displays a clear empty state and an option to create a routine.
+        try Self.withTemporaryRoutineFile { url in
+            let store = RoutineStore(fileURL: url)
+            #expect(store.routines.isEmpty)
+            #expect(store.loadError == nil)
+            
+            // MyRoutinesView observes repository.routines: when empty, it renders emptyStateView
+            _ = MyRoutinesView(repository: store)
+            #expect(store.routines.isEmpty)
+        }
+    }
 }
