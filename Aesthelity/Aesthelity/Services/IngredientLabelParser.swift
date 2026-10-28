@@ -14,6 +14,23 @@ enum IngredientLabelParser {
             .compactMap(cleanedName)
     }
 
+    struct Entry: Equatable {
+        let input: String
+        let name: String?
+    }
+
+    /// Retains nonempty entries that cleanup cannot turn into ingredient names.
+    static func entriesForValidation(in label: String) -> [Entry] {
+        splitTopLevel(removingSectionHeadings(from: label)).compactMap { raw in
+            let visible = String(String.UnicodeScalarView(raw.unicodeScalars.filter {
+                $0.properties.generalCategory != .format
+            }))
+            let trimmed = visible.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return nil }
+            return Entry(input: raw, name: cleanedName(visible))
+        }
+    }
+
     /// Headings like "Inactive Ingredients:" and "May Contain (+/-):" separate lists rather than name ingredients.
     private static func removingSectionHeadings(from label: String) -> String {
         let headings = [

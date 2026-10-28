@@ -209,3 +209,132 @@ final class ProfileUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["profile-summary-concerns"].label, "None provided")
     }
 }
+
+final class ManualProductUITests: XCTestCase {
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    @MainActor
+    private func launch(reset: Bool = true, saveFailure: Bool = false) -> XCUIApplication {
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments = ["--pd02-ui-testing"]
+        if reset { app.launchArguments.append("--pd02-reset-products") }
+        if saveFailure { app.launchArguments.append("--pd02-save-failure") }
+        app.launch()
+        XCTAssertTrue(app.buttons["tab.library"].waitForExistence(timeout: 10))
+        app.buttons["tab.library"].tap()
+        XCTAssertTrue(app.buttons["manual-add"].waitForExistence(timeout: 5))
+        return app
+    }
+
+    @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication) {
+        for _ in 0..<10 {
+            if element.exists && element.isHittable { return }
+            app.swipeUp()
+        }
+        XCTAssertTrue(element.exists)
+        XCTAssertTrue(element.isHittable)
+    }
+
+    @MainActor
+    private func enter(_ name: String, ingredients: String, app: XCUIApplication) {
+        app.buttons["manual-add"].tap()
+        let field = app.textFields["manual-name"]
+        XCTAssertTrue(field.waitForExistence(timeout: 5))
+        field.tap()
+        field.typeText(name)
+        let label = app.textViews["manual-ingredients"]
+        label.tap()
+        label.typeText(ingredients)
+        app.buttons["Done"].tap()
+        reveal(app.buttons["manual-review"], in: app)
+        app.buttons["manual-review"].tap()
+    }
+
+    @MainActor
+    func testSaveWarningsAndRelaunch() {
+        var app = launch()
+        enter("Manual serum", ingredients: "Water, Niacinimide\nVitamin C, Unobtainium", app: app)
+        let warning = app.staticTexts["manual-warning-1"]
+        reveal(warning, in: app)
+        XCTAssertTrue(warning.label.contains("Niacinamide"))
+        let save = app.buttons["manual-save"]
+        reveal(save, in: app)
+        save.tap()
+        XCTAssertTrue(app.buttons["manual-add"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Manual serum"].exists)
+        app.terminate()
+        app = launch(reset: false)
+        XCTAssertTrue(app.staticTexts["Manual serum"].exists)
+        app.staticTexts["Manual serum"].tap()
+        XCTAssertTrue(app.navigationBars["Saved product"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Category not specified"].exists)
+    }
+
+    @MainActor
+    func testRequiredAndInvalidInputRetainTextUntilCorrected() {
+        let app = launch()
+        app.buttons["manual-add"].tap()
+        app.buttons["manual-review"].tap()
+        XCTAssertTrue(app.staticTexts["manual-error-name"].exists)
+        XCTAssertTrue(app.staticTexts["manual-error-ingredientList"].exists)
+        XCTAssertFalse(app.buttons["manual-save"].exists)
+        let name = app.textFields["manual-name"]
+        name.tap()
+        name.typeText("Invalid test")
+        let ingredients = app.textViews["manual-ingredients"]
+        ingredients.tap()
+        ingredients.typeText("Water, !!!")
+        app.buttons["Done"].tap()
+        reveal(app.buttons["manual-review"], in: app)
+        app.buttons["manual-review"].tap()
+        XCTAssertTrue(app.staticTexts["manual-error-ingredientList"].label.contains("at least one letter"))
+        XCTAssertEqual(ingredients.value as? String, "Water, !!!")
+        ingredients.tap()
+        ingredients.press(forDuration: 1.2)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: 2) {
+            selectAll.tap()
+        } else {
+            app.buttons["Select All"].tap()
+        }
+        ingredients.typeText("Water, Glycerin")
+        XCTAssertEqual(ingredients.value as? String, "Water, Glycerin")
+        app.buttons["Done"].tap()
+        reveal(app.buttons["manual-review"], in: app)
+        app.buttons["manual-review"].tap()
+        reveal(app.buttons["manual-save"], in: app)
+        app.buttons["manual-save"].tap()
+        XCTAssertTrue(app.staticTexts["Invalid test"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testCancelDoesNotSave() {
+        let app = launch()
+        enter("Discard me", ingredients: "Water", app: app)
+        app.buttons["manual-cancel"].tap()
+        XCTAssertTrue(app.buttons["manual-add"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Discard me"].exists)
+    }
+
+    @MainActor
+    func testSaveFailureRetainsReviewAndAllowsRetry() {
+        let app = launch(saveFailure: true)
+        enter("Retry me", ingredients: "Water", app: app)
+        let save = app.buttons["manual-save"]
+        reveal(save, in: app)
+        save.tap()
+        XCTAssertTrue(app.staticTexts["manual-save-error"].waitForExistence(timeout: 5))
+        reveal(save, in: app)
+        save.tap()
+        XCTAssertTrue(app.staticTexts["manual-save-error"].exists)
+        for _ in 0..<5 {
+            if app.textFields["manual-name"].exists { break }
+            app.collectionViews.firstMatch.swipeDown()
+        }
+        XCTAssertEqual(app.textFields["manual-name"].value as? String, "Retry me")
+    }
+}
