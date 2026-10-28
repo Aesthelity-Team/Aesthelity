@@ -3,7 +3,7 @@ import json
 from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 CATEGORIES = {'cleanser','serum','treatment','moisturizer','sunscreen','toner','mist','mask'}
 def load(directory=None):
     directory = Path(directory) if directory else ROOT / 'Aesthelity/Aesthelity/Resources/DemoData'
