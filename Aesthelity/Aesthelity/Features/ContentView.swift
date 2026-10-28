@@ -161,6 +161,8 @@ struct ContentView: View {
     @State var showIngredientClashDetail: Bool = false
     @State var showManageRoutinesView: Bool = false
     @State var showEditRoutineView: Bool = false
+    @State var showCreateRoutineView: Bool = false
+    @State var routineEditorError: String? = nil
     @State var showStartupFlowSheet: Bool = false
     @State private var showSkinProfileSetupSheet = false
     public var onResetStartup: (() -> Void)? = nil
@@ -261,10 +263,20 @@ struct ContentView: View {
     }
 
     private var selectedRoutineDisplayName: String {
-        if let name = routineStore.routines.first(where: { $0.period == selectedPeriod })?.name {
+        if let name = selectedPeriodRoutine?.name {
             return name
         }
         return selectedPeriod == .am ? "AM routine" : "PM routine"
+    }
+
+    /// Saved routine for the currently selected AM/PM period, if any.
+    var selectedPeriodRoutine: RoutineRecord? {
+        routineStore.routines.first(where: { $0.period == selectedPeriod })
+    }
+
+    /// Production Home must not show a numeric compatibility score as a real assessment.
+    var showsMockCompatibilityScore: Bool {
+        usesInjectedSteps
     }
     
     var emptyRoutineMessage: String? {
@@ -289,27 +301,50 @@ struct ContentView: View {
                                 showManageRoutinesView = false
                             }
                         })
-                    } else if showEditRoutineView {
+                    } else if showEditRoutineView, let routine = selectedPeriodRoutine {
                         EditRoutineView(
-                            routine: routineStore.routines.first(where: { $0.period == selectedPeriod })
-                                ?? routineStore.routines.first
-                                ?? RoutineRecord(
-                                    name: selectedPeriod == .am ? "Morning Routine" : "Evening Routine",
-                                    period: selectedPeriod
-                                ),
+                            routine: routine,
                             onBack: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     showEditRoutineView = false
                                 }
                             },
                             onSave: { updatedRoutine in
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    do {
-                                        try routineStore.update(updatedRoutine)
-                                    } catch {
-                                        try? routineStore.save(updatedRoutine)
+                                do {
+                                    try routineStore.update(updatedRoutine)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showEditRoutineView = false
+                                        routineEditorError = nil
                                     }
+                                    return true
+                                } catch {
+                                    routineEditorError = "Could not save your \(selectedPeriod.rawValue) routine changes. Please try again."
+                                    return false
+                                }
+                            }
+                        )
+                    } else if showCreateRoutineView || (showEditRoutineView && selectedPeriodRoutine == nil) {
+                        CreateRoutineView(
+                            initialName: selectedPeriod == .am ? "Morning Routine" : "Evening Routine",
+                            initialPeriod: selectedPeriod,
+                            onCancel: {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    showCreateRoutineView = false
                                     showEditRoutineView = false
+                                }
+                            },
+                            onSaveRoutine: { newRoutine in
+                                do {
+                                    try routineStore.save(newRoutine)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showCreateRoutineView = false
+                                        showEditRoutineView = false
+                                        routineEditorError = nil
+                                    }
+                                    return true
+                                } catch {
+                                    routineEditorError = "Could not create your \(selectedPeriod.rawValue) routine. Please try again."
+                                    return false
                                 }
                             }
                         )
@@ -370,13 +405,35 @@ struct ContentView: View {
     private var homeContentView: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                // Top Demo Banner
-                demoClashBanner
+                // Demo clash toggle only for explicitly injected sample Home layouts
+                if usesInjectedSteps {
+                    demoClashBanner
+                }
                 
                 // Header (Home & Welcome)
                 headerSection
+
+                if let routineEditorError {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color(hex: "#842029"))
+                        Text(routineEditorError)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(hex: "#842029"))
+                        Spacer(minLength: 0)
+                        Button("Dismiss") {
+                            self.routineEditorError = nil
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#842029"))
+                    }
+                    .padding(12)
+                    .background(Color(hex: "#F8D7DA"))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityIdentifier("home.routineEditorError")
+                }
                 
-                if showClashDemo && selectedPeriod == .am {
+                if usesInjectedSteps && showClashDemo && selectedPeriod == .am {
                     // Ingredient Clash Warning Banner
                     ingredientClashAlertBanner
                     
@@ -386,7 +443,7 @@ struct ContentView: View {
                     // Why this order card
                     whyThisOrderCard
                     
-                    // Other sections below routine
+                    // Labeled sample score only for injected demo layouts
                     confidenceScoreCard
                     manageRoutinesRow
                     editRoutineCard
@@ -394,7 +451,10 @@ struct ContentView: View {
                 } else {
                     manageRoutinesRow
                     editRoutineCard
-                    confidenceScoreCard
+                    // No numeric compatibility score on production Home (would be a fake assessment).
+                    if showsMockCompatibilityScore {
+                        confidenceScoreCard
+                    }
                     todaysRoutineCard
                     whyThisOrderCard
                     skinJournalSection
@@ -500,21 +560,29 @@ struct ContentView: View {
         .buttonStyle(.plain)
     }
     
-    // MARK: - 3. Edit Routine Card
+    // MARK: - 3. Edit / Create Routine Card
     private var editRoutineCard: some View {
-        Button(action: {
+        let hasRoutine = selectedPeriodRoutine != nil
+        return Button(action: {
             withAnimation(.easeInOut(duration: 0.2)) {
-                showEditRoutineView = true
+                routineEditorError = nil
+                if hasRoutine {
+                    showCreateRoutineView = false
+                    showEditRoutineView = true
+                } else {
+                    showEditRoutineView = false
+                    showCreateRoutineView = true
+                }
             }
         }) {
             HStack {
-                Text("Edit routine")
+                Text(hasRoutine ? "Edit routine" : "Create routine")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Constants.semanticInkAccent)
                 
                 Spacer()
                 
-                Text("\(selectedRoutineDisplayName) ›")
+                Text(hasRoutine ? "\(selectedRoutineDisplayName) ›" : "Add \(selectedPeriod.rawValue) ›")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(Constants.semanticInkSecondary)
             }
@@ -530,13 +598,17 @@ struct ContentView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(hasRoutine ? "home.editRoutine" : "home.createRoutine")
     }
     
-    // MARK: - 4. Confidence Score Card
+    // MARK: - 4. Confidence Score Card (sample/demo layouts only)
     private var confidenceScoreCard: some View {
         ConfidenceCard(
-            score: (usesInjectedSteps && showClashDemo && selectedPeriod == .am) ? 64 : 82,
-            subtitle: (usesInjectedSteps && showClashDemo && selectedPeriod == .am) ? "Active clash detected" : "Routine compatibility",
+            score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
+            title: "SAMPLE CONFIDENCE SCORE",
+            subtitle: (showClashDemo && selectedPeriod == .am)
+                ? "Sample demo · active clash"
+                : "Sample demo · not a real assessment",
             amSteps: displayedAMStepCount,
             pmSteps: displayedPMStepCount,
             onTap: {

@@ -870,7 +870,10 @@ struct AesthelityTests {
         var savedRecord: RoutineRecord? = nil
         let createView = CreateRoutineView(
             onCancel: { cancelCalled = true },
-            onSaveRoutine: { rec in savedRecord = rec }
+            onSaveRoutine: { rec in
+                savedRecord = rec
+                return true
+            }
         )
         #expect(createView.routineName.isEmpty)
         #expect(createView.selectedPeriod == RoutinePeriod.am)

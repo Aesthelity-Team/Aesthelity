@@ -194,6 +194,80 @@ struct CloudSyncAndCatalogSafetyTests {
         #expect(pmHome.emptyRoutineMessage == nil)
     }
 
+    @Test func homeDoesNotEditOtherPeriodWhenSelectedPeriodMissing() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let url = directory.appendingPathComponent("routines.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = RoutineStore(fileURL: url)
+        try store.save(
+            RoutineRecord(
+                name: "Evening Only",
+                period: .pm,
+                steps: [RoutineStepItem(stepNumber: 1, title: "Oil Cleanser", subtitle: "Step 1", state: .incomplete)]
+            )
+        )
+
+        let home = ContentView(selectedPeriod: .am, routineStore: store)
+        #expect(home.selectedPeriodRoutine == nil)
+        #expect(home.selectedPeriodRoutine?.period != .pm)
+        #expect(store.routines.first?.period == .pm)
+    }
+
+    @Test func homeUpdateFailureDoesNotFallBackToBlindSave() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let url = directory.appendingPathComponent("routines.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = RoutineStore(fileURL: url)
+        let existing = RoutineRecord(name: "Morning", period: .am)
+        try store.save(existing)
+
+        // Unknown id must throw from update and must not be inserted via silent save fallback.
+        let orphan = RoutineRecord(name: "Orphan", period: .am)
+        #expect(throws: RoutineStore.StoreError.routineNotFound) {
+            try store.update(orphan)
+        }
+        #expect(store.routines.count == 1)
+        #expect(store.routines[0].id == existing.id)
+    }
+
+    @Test func productionHomeHidesMockCompatibilityScore() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        let url = directory.appendingPathComponent("routines.json")
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let store = RoutineStore(fileURL: url)
+        try store.save(
+            RoutineRecord(
+                name: "Morning",
+                period: .am,
+                steps: [RoutineStepItem(stepNumber: 1, title: "Cleanser", subtitle: "Step 1", state: .incomplete)]
+            )
+        )
+        let productionHome = ContentView(selectedPeriod: .am, routineStore: store)
+        #expect(productionHome.showsMockCompatibilityScore == false)
+
+        let sampleHome = ContentView(
+            selectedPeriod: .am,
+            showClashDemo: true,
+            amSteps: ContentViewStepModel.defaultAMSteps,
+            amClashSteps: ContentViewStepModel.defaultAMClashSteps,
+            pmSteps: ContentViewStepModel.defaultPMSteps
+        )
+        #expect(sampleHome.showsMockCompatibilityScore == true)
+    }
+
+    @Test func invalidSignInRetryPreservesTypedCredentials() {
+        let email = "user@example.com"
+        let password = "my-secret"
+        let preserved = AuthEmailSignIn.credentialsPreservedForRetry(email: email, password: password)
+        #expect(preserved.email == email)
+        #expect(preserved.password == password)
+        #expect(preserved.email != "maya@aesthelity.app")
+        #expect(preserved.password != "password123")
+    }
+
     @Test func unavailableAndPartialIngredientsAvoidBlanketSafetyClaims() {
         let unavailable = DemoProduct(
             id: "test_unavailable",

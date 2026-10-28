@@ -640,15 +640,12 @@ public struct AuthSignInView: View {
     }
     
     private func handlePrimaryAction() {
+        // Leaving invalid mode must keep the user's typed email/password so they can correct it.
         if mode == .invalid {
-            // Preview mode: restore a valid-looking email so the form can be retried.
-            email = "maya@aesthelity.app"
-            password = "password123"
             authStatusMessage = nil
             withAnimation(.easeInOut(duration: 0.2)) {
                 mode = .normal
             }
-            return
         }
 
         isAuthenticating = true

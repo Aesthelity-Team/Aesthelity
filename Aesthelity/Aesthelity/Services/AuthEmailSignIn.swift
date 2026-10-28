@@ -19,6 +19,14 @@ public enum AuthEmailSignIn {
     public static let missingCredentialsMessage =
         "Enter your email and password to sign in, or continue without signing in."
 
+    /// Retrying after an invalid form must keep the user's typed credentials.
+    public static func credentialsPreservedForRetry(
+        email: String,
+        password: String
+    ) -> (email: String, password: String) {
+        (email, password)
+    }
+
     public static func attempt(
         email: String,
         password: String,

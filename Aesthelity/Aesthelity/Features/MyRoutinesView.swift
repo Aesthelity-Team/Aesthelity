@@ -67,9 +67,14 @@ public struct MyRoutinesView: View {
             CreateRoutineView(
                 onCancel: { showCreateRoutineSheet = false },
                 onSaveRoutine: { newRoutine in
-                    try? repository.save(newRoutine)
-                    showEmptyStateDemo = false
-                    showCreateRoutineSheet = false
+                    do {
+                        try repository.save(newRoutine)
+                        showEmptyStateDemo = false
+                        showCreateRoutineSheet = false
+                        return true
+                    } catch {
+                        return false
+                    }
                 }
             )
         }
@@ -78,8 +83,13 @@ public struct MyRoutinesView: View {
                 routine: routine,
                 onBack: { selectedRoutineToEdit = nil },
                 onSave: { updatedRoutine in
-                    try? repository.update(updatedRoutine)
-                    selectedRoutineToEdit = nil
+                    do {
+                        try repository.update(updatedRoutine)
+                        selectedRoutineToEdit = nil
+                        return true
+                    } catch {
+                        return false
+                    }
                 }
             )
         }

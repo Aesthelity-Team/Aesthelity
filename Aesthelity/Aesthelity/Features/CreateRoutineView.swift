@@ -247,14 +247,15 @@ public struct CreateRoutineView: View {
     
     // Callbacks
     public var onCancel: () -> Void
-    public var onSaveRoutine: (RoutineRecord) -> Void
+    /// Persist the new routine. Return `true` when saved; `false` keeps the form open.
+    public var onSaveRoutine: (RoutineRecord) -> Bool
     
     public init(
         initialName: String = "",
         initialPeriod: RoutinePeriod = .am,
         initialSteps: [RoutineStepItem] = [],
         onCancel: @escaping () -> Void = {},
-        onSaveRoutine: @escaping (RoutineRecord) -> Void = { _ in }
+        onSaveRoutine: @escaping (RoutineRecord) -> Bool = { _ in true }
     ) {
         let model = CreateRoutineViewModel(
             routineName: initialName,
@@ -270,7 +271,7 @@ public struct CreateRoutineView: View {
     public init(
         viewModel: CreateRoutineViewModel,
         onCancel: @escaping () -> Void = {},
-        onSaveRoutine: @escaping (RoutineRecord) -> Void = { _ in }
+        onSaveRoutine: @escaping (RoutineRecord) -> Bool = { _ in true }
     ) {
         self.viewModel = viewModel
         self._observedViewModel = ObservedObject(wrappedValue: viewModel)
@@ -403,7 +404,11 @@ public struct CreateRoutineView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Color(hex: "#842029"))
                 
-                Text("Add a routine name, then try again.")
+                Text(
+                    routineName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "Add a routine name, then try again."
+                        : "Your routine could not be saved. Please try again."
+                )
                     .font(.system(size: 13))
                     .foregroundStyle(Color(hex: "#842029").opacity(0.9))
             }
@@ -969,7 +974,9 @@ public struct CreateRoutineView: View {
                     leadTime: leadTime,
                     quietHoursEnabled: quietHoursEnabled
                 )
-                onSaveRoutine(newRecord)
+                if !onSaveRoutine(newRecord) {
+                    withAnimation { showErrorBanner = true }
+                }
             }
         }
         .padding(.top, 8)
