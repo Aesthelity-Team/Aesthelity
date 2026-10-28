@@ -1234,14 +1234,9 @@ struct ContentView: View {
     
     // MARK: - Sheets
     private var analysisDetailSheet: some View {
-        ConfidenceScoreView(
-            score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
-            amStepsCount: currentSteps.count,
-            pmStepsCount: pmSteps.count,
-            onDismiss: {
-                showAnalysisSheet = false
-            }
-        )
+        LiveAnalysisView(onDismiss: {
+            showAnalysisSheet = false
+        })
     }
     
     private var journalDetailSheet: some View {
