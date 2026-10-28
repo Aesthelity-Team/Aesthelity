@@ -17,7 +17,8 @@ extension RoutineStepItem: Equatable {
         lhs.subtitle == rhs.subtitle &&
         lhs.state == rhs.state &&
         lhs.hasClash == rhs.hasClash &&
-        lhs.productId == rhs.productId
+        lhs.productId == rhs.productId &&
+        lhs.product == rhs.product
     }
 }
 

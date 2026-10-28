@@ -338,3 +338,192 @@ final class ManualProductUITests: XCTestCase {
         XCTAssertEqual(app.textFields["manual-name"].value as? String, "Retry me")
     }
 }
+
+final class RoutineEditorUITests: XCTestCase {
+    override func setUpWithError() throws { continueAfterFailure = false }
+
+    @MainActor
+    private func launch() -> XCUIApplication {
+        XCUIDevice.shared.orientation = .portrait
+        let app = XCUIApplication()
+        app.launchArguments = ["--pd02-ui-testing", "--pd02-reset-products", "--rt02-ui-testing", "--reset-routines"]
+        app.launch()
+        XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 10))
+        return app
+    }
+
+    @MainActor
+    private func reveal(_ element: XCUIElement, in app: XCUIApplication, upwards: Bool = false) {
+        for _ in 0..<12 {
+            if element.exists && element.isHittable { return }
+            if upwards { app.swipeDown() } else { app.swipeUp() }
+        }
+        XCTAssertTrue(element.exists)
+        XCTAssertTrue(element.isHittable)
+    }
+
+    @MainActor
+    private func create(in app: XCUIApplication) {
+        reveal(app.buttons["routine-manage"], in: app)
+        app.buttons["routine-manage"].tap()
+        XCTAssertTrue(app.buttons["routine-create"].waitForExistence(timeout: 5))
+        app.buttons["routine-create"].tap()
+        XCTAssertTrue(app.textFields["routine-name"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    private func name(_ text: String, in app: XCUIApplication) {
+        reveal(app.textFields["routine-name"], in: app, upwards: true)
+        app.textFields["routine-name"].tap()
+        app.textFields["routine-name"].typeText(text + "\n")
+    }
+
+    @MainActor
+    private func pick(_ id: String, in app: XCUIApplication) {
+        reveal(app.buttons["routine-add-product"], in: app)
+        app.buttons["routine-add-product"].tap()
+        let button = app.buttons["routine-pick-catalog-\(id)"]
+        reveal(button, in: app)
+        button.tap()
+        XCTAssertTrue(app.buttons["routine-add-product"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testCreateReorderConfirmRemovalSaveAndRejectEmptyEdit() {
+        let app = launch()
+        create(in: app)
+        reveal(app.buttons["routine-save"], in: app)
+        app.buttons["routine-save"].tap()
+        XCTAssertTrue(app.staticTexts["routine-validation"].label.contains("routine name"))
+        XCTAssertTrue(app.staticTexts["routine-validation"].label.contains("at least one product"))
+        name("RT editor test", in: app)
+        pick("cleanser_gel", in: app)
+        pick("cleanser_oil", in: app)
+        reveal(app.buttons["routine-down-0"], in: app, upwards: true)
+        app.buttons["routine-down-0"].tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("Demo Cleansing Oil"))
+        reveal(app.buttons["routine-remove-1"], in: app)
+        app.buttons["routine-remove-1"].tap()
+        app.buttons["Keep product"].tap()
+        XCTAssertTrue(app.staticTexts["routine-step-1"].exists)
+        app.buttons["routine-remove-1"].tap()
+        app.buttons["Remove product"].tap()
+        XCTAssertFalse(app.staticTexts["routine-step-1"].exists)
+        reveal(app.buttons["routine-save"], in: app)
+        app.buttons["routine-save"].tap()
+        let card = app.buttons["routine-card-RT editor test"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("Demo Cleansing Oil"))
+        reveal(app.buttons["routine-remove-0"], in: app)
+        app.buttons["routine-remove-0"].tap()
+        app.buttons["Remove product"].tap()
+        reveal(app.buttons["routine-save"], in: app)
+        app.buttons["routine-save"].tap()
+        XCTAssertTrue(app.staticTexts["routine-validation"].label.contains("at least one product"))
+        reveal(app.buttons["Routines"], in: app, upwards: true)
+        app.buttons["Routines"].tap()
+        card.tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
+    func testManualProductsRetainWarningsAndCancellingCreateDoesNotSave() {
+        let app = launch()
+        app.buttons["tab.library"].tap()
+        app.buttons["manual-add"].tap()
+        app.textFields["manual-name"].tap()
+        app.textFields["manual-name"].typeText("Routine manual serum")
+        app.textViews["manual-ingredients"].tap()
+        app.textViews["manual-ingredients"].typeText("Water, Vitamin C")
+        app.buttons["Done"].tap()
+        reveal(app.buttons["manual-review"], in: app)
+        app.buttons["manual-review"].tap()
+        reveal(app.buttons["manual-save"], in: app)
+        app.buttons["manual-save"].tap()
+        XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 5))
+        app.buttons["tab.home"].tap()
+        create(in: app)
+        name("Cancelled routine", in: app)
+        app.buttons["routine-add-product"].tap()
+        let search = app.searchFields.firstMatch
+        search.tap()
+        search.typeText("Routine manual serum\n")
+        let manual = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "routine-pick-manual-")).firstMatch
+        reveal(manual, in: app)
+        manual.tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("Routine manual serum"))
+        app.buttons["Ingredient details"].tap()
+        let warning = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "could refer")).firstMatch
+        reveal(warning, in: app)
+        XCTAssertTrue(warning.exists)
+        app.buttons["Cancel"].tap()
+        XCTAssertFalse(app.buttons["routine-card-Cancelled routine"].exists)
+    }
+
+    @MainActor
+    func testCatalogAndManualRoutineSaveReopenAndRestart() {
+        let app = launch()
+        app.buttons["tab.library"].tap()
+        app.buttons["manual-add"].tap()
+        app.textFields["manual-name"].tap()
+        app.textFields["manual-name"].typeText("RT smoke manual")
+        app.textViews["manual-ingredients"].tap()
+        app.textViews["manual-ingredients"].typeText("Water, Vitamin C")
+        app.buttons["Done"].tap()
+        reveal(app.buttons["manual-review"], in: app)
+        app.buttons["manual-review"].tap()
+        reveal(app.buttons["manual-save"], in: app)
+        app.buttons["manual-save"].tap()
+        app.buttons["tab.home"].tap()
+        create(in: app)
+        name("RT restart smoke", in: app)
+        pick("cleanser_gel", in: app)
+        reveal(app.buttons["routine-add-product"], in: app)
+        app.buttons["routine-add-product"].tap()
+        let search = app.searchFields.firstMatch
+        search.tap()
+        search.typeText("RT smoke manual\n")
+        let manual = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "routine-pick-manual-")).firstMatch
+        reveal(manual, in: app)
+        manual.tap()
+        pick("cleanser_oil", in: app)
+        reveal(app.buttons["routine-down-0"], in: app, upwards: true)
+        app.buttons["routine-down-0"].tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("RT smoke manual"))
+        reveal(app.buttons["routine-remove-2"], in: app)
+        app.buttons["routine-remove-2"].tap()
+        app.buttons["Remove product"].tap()
+        reveal(app.buttons["routine-save"], in: app)
+        app.buttons["routine-save"].tap()
+        let card = app.buttons["routine-card-RT restart smoke"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("RT smoke manual"))
+        XCTAssertTrue(app.staticTexts["routine-step-1"].label.contains("Gentle Gel Cleanser"))
+        app.terminate()
+        app.launchArguments = ["--pd02-ui-testing", "--rt02-ui-testing"]
+        app.launch()
+        reveal(app.buttons["routine-manage"], in: app)
+        app.buttons["routine-manage"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("RT smoke manual"))
+        XCTAssertTrue(app.staticTexts["routine-step-1"].label.contains("Gentle Gel Cleanser"))
+        XCTAssertFalse(app.staticTexts["routine-step-2"].exists)
+        let details = app.buttons["Ingredient details"].firstMatch
+        reveal(details, in: app)
+        details.tap()
+        let warning = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "could refer")).firstMatch
+        reveal(warning, in: app)
+        XCTAssertTrue(warning.exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "RT-02 routine restored after restart"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+}

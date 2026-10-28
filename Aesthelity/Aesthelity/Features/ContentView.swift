@@ -63,6 +63,7 @@ public struct RoutineStepItem: Identifiable, Codable {
     public var state: StepState
     public var hasClash: Bool
     public var productId: UUID?
+    public let product: RoutineProductSnapshot?
     
     public init(
         id: UUID = UUID(),
@@ -71,7 +72,8 @@ public struct RoutineStepItem: Identifiable, Codable {
         subtitle: String,
         state: StepState,
         hasClash: Bool = false,
-        productId: UUID? = nil
+        productId: UUID? = nil,
+        product: RoutineProductSnapshot? = nil
     ) {
         self.id = id
         self.stepNumber = stepNumber
@@ -80,10 +82,11 @@ public struct RoutineStepItem: Identifiable, Codable {
         self.state = state
         self.hasClash = hasClash
         self.productId = productId
+        self.product = product
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, stepNumber, title, subtitle, state, hasClash, productId
+        case id, stepNumber, title, subtitle, state, hasClash, productId, product
     }
 
     public init(from decoder: Decoder) throws {
@@ -95,6 +98,7 @@ public struct RoutineStepItem: Identifiable, Codable {
         self.state = try container.decodeIfPresent(StepState.self, forKey: .state) ?? .incomplete
         self.hasClash = try container.decodeIfPresent(Bool.self, forKey: .hasClash) ?? false
         self.productId = try container.decodeIfPresent(UUID.self, forKey: .productId)
+        self.product = try container.decodeIfPresent(RoutineProductSnapshot.self, forKey: .product)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -106,6 +110,7 @@ public struct RoutineStepItem: Identifiable, Codable {
         try container.encode(state, forKey: .state)
         try container.encode(hasClash, forKey: .hasClash)
         try container.encodeIfPresent(productId, forKey: .productId)
+        try container.encodeIfPresent(product, forKey: .product)
     }
 }
 
@@ -558,6 +563,7 @@ struct ContentView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("routine-manage")
     }
     
     // MARK: - 3. Edit / Create Routine Card

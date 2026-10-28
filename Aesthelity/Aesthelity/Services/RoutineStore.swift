@@ -24,7 +24,11 @@ public final class RoutineStore: ObservableObject {
     public nonisolated static let defaultFileURL = URL.applicationSupportDirectory
         .appendingPathComponent("Routines/routines.json")
 
-    public static let shared = RoutineStore()
+    public static let shared = RoutineStore(fileURL:
+        ProcessInfo.processInfo.arguments.contains("--rt02-ui-testing")
+            ? URL.applicationSupportDirectory.appendingPathComponent("RT02UITests/routines.json")
+            : defaultFileURL
+    )
 
     @Published public private(set) var routines: [RoutineRecord] = []
     @Published public private(set) var loadError: String?

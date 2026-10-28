@@ -88,12 +88,14 @@ public final class CreateRoutineViewModel: ObservableObject {
             return
         }
         let item = RoutineStepItem(
+            id: newStep.id,
             stepNumber: steps.count + 1,
             title: newStep.title,
             subtitle: newStep.subtitle.isEmpty ? "Step \(steps.count + 1)" : newStep.subtitle,
             state: newStep.state,
             hasClash: newStep.hasClash,
-            productId: newStep.productId
+            productId: newStep.productId,
+            product: newStep.product
         )
         steps.append(item)
         if steps.count < 8 {
@@ -106,12 +108,14 @@ public final class CreateRoutineViewModel: ObservableObject {
         for index in 0..<updatedSteps.count {
             let current = updatedSteps[index]
             updatedSteps[index] = RoutineStepItem(
+                id: current.id,
                 stepNumber: index + 1,
                 title: current.title,
                 subtitle: current.subtitle,
                 state: current.state,
                 hasClash: current.hasClash,
-                productId: current.productId
+                productId: current.productId,
+                product: current.product
             )
         }
         steps = updatedSteps
@@ -307,6 +311,10 @@ public struct CreateRoutineView: View {
                     // Settings Navigation Rows (Schedule & Notifications)
                     settingsNavigationSection
                     
+                    if hasAttemptedSave && !RoutineEditor.validationErrors(name: routineName, steps: steps).isEmpty {
+                        Text(RoutineEditor.validationErrors(name: routineName, steps: steps).joined(separator: " "))
+                            .foregroundStyle(.red).accessibilityIdentifier("routine-validation")
+                    }
                     // Save Button
                     saveButton
                 }
@@ -334,15 +342,10 @@ public struct CreateRoutineView: View {
             )
         }
         .sheet(isPresented: $observedViewModel.showAddProductSheet) {
-            AddProductToRoutineView(
-                currentRoutineName: routineName.isEmpty ? (selectedPeriod == .am ? "Morning Routine" : "Evening Routine") : routineName,
-                existingStepTitles: Set(steps.map { $0.title }),
-                onProductSelected: { newStep in
-                    addStep(newStep)
-                    showAddProductSheet = false
-                },
-                onCancel: { showAddProductSheet = false }
-            )
+            RoutineProductPicker(steps: steps) { step in
+                steps = RoutineEditor.adding(step, to: steps)
+                showAddProductSheet = false
+            }
         }
         .sheet(isPresented: $observedViewModel.showReorderSheet) {
             ReorderStepsView(
@@ -440,7 +443,10 @@ public struct CreateRoutineView: View {
                 .foregroundStyle(Color(hex: "#625478"))
             
             HStack {
-                TextField("e.g. Morning Glow", text: $observedViewModel.routineName)
+                TextField("e.g. Morning Glow", text: $observedViewModel.routineName, prompt: Text("e.g. Morning Glow").foregroundStyle(Color(hex: "#625478")))
+                    .accessibilityIdentifier("routine-name")
+                    .submitLabel(.done)
+                    .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color(hex: "#1A1628"))
                     .onChange(of: viewModel.routineName) { _, newValue in
@@ -547,146 +553,9 @@ public struct CreateRoutineView: View {
     
     // MARK: - Steps Section
     private var stepsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("STEPS · \(steps.count)")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color(hex: "#625478"))
-                
-                Spacer()
-                
-                if steps.count >= 2 {
-                    Button(action: { showReorderSheet = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.up.arrow.down")
-                                .font(.system(size: 12, weight: .semibold))
-                            Text("Reorder")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundStyle(Color(hex: "#50578F"))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-            
-            if showStepLimitWarning || steps.count >= 8 {
-                stepLimitWarningBanner
-            }
-            
-            if steps.isEmpty {
-                // Empty state card
-                VStack(spacing: 16) {
-                    RoutineEmptyIllustration(size: 64)
-                    
-                    VStack(spacing: 4) {
-                        Text("No steps yet")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Color(hex: "#1A1628"))
-                        
-                        Text("Add products or pick suggested steps below to build your ritual")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color(hex: "#625478"))
-                            .multilineTextAlignment(.center)
-                    }
-                    
-                    HStack(spacing: 10) {
-                        Button(action: {
-                            showAddProductSheet = true
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 14, weight: .semibold))
-                                Text("Add step")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(Color(hex: "#50578F"))
-                            .padding(.horizontal, 18)
-                            .padding(.vertical, 10)
-                            .background(Color(hex: "#DFD8F5"))
-                            .clipShape(Capsule())
-                        }
-                        .buttonStyle(.plain)
-                        
-                        Button(action: {
-                            showCustomStepSheet = true
-                        }) {
-                            HStack(spacing: 6) {
-                                Image(systemName: "square.and.pencil")
-                                    .font(.system(size: 14, weight: .semibold))
-                                Text("Custom")
-                                    .font(.system(size: 14, weight: .semibold))
-                            }
-                            .foregroundStyle(Color(hex: "#625478"))
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(Color.white)
-                            .clipShape(Capsule())
-                            .overlay(
-                                Capsule()
-                                    .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
-                            )
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .frame(maxWidth: .infinity)
-                .padding(24)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
-                )
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(steps) { step in
-                        stepRow(step: step)
-                    }
-                }
-                
-                // Add step buttons row
-                HStack(spacing: 10) {
-                    LabeledButton("Add step", systemImage: "plus", variant: .secondary) {
-                        if steps.count >= 8 {
-                            withAnimation { showStepLimitWarning = true }
-                        } else {
-                            showAddProductSheet = true
-                        }
-                    }
-                    
-                    Button(action: {
-                        if steps.count >= 8 {
-                            withAnimation { showStepLimitWarning = true }
-                        } else {
-                            showCustomStepSheet = true
-                        }
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "square.and.pencil")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("Custom")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(Color(hex: "#625478"))
-                        .frame(height: 48)
-                        .padding(.horizontal, 16)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
-                .padding(.top, 4)
-            }
-            
-            // Quick-add suggestions banner / row
-            quickAddSuggestionsCard
-        }
+        RoutineStepsEditor(steps: $observedViewModel.steps, onAdd: { showAddProductSheet = true })
     }
-    
+
     // MARK: - Step Row
     private func stepRow(step: RoutineStepItem) -> some View {
         HStack(spacing: 12) {
@@ -959,17 +828,17 @@ public struct CreateRoutineView: View {
     private var saveButton: some View {
         LabeledButton("Save routine", variant: .primary) {
             hasAttemptedSave = true
-            if routineName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !RoutineEditor.validationErrors(name: routineName, steps: steps).isEmpty {
                 withAnimation { showErrorBanner = true }
             } else {
                 let newRecord = RoutineRecord(
-                    name: routineName,
+                    name: routineName.trimmingCharacters(in: .whitespacesAndNewlines),
                     period: selectedPeriod,
                     status: .active,
                     frequency: frequency,
                     reminderTime: reminderTime,
                     activeDays: activeDays,
-                    steps: steps,
+                    steps: RoutineEditor.numbered(steps),
                     pushRemindersEnabled: pushRemindersEnabled,
                     leadTime: leadTime,
                     quietHoursEnabled: quietHoursEnabled
@@ -979,6 +848,7 @@ public struct CreateRoutineView: View {
                 }
             }
         }
+        .accessibilityIdentifier("routine-save")
         .padding(.top, 8)
     }
 }
