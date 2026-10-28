@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contractStatus": "proposed",
+  "contractStatus": "approved",
   "caseRole": "normal",
   "fixtureID": "an02-normal",
   "summary": "Complete version-3 hydrating serum, known empty allergies, no proposed rule matches.",
@@ -51,7 +51,8 @@
     ],
     "findings": [],
     "limitations": [
-      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
-    ]
+      "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
+    ],
+    "displayLabel": "No recorded conflicts"
   }
 }

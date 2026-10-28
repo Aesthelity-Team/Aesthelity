@@ -21,6 +21,10 @@ _LIMITATIONS = [
     "Team-approved v1 rules. This is not clinically validated or a safety guarantee. "
     "Severity, when present, is display priority and not a clinical grade."
 ]
+_MICROSPHERE_LIMITATION = (
+    "The 2002 microsphere study kept 87% of tretinoin after 24 hours. No conflict "
+    "here means this is not the 1998 mixture, not that the amount was unchanged."
+)
 _FORMULATION_VEHICLES = {
     "conventional-gel",
     "lotion",
@@ -53,9 +57,20 @@ def evaluate_routine(routine: dict[str, Any], catalog: dict[str, Any]) -> dict[s
 
     findings: list[dict[str, Any]] = []
     completeness = "complete"
+    allergy_ids = set(allergies["ingredientIDs"]) if allergies["status"] == "known" else set()
+    routine_has_benzoyl_peroxide = any(
+        row.get("ingredient_id") == "benzoyl-peroxide" or row.get("eligible_id") == "benzoyl-peroxide"
+        for product in products
+        for row in product["ingredients"]
+    )
 
     for product in products:
-        product_findings, product_complete = _coverage_for_product(product, catalog_version)
+        product_findings, product_complete = _coverage_for_product(
+            product,
+            catalog_version,
+            allergy_ids=allergy_ids,
+            routine_has_benzoyl_peroxide=routine_has_benzoyl_peroxide,
+        )
         findings.extend(product_findings)
         if not product_complete:
             completeness = "incomplete"
@@ -89,7 +104,7 @@ def evaluate_routine(routine: dict[str, Any], catalog: dict[str, Any]) -> dict[s
     findings.extend(_caution_findings(rule_products, catalog_classes, catalog))
     findings.extend(_allergen_findings(rule_products, allergies, catalog))
 
-    tretinoin_findings, tretinoin_context_incomplete = _tretinoin_bpo_findings(
+    tretinoin_findings, tretinoin_context_incomplete, extra_limitations = _tretinoin_bpo_findings(
         rule_products, coapplication
     )
     findings.extend(tretinoin_findings)
@@ -99,6 +114,11 @@ def evaluate_routine(routine: dict[str, Any], catalog: dict[str, Any]) -> dict[s
     findings.sort(key=lambda finding: _finding_sort_key(finding, products))
     outcome = "findings" if findings else "noFindings"
 
+    limitations = list(_LIMITATIONS)
+    for limitation in extra_limitations:
+        if limitation not in limitations:
+            limitations.append(limitation)
+
     result = {
         "period": period,
         "activeCatalogVersion": catalog_version,
@@ -106,7 +126,7 @@ def evaluate_routine(routine: dict[str, Any], catalog: dict[str, Any]) -> dict[s
         "completeness": completeness,
         "productIDs": [product["productID"] for product in products],
         "findings": findings,
-        "limitations": list(_LIMITATIONS),
+        "limitations": limitations,
     }
     if outcome == "noFindings":
         result["displayLabel"] = "No recorded conflicts"
@@ -241,13 +261,20 @@ def _catalog_classes(catalog: Mapping[str, Any]) -> dict[str, set[str]]:
     return classes
 
 
-def _coverage_for_product(product: dict[str, Any], catalog_version: int) -> tuple[list[dict[str, Any]], bool]:
+def _coverage_for_product(
+    product: dict[str, Any],
+    catalog_version: int,
+    *,
+    allergy_ids: set[str] | None = None,
+    routine_has_benzoyl_peroxide: bool = False,
+) -> tuple[list[dict[str, Any]], bool]:
     product_id = product["productID"]
     status = product["listStatus"]
     rows = product["ingredients"]
     stored_version = product["catalogVersion"]
     findings: list[dict[str, Any]] = []
     complete = True
+    allergy_ids = allergy_ids or set()
 
     if product["contradictory"]:
         known_names = [row["ingredient_id"] for row in rows if row["ingredient_id"]]
@@ -318,7 +345,15 @@ def _coverage_for_product(product: dict[str, Any], catalog_version: int) -> tupl
                 reason_code = row["mapping"]
             else:
                 continue
-            findings.append(_unresolved_row_finding(product, row, reason_code))
+            findings.append(
+                _unresolved_row_finding(
+                    product,
+                    row,
+                    reason_code,
+                    allergy_ids=allergy_ids,
+                    routine_has_benzoyl_peroxide=routine_has_benzoyl_peroxide,
+                )
+            )
             complete = False
 
     if stored_version is None or stored_version != catalog_version:
@@ -331,18 +366,41 @@ def _coverage_for_product(product: dict[str, Any], catalog_version: int) -> tupl
     return findings, complete
 
 
-def _unresolved_row_finding(product: Mapping[str, Any], row: Mapping[str, Any], reason_code: str) -> dict[str, Any]:
+def _unresolved_row_finding(
+    product: Mapping[str, Any],
+    row: Mapping[str, Any],
+    reason_code: str,
+    *,
+    allergy_ids: set[str] | None = None,
+    routine_has_benzoyl_peroxide: bool = False,
+) -> dict[str, Any]:
     text = row["original_text"]
     ingredient_id = row["ingredient_id"]
+    suggested_id = row.get("suggested_id")
+    allergy_ids = allergy_ids or set()
     if reason_code == "ambiguous":
         explanation = f"{text} is not a rule-eligible identity."
         reason = "Candidate IDs are not confirmed matches."
     elif reason_code == "uncertain":
-        explanation = f"{text} is not a rule-eligible identity."
+        if isinstance(suggested_id, str) and suggested_id in allergy_ids:
+            explanation = (
+                f"The recorded allergy names {suggested_id}, but this row only suggests it."
+            )
+        else:
+            explanation = f"{text} is not a rule-eligible identity."
         reason = "suggestedID is not a confirmed match."
     elif reason_code == "unmatched":
         explanation = f"{text} is not a rule-eligible identity."
         reason = "The row has no confirmed ID."
+    elif (
+        reason_code == "absent-catalog-id"
+        and ingredient_id == "tretinoin"
+        and routine_has_benzoyl_peroxide
+    ):
+        explanation = (
+            "tretinoin is not in the bundled version 3 catalog, so the benzoyl peroxide conflict does not fire."
+        )
+        reason = "A slug can be stored without being a catalog member."
     else:
         explanation = f"{text} is not a rule-eligible identity."
         reason = f"{ingredient_id} is not in the bundled catalog."
@@ -396,21 +454,33 @@ def _caution_findings(
         },
     )
 
-    if len(active_ids) == 1 and len(exfoliant_ids) == 1 and all(
-        product["listStatus"] == "complete" for product, _ in eligible if product["productID"] in involved_product_ids
-    ):
+    default_reason = (
+        "The rule matches retinol, benzoyl peroxide, or tretinoin with class exfoliant. "
+        "Repeated retinol rows are one identity. Order is not a match condition."
+    )
+    if len(active_ids) == 1 and len(exfoliant_ids) == 1:
         active_name = _display_name(active_ids[0], catalog).lower()
         exfoliant_name = _display_name(exfoliant_ids[0], catalog).lower()
-        explanation = (
-            "The American Academy of Dermatology says products containing retinol or benzoyl peroxide may make skin more sensitive, "
-            "and exfoliating while using them may worsen dryness or cause breakouts. "
-            f"Confirmed {active_name} and confirmed {exfoliant_name}, class exfoliant, are both in this routine."
+        involved_partial = any(
+            product["listStatus"] == "partial"
+            for product, _ in eligible
+            if product["productID"] in involved_product_ids
         )
-        if any(product["listStatus"] == "partial" for product, _ in eligible if product["productID"] in involved_product_ids):
+        if involved_partial:
             explanation = (
                 f"Confirmed {active_name} is still rule-eligible on a partial list. "
                 f"Confirmed {exfoliant_name} has class exfoliant. The American Academy of Dermatology caution still applies to the rows that are present."
             )
+            reason = (
+                "A partial list does not erase a confirmed row, and it does not make the missing rows known."
+            )
+        else:
+            explanation = (
+                "The American Academy of Dermatology says products containing retinol or benzoyl peroxide may make skin more sensitive, "
+                "and exfoliating while using them may worsen dryness or cause breakouts. "
+                f"Confirmed {active_name} and confirmed {exfoliant_name}, class exfoliant, are both in this routine."
+            )
+            reason = default_reason
     else:
         names = ", ".join(_display_name(value, catalog).lower() for value in ingredient_ids)
         explanation = (
@@ -418,12 +488,13 @@ def _caution_findings(
             "and exfoliating while using them may worsen dryness or cause breakouts. "
             f"Confirmed ingredients {names} include an exfoliant and a named active in this routine."
         )
+        reason = default_reason
 
     return [
         {
             "ruleStatus": "approved",
             "explanation": explanation,
-            "reason": "The rule matches retinol, benzoyl peroxide, or tretinoin with class exfoliant. Repeated retinol rows are one identity. Order is not a match condition.",
+            "reason": reason,
             "limitations": list(_LIMITATIONS),
             "ruleID": "irritation.retinol-benzoyl-peroxide-with-exfoliant",
             "outcome": "caution",
@@ -482,7 +553,7 @@ def _allergen_findings(
 
 def _tretinoin_bpo_findings(
     products: list[dict[str, Any]], coapplication: str | None
-) -> tuple[list[dict[str, Any]], bool]:
+) -> tuple[list[dict[str, Any]], bool, list[str]]:
     bpo_rows = [
         (product, row)
         for product in products
@@ -496,7 +567,7 @@ def _tretinoin_bpo_findings(
         if row["eligible_id"] == "tretinoin"
     ]
     if not bpo_rows or not tretinoin_rows:
-        return [], False
+        return [], False, []
 
     ingredient_ids = _routine_order_ids(products, {"benzoyl-peroxide", "tretinoin"})
     all_pairs = [
@@ -537,15 +608,19 @@ def _tretinoin_bpo_findings(
                 "productIDs": conflict_product_ids,
                 "ingredientIDs": ingredient_ids,
             }
-        ], False
+        ], False, []
 
-    stable_pair = any(
-        _is_formulation(tret_row["formulation"], "optimized-aqueous-gel", 0.05)
-        or _is_formulation(tret_row["formulation"], "microsphere-gel", 0.1)
+    microsphere_pair = any(
+        _is_formulation(tret_row["formulation"], "microsphere-gel", 0.1)
         for _, _, _, tret_row in all_pairs
     )
-    if stable_pair and coapplication == "mixed":
-        return [], False
+    optimized_pair = any(
+        _is_formulation(tret_row["formulation"], "optimized-aqueous-gel", 0.05)
+        for _, _, _, tret_row in all_pairs
+    )
+    if (microsphere_pair or optimized_pair) and coapplication == "mixed":
+        extras = [_MICROSPHERE_LIMITATION] if microsphere_pair else []
+        return [], False, extras
 
     product_ids = _routine_order_product_ids(
         products,
@@ -596,7 +671,7 @@ def _tretinoin_bpo_findings(
         ingredient_ids=ingredient_ids,
         reason_code=reason_code,
     )
-    return [finding], True
+    return [finding], True, []
 
 
 def _formulation_for_row(row: Any) -> Any:

@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contractStatus": "proposed",
+  "contractStatus": "approved",
   "caseRole": "allergen",
   "fixtureID": "an02-allergen-limonene",
   "summary": "Known recorded limonene allergy and the demo mist's confirmed limonene row.",
@@ -53,11 +53,11 @@
     ],
     "findings": [
       {
-        "ruleStatus": "proposed",
-        "explanation": "Proposed. The recorded allergy list names limonene, and mist_fragranced has a confirmed limonene row. EU Annex III entry 88 requires limonene to be named on the label above a concentration threshold so a sensitised person can see it. A name on a label is not itself an allergy.",
-        "reason": "Proposed. The match is exact confirmed ID equality. Class fragrance-allergen is not the match key.",
+        "ruleStatus": "approved",
+        "explanation": "The recorded allergy list names limonene, and mist_fragranced has a confirmed limonene row. EU Annex III entry 88 requires limonene to be named on the label above a concentration threshold so a sensitised person can see it. A name on a label is not itself an allergy.",
+        "reason": "The match is exact confirmed ID equality. Class fragrance-allergen is not the match key.",
         "limitations": [
-          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+          "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
         ],
         "ruleID": "allergy.recorded-ingredient",
         "outcome": "allergen",
@@ -72,7 +72,7 @@
       }
     ],
     "limitations": [
-      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+      "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ]
   }
 }
