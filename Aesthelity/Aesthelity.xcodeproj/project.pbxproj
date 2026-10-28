@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6E8174713091B41B00FB7ED8 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 6E8174703091B41B00FB7ED8 /* FirebaseAuth */; };
+		6E8174733091B41B00FB7ED8 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 6E8174723091B41B00FB7ED8 /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6E315A8D3076EC59002817B4 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -96,6 +101,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6E8174713091B41B00FB7ED8 /* FirebaseAuth in Frameworks */,
+				6E8174733091B41B00FB7ED8 /* FirebaseFirestore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -154,6 +161,8 @@
 			);
 			name = Aesthelity;
 			packageProductDependencies = (
+				6E8174703091B41B00FB7ED8 /* FirebaseAuth */,
+				6E8174723091B41B00FB7ED8 /* FirebaseFirestore */,
 			);
 			productName = Aesthelity;
 			productReference = 6E315A7C3076EC58002817B4 /* Aesthelity.app */;
@@ -207,7 +216,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 1620;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					6E315A7B3076EC58002817B4 = {
 						CreatedOnToolsVersion = 16.2;
@@ -231,6 +240,9 @@
 			);
 			mainGroup = 6E315A733076EC58002817B4;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6E81746F3091B41B00FB7ED8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6E315A7D3076EC58002817B4 /* Products */;
 			projectDirPath = "";
@@ -363,6 +375,7 @@
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
 			};
@@ -419,6 +432,7 @@
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = iphoneos;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_COMPILATION_MODE = wholemodule;
 				VALIDATE_PRODUCT = YES;
 			};
@@ -592,6 +606,30 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6E81746F3091B41B00FB7ED8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 13.1.1;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6E8174703091B41B00FB7ED8 /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6E81746F3091B41B00FB7ED8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		6E8174723091B41B00FB7ED8 /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6E81746F3091B41B00FB7ED8 /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6E315A743076EC58002817B4 /* Project object */;
 }

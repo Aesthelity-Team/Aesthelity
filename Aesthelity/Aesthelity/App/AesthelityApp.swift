@@ -5,14 +5,20 @@
 //  Main application entry point for Aesthelity Routine Optimizer.
 //
 
+import FirebaseCore
 import SwiftUI
 
 @main
 struct AesthelityApp: App {
     @AppStorage("hasCompletedStartup") private var hasCompletedStartup: Bool = false
     @StateObject private var profileStore: SkinProfileStore
+    @StateObject private var authService = FirebaseAuthService.shared
+    @StateObject private var syncService = FirestoreSyncService.shared
 
     init() {
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         let arguments = ProcessInfo.processInfo.arguments
         let testing = arguments.contains("--pf01-ui-testing")
         if arguments.contains("-resetStartupForUITests") {
@@ -58,6 +64,25 @@ struct AesthelityApp: App {
                 }
             }
             .environmentObject(profileStore)
+            .environmentObject(authService)
+            .environmentObject(syncService)
+            .task {
+                guard !isRunningInTestEnvironment else { return }
+                await authService.ensureAuthenticated()
+                if let userId = authService.userId {
+                    syncService.startRoutineListener(for: userId)
+                }
+            }
         }
+    }
+    
+    private var isRunningInTestEnvironment: Bool {
+        let env = ProcessInfo.processInfo.environment
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("--pf01-ui-testing") ||
+               args.contains("-resetStartupForUITests") ||
+               env["XCTestConfigurationFilePath"] != nil ||
+               env["XCInjectBundleInto"] != nil ||
+               NSClassFromString("XCTestCase") != nil
     }
 }

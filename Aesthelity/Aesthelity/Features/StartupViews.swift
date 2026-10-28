@@ -606,8 +606,19 @@ public struct AuthSignInView: View {
                 mode = .normal
             }
         } else {
-            // Sign in successfully
-            onSuccess()
+            if !email.isEmpty && !password.isEmpty && !ProcessInfo.processInfo.arguments.contains("--pf01-ui-testing") {
+                Task {
+                    do {
+                        try await FirebaseAuthService.shared.signIn(email: email, password: password)
+                    } catch {
+                        // Attempt sign up if account doesn't exist yet
+                        try? await FirebaseAuthService.shared.signUp(email: email, password: password)
+                    }
+                    onSuccess()
+                }
+            } else {
+                onSuccess()
+            }
         }
     }
     

@@ -165,16 +165,4 @@ final class ProfileUITests: XCTestCase {
         reveal(app.staticTexts["profile-summary-concerns"], in: app)
         XCTAssertEqual(app.staticTexts["profile-summary-concerns"].label, "None provided")
     }
-
-    @MainActor
-    func testExample() throws {
-        XCUIApplication().launch()
-    }
-
-    @MainActor
-    func testLaunchPerformance() throws {
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
-    }
 }

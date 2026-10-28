@@ -32,5 +32,11 @@ final class SkinProfileStore: ObservableObject {
         try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
         self.profile = profile
         loadError = nil
+        
+        if let userId = FirebaseAuthService.shared.userId {
+            Task {
+                await FirestoreSyncService.shared.saveSkinProfile(profile, for: userId)
+            }
+        }
     }
 }

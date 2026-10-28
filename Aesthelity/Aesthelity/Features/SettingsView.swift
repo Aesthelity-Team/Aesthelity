@@ -54,6 +54,7 @@ public struct SettingsView: View {
     public var onDeleteScanHistory: (() -> Void)?
     
     // MARK: - Local State
+    @ObservedObject private var authService = FirebaseAuthService.shared
     @State public var amRoutineReminder: Bool
     @State public var pmRoutineReminder: Bool
     @State public var scanAlertsEnabled: Bool
@@ -113,6 +114,10 @@ public struct SettingsView: View {
                     
                     // Section 3: Privacy & Data
                     privacySection
+                        .padding(.bottom, 24)
+                    
+                    // Section 4: Cloud Sync & Account
+                    accountSection
                         .padding(.bottom, showsTabBar ? 24 : 36)
                 }
                 .padding(.horizontal, 24)
@@ -331,6 +336,47 @@ public struct SettingsView: View {
                 )
             }
             .buttonStyle(.plain)
+        }
+    }
+    
+    // MARK: - 5.5. Cloud Sync & Account Section
+    private var accountSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Cloud Sync & Account")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Constants.semanticInkBrand)
+            
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(authService.isAuthenticated && !authService.isAnonymous ? (authService.userEmail ?? "Logged In") : "Guest Account")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(Constants.semanticInkBrand)
+                    
+                    Text(authService.isAuthenticated ? "Firebase Cloud Sync Active" : "Local Storage Mode")
+                        .font(.system(size: 13, weight: .regular))
+                        .foregroundStyle(Constants.semanticInkAccent)
+                }
+                
+                Spacer()
+                
+                if authService.isAuthenticated && !authService.isAnonymous {
+                    Button("Sign Out") {
+                        try? authService.signOut()
+                    }
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#842029"))
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(Constants.semanticSurfaceRaised)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(cardBorderColor, lineWidth: 1.2)
+            )
         }
     }
     

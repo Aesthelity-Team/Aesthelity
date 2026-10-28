@@ -95,6 +95,12 @@ public final class RoutineStore: ObservableObject {
             updatedRoutines.append(routine)
         }
         try persist(routines: updatedRoutines)
+        
+        if let userId = FirebaseAuthService.shared.userId {
+            Task {
+                await FirestoreSyncService.shared.saveRoutine(routine, for: userId)
+            }
+        }
     }
 
     /// Explicitly updates an existing routine, throwing if the routine ID is not found.
@@ -105,6 +111,12 @@ public final class RoutineStore: ObservableObject {
         }
         updatedRoutines[index] = routine
         try persist(routines: updatedRoutines)
+        
+        if let userId = FirebaseAuthService.shared.userId {
+            Task {
+                await FirestoreSyncService.shared.saveRoutine(routine, for: userId)
+            }
+        }
     }
 
     /// Saves the given list of routines to disk atomically.
@@ -120,6 +132,12 @@ public final class RoutineStore: ObservableObject {
         }
         updatedRoutines.remove(at: index)
         try persist(routines: updatedRoutines)
+        
+        if let userId = FirebaseAuthService.shared.userId {
+            Task {
+                await FirestoreSyncService.shared.deleteRoutine(id: id, for: userId)
+            }
+        }
     }
 
     /// Resets routines to empty and updates the persisted file.
