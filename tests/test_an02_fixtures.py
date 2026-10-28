@@ -140,17 +140,18 @@ class FixtureInventory(unittest.TestCase):
             {"exfoliant"},
         )
         for path, doc in self.fixtures:
-            self.assertEqual(doc["contractStatus"], "proposed", path.name)
+            self.assertEqual(doc["contractStatus"], "approved", path.name)
             self.assertEqual(doc["schemaVersion"], 1, path.name)
             expected = doc["expected"]
             self.assertEqual(expected["productIDs"], [item["productID"] for item in doc["input"]["products"]])
             if expected["outcome"] == "noFindings":
                 self.assertEqual(expected["findings"], [])
                 self.assertEqual(expected["completeness"], "complete")
+                self.assertEqual(expected.get("displayLabel"), "No recorded conflicts", path.name)
             else:
                 self.assertTrue(expected["findings"], path.name)
             for item in expected["findings"]:
-                self.assertEqual(item["ruleStatus"], "proposed", path.name)
+                self.assertEqual(item["ruleStatus"], "approved", path.name)
                 if item["outcome"] == "unknown":
                     self.assertNotIn("severity", item, path.name)
                 else:

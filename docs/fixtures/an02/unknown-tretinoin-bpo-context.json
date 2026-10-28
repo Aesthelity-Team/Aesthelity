@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "contractStatus": "proposed",
+  "contractStatus": "approved",
   "caseRole": "unknown",
   "fixtureID": "an02-unknown-tretinoin-bpo-context",
   "summary": "Both IDs are rule-eligible, but formulation and coapplication are omitted, so the result is unknown rather than conflict.",
@@ -49,11 +49,11 @@
     ],
     "findings": [
       {
-        "ruleStatus": "proposed",
-        "explanation": "Proposed. Benzoyl peroxide and tretinoin are confirmed, but neither row states vehicle and concentration, and coapplication is omitted. The 1998 loss result is not applied.",
-        "reason": "Proposed. Unknown formulation context is a review item, not a conflict.",
+        "ruleStatus": "approved",
+        "explanation": "Benzoyl peroxide and tretinoin are confirmed, but neither row states vehicle and concentration, and coapplication is omitted. The 1998 loss result is not applied.",
+        "reason": "Unknown formulation context is a review item, not a conflict.",
         "limitations": [
-          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+          "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
         ],
         "ruleID": "coverage.tretinoin-bpo-context-unknown",
         "outcome": "unknown",
@@ -70,7 +70,7 @@
       }
     ],
     "limitations": [
-      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+      "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ]
   }
 }
