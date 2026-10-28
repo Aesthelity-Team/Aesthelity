@@ -30,7 +30,12 @@ public struct StartupFlowView: View {
     @State private var loadedDraft = false
     @State private var attemptedSubmit = false
     @State private var saveError: String?
-    private let normalizer = try? IngredientNormalizer(catalog: .loadBundled())
+    private let ingredientLookup = Result { try IngredientNormalizer(catalog: .loadBundled()) }
+    private var normalizer: IngredientNormalizer? { try? ingredientLookup.get() }
+    private var ingredientLookupError: String? {
+        if case .failure(let error) = ingredientLookup { return error.localizedDescription }
+        return nil
+    }
     public var onFinish: () -> Void
     public var onCancel: (() -> Void)?
     
@@ -76,7 +81,7 @@ public struct StartupFlowView: View {
                         OnboardingConcernsView(
                             draft: $draft,
                             errors: attemptedSubmit ? draft.validationErrors() : [],
-                            saveError: saveError ?? profileStore.loadError,
+                            saveError: saveError ?? ingredientLookupError ?? profileStore.loadError,
                             normalizer: normalizer,
                             onBack: {
                                 if let onCancel {
@@ -152,7 +157,7 @@ public struct StartupFlowView: View {
     private func submitProfile() {
         attemptedSubmit = true
         guard let normalizer else {
-            saveError = "Ingredient lookup is unavailable. Please try again."
+            saveError = ingredientLookupError ?? "Ingredient reference data could not be loaded."
             return
         }
         if case .completed(let profile) = draft.submit(using: normalizer) {

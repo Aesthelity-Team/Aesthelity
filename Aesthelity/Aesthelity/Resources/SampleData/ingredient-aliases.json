@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "ingredients": [
     { "id": "water", "name": "Water", "aliases": ["Aqua", "Eau", "Aqua/Water/Eau", "Water/Aqua/Eau", "Purified Water", "Deionized Water"], "classes": ["solvent"] },
     { "id": "glycerin", "name": "Glycerin", "aliases": ["Glycerine", "Glycerol"], "classes": ["humectant"] },
@@ -32,7 +32,103 @@
     { "id": "butylated-hydroxyanisole", "name": "Butylated Hydroxyanisole", "aliases": [], "classes": ["antioxidant", "preservative"] },
     { "id": "dimethicone", "name": "Dimethicone", "aliases": ["Polydimethylsiloxane"], "classes": ["silicone"] },
     { "id": "zinc-oxide", "name": "Zinc Oxide", "aliases": ["CI 77947"], "classes": ["uv-filter"] },
-    { "id": "titanium-dioxide", "name": "Titanium Dioxide", "aliases": ["CI 77891"], "classes": ["uv-filter"] }
+    { "id": "titanium-dioxide", "name": "Titanium Dioxide", "aliases": ["CI 77891"], "classes": ["uv-filter"] },
+    {
+      "id": "cocamidopropyl-betaine",
+      "name": "Cocamidopropyl Betaine",
+      "aliases": [],
+      "classes": ["surfactant"],
+      "references": [
+        {
+          "source": "Cosmetic Ingredient Review",
+          "url": "https://www.cir-safety.org/ingredient/cocamidopropyl-betaine",
+          "identifier": "Cocamidopropyl betaine ingredient entry",
+          "retrievedOn": "2026-10-18",
+          "datasetVersion": "Ingredient name verified against the linked CIR source; exact-name matching only. No safety conclusion or additional aliases imported.",
+          "reviewStatus": "reviewed"
+        }
+      ]
+    },
+    {
+      "id": "sodium-chloride",
+      "name": "Sodium Chloride",
+      "aliases": [],
+      "classes": ["viscosity-controller"],
+      "references": [
+        {
+          "source": "PubChem",
+          "url": "https://pubchem.ncbi.nlm.nih.gov/compound/5234",
+          "identifier": "CID 5234",
+          "retrievedOn": "2026-10-18",
+          "datasetVersion": "PubChem compound CID 5234, title Sodium Chloride, CAS 7647-14-5",
+          "reviewStatus": "reviewed"
+        }
+      ]
+    },
+    {
+      "id": "caprylic-capric-triglyceride",
+      "name": "Caprylic/Capric Triglyceride",
+      "aliases": [],
+      "classes": ["emollient"],
+      "references": [
+        {
+          "source": "Cosmetic Ingredient Review",
+          "url": "https://cir-safety.org/sites/default/files/material_admin.pdf",
+          "identifier": "Triglycerides assessment materials: Caprylic/Capric Triglyceride",
+          "retrievedOn": "2026-10-18",
+          "datasetVersion": "Ingredient name verified against the linked CIR source; exact-name matching only. No safety conclusion or additional aliases imported.",
+          "reviewStatus": "reviewed"
+        }
+      ]
+    },
+    {
+      "id": "squalane",
+      "name": "Squalane",
+      "aliases": ["Perhydrosqualene", "2,6,10,15,19,23-Hexamethyltetracosane"],
+      "classes": ["emollient"],
+      "references": [
+        {
+          "source": "PubChem",
+          "url": "https://pubchem.ncbi.nlm.nih.gov/compound/8089",
+          "identifier": "CID 8089",
+          "retrievedOn": "2026-10-18",
+          "datasetVersion": "PubChem compound CID 8089, title Squalane, CAS 111-01-3. Aliases limited to the IUPAC name and Perhydrosqualene from that record.",
+          "reviewStatus": "reviewed"
+        }
+      ]
+    },
+    {
+      "id": "polysorbate-80",
+      "name": "Polysorbate 80",
+      "aliases": [],
+      "classes": ["surfactant", "emulsifier"],
+      "references": [
+        {
+          "source": "Cosmetic Ingredient Review",
+          "url": "https://cir-reports.cir-safety.org/cir-ingredient-status-report/?id=29fbf8be-80a3-420e-8a84-a0229deaa7b6",
+          "identifier": "Polysorbate 80 ingredient status report",
+          "retrievedOn": "2026-10-18",
+          "datasetVersion": "Ingredient name verified against the linked CIR source; exact-name matching only. No safety conclusion or additional aliases imported.",
+          "reviewStatus": "reviewed"
+        }
+      ]
+    },
+    {
+      "id": "cetyl-alcohol",
+      "name": "Cetyl Alcohol",
+      "aliases": ["1-Hexadecanol", "Hexadecan-1-ol", "Palmityl Alcohol"],
+      "classes": ["emollient", "thickener"],
+      "references": [
+        {
+          "source": "PubChem",
+          "url": "https://pubchem.ncbi.nlm.nih.gov/compound/2682",
+          "identifier": "CID 2682",
+          "retrievedOn": "2026-10-18",
+          "datasetVersion": "PubChem compound CID 2682, title Cetyl Alcohol, CAS 36653-82-4. Aliases limited to 1-Hexadecanol, Hexadecan-1-ol, and Palmityl Alcohol from that record.",
+          "reviewStatus": "reviewed"
+        }
+      ]
+    }
   ],
   "ambiguousTerms": [
     {

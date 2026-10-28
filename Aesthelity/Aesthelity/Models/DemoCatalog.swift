@@ -19,7 +19,7 @@ public enum DemoProductCategory: String, Decodable, CaseIterable {
     }
 }
 
-public enum IngredientListStatus: String, Decodable, CaseIterable {
+public enum IngredientListStatus: String, Codable, Equatable, CaseIterable {
     case complete, partial, unavailable
 }
 
