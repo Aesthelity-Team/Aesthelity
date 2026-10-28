@@ -45,7 +45,6 @@ struct ManualProductDraft: Equatable {
         guard errors.isEmpty else { return .invalid(errors) }
 
         let preparedBrand = Self.prepared(brand)
-        // TODO(PD-02): Pass the completed product to the team's persistence/analysis integration.
         return .completed(ManualProduct(
             name: Self.prepared(name),
             brand: preparedBrand.isEmpty ? nil : preparedBrand,

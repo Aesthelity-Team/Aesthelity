@@ -386,6 +386,7 @@ public struct LibraryView: View {
                     
                     // Warm Section (Want to try + Recent saves)
                     VStack(alignment: .leading, spacing: 20) {
+                        ManualProductsSection()
                         wantToTrySection
                         recentSavesSection
                     }
@@ -638,4 +639,5 @@ public struct LibraryView: View {
 
 #Preview("Library Screen - 390x844 Frame") {
     LibraryView()
+        .environmentObject(ManualProductStore())
 }
