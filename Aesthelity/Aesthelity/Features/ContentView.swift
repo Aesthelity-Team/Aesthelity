@@ -49,30 +49,108 @@ public enum RoutinePeriod: String, CaseIterable, Identifiable, Codable {
     public var id: String { rawValue }
 }
 
-public enum StepState: Equatable {
+public enum StepState: String, Codable, Equatable {
     case complete
     case active
     case incomplete
 }
 
-public struct RoutineStepItem: Identifiable {
+public struct RoutineStepItem: Identifiable, Codable {
     public let id: UUID
-    public let product: RoutineProductSnapshot?
     public let stepNumber: Int
     public let title: String
     public let subtitle: String
     public var state: StepState
-    public var hasClash: Bool = false
+    public var hasClash: Bool
+    public var productId: UUID?
+    public let product: RoutineProductSnapshot?
     
-    public init(id: UUID = UUID(), stepNumber: Int, title: String, subtitle: String, state: StepState, hasClash: Bool = false, product: RoutineProductSnapshot? = nil) {
+    public init(
+        id: UUID = UUID(),
+        stepNumber: Int,
+        title: String,
+        subtitle: String,
+        state: StepState,
+        hasClash: Bool = false,
+        productId: UUID? = nil,
+        product: RoutineProductSnapshot? = nil
+    ) {
         self.id = id
-        self.product = product
         self.stepNumber = stepNumber
         self.title = title
         self.subtitle = subtitle
         self.state = state
         self.hasClash = hasClash
+        self.productId = productId
+        self.product = product
     }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, stepNumber, title, subtitle, state, hasClash, productId, product
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
+        self.stepNumber = try container.decode(Int.self, forKey: .stepNumber)
+        self.title = try container.decode(String.self, forKey: .title)
+        self.subtitle = try container.decodeIfPresent(String.self, forKey: .subtitle) ?? ""
+        self.state = try container.decodeIfPresent(StepState.self, forKey: .state) ?? .incomplete
+        self.hasClash = try container.decodeIfPresent(Bool.self, forKey: .hasClash) ?? false
+        self.productId = try container.decodeIfPresent(UUID.self, forKey: .productId)
+        self.product = try container.decodeIfPresent(RoutineProductSnapshot.self, forKey: .product)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(stepNumber, forKey: .stepNumber)
+        try container.encode(title, forKey: .title)
+        try container.encode(subtitle, forKey: .subtitle)
+        try container.encode(state, forKey: .state)
+        try container.encode(hasClash, forKey: .hasClash)
+        try container.encodeIfPresent(productId, forKey: .productId)
+        try container.encodeIfPresent(product, forKey: .product)
+    }
+}
+
+final class ContentViewStepModel: ObservableObject {
+    @Published var amSteps: [RoutineStepItem]
+    @Published var amClashSteps: [RoutineStepItem]
+    @Published var pmSteps: [RoutineStepItem]
+    
+    init(
+        amSteps: [RoutineStepItem] = ContentViewStepModel.defaultAMSteps,
+        amClashSteps: [RoutineStepItem] = ContentViewStepModel.defaultAMClashSteps,
+        pmSteps: [RoutineStepItem] = ContentViewStepModel.defaultPMSteps
+    ) {
+        self.amSteps = amSteps
+        self.amClashSteps = amClashSteps
+        self.pmSteps = pmSteps
+    }
+    
+    static let defaultAMSteps: [RoutineStepItem] = [
+        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete),
+        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active),
+        RoutineStepItem(stepNumber: 3, title: "Daily Moisturizer", subtitle: "Pending · Step 3", state: .incomplete),
+        RoutineStepItem(stepNumber: 4, title: "SPF 46", subtitle: "Pending · Step 4", state: .incomplete)
+    ]
+    
+    static let defaultAMClashSteps: [RoutineStepItem] = [
+        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete, hasClash: false),
+        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active, hasClash: true),
+        RoutineStepItem(stepNumber: 3, title: "Retinol Night Cream", subtitle: "Ready · Step 3", state: .active, hasClash: true),
+        RoutineStepItem(stepNumber: 4, title: "Daily Moisturizer", subtitle: "Pending · Step 4", state: .incomplete, hasClash: false),
+        RoutineStepItem(stepNumber: 5, title: "SPF 46", subtitle: "Pending · Step 5", state: .incomplete, hasClash: false)
+    ]
+    
+    static let defaultPMSteps: [RoutineStepItem] = [
+        RoutineStepItem(stepNumber: 1, title: "Oil Cleanser", subtitle: "Completed · Step 1", state: .complete),
+        RoutineStepItem(stepNumber: 2, title: "Gentle Cleanser", subtitle: "Ready · Step 2", state: .active),
+        RoutineStepItem(stepNumber: 3, title: "Niacinamide Serum", subtitle: "Pending · Step 3", state: .incomplete),
+        RoutineStepItem(stepNumber: 4, title: "Night Recovery Cream", subtitle: "Pending · Step 4", state: .incomplete),
+        RoutineStepItem(stepNumber: 5, title: "Hydrating Eye Balm", subtitle: "Pending · Step 5", state: .incomplete)
+    ]
 }
 
 // MARK: - Main ContentView / Home Screen
@@ -82,27 +160,49 @@ struct ContentView: View {
     @State var selectedPeriod: RoutinePeriod = .am
     @State var selectedTab: Int = 0
     @State var showAnalysisSheet: Bool = false
-    @State var showClashDemo: Bool = true
+    @State var showClashDemo: Bool = false
     @State var showJournalSheet: Bool = false
     @State var showCalendarSheet: Bool = false
     @State var showIngredientClashDetail: Bool = false
     @State var showManageRoutinesView: Bool = false
     @State var showEditRoutineView: Bool = false
+    @State var showCreateRoutineView: Bool = false
+    @State var routineEditorError: String? = nil
     @State var showStartupFlowSheet: Bool = false
     @State private var showSkinProfileSetupSheet = false
     public var onResetStartup: (() -> Void)? = nil
+
+    /// When false, Home reads steps from `routineStore` for the selected period.
+    private let usesInjectedSteps: Bool
+    let stepModel: ContentViewStepModel
+    @ObservedObject private var observedStepModel: ContentViewStepModel
+    @ObservedObject private var routineStore: RoutineStore
     
+    var amSteps: [RoutineStepItem] {
+        get { stepModel.amSteps }
+        nonmutating set { stepModel.amSteps = newValue }
+    }
+    var amClashSteps: [RoutineStepItem] {
+        get { stepModel.amClashSteps }
+        nonmutating set { stepModel.amClashSteps = newValue }
+    }
+    var pmSteps: [RoutineStepItem] {
+        get { stepModel.pmSteps }
+        nonmutating set { stepModel.pmSteps = newValue }
+    }
+
     public init(
         selectedPeriod: RoutinePeriod = .am,
         selectedTab: Int = 0,
         showAnalysisSheet: Bool = false,
-        showClashDemo: Bool = true,
+        showClashDemo: Bool = false,
         showJournalSheet: Bool = false,
         showCalendarSheet: Bool = false,
         showIngredientClashDetail: Bool = false,
         showManageRoutinesView: Bool = false,
         showEditRoutineView: Bool = false,
-        onResetStartup: (() -> Void)? = nil
+        onResetStartup: (() -> Void)? = nil,
+        routineStore: RoutineStore = .shared
     ) {
         self._selectedPeriod = State(initialValue: selectedPeriod)
         self._selectedTab = State(initialValue: selectedTab)
@@ -114,6 +214,12 @@ struct ContentView: View {
         self._showManageRoutinesView = State(initialValue: showManageRoutinesView)
         self._showEditRoutineView = State(initialValue: showEditRoutineView)
         self.onResetStartup = onResetStartup
+        self.usesInjectedSteps = false
+        // Empty placeholders — live Home uses `routineStore`.
+        let model = ContentViewStepModel(amSteps: [], amClashSteps: [], pmSteps: [])
+        self.stepModel = model
+        self._observedStepModel = ObservedObject(wrappedValue: model)
+        self._routineStore = ObservedObject(wrappedValue: routineStore)
     }
     
     init(
@@ -121,46 +227,61 @@ struct ContentView: View {
         showClashDemo: Bool = true,
         amSteps: [RoutineStepItem],
         amClashSteps: [RoutineStepItem],
-        pmSteps: [RoutineStepItem]
+        pmSteps: [RoutineStepItem],
+        routineStore: RoutineStore = .shared
     ) {
-        self.init(selectedPeriod: selectedPeriod, showClashDemo: showClashDemo)
-        self._amSteps = State(initialValue: amSteps)
-        self._amClashSteps = State(initialValue: amClashSteps)
-        self._pmSteps = State(initialValue: pmSteps)
+        self._selectedPeriod = State(initialValue: selectedPeriod)
+        self._selectedTab = State(initialValue: 0)
+        self._showAnalysisSheet = State(initialValue: false)
+        self._showClashDemo = State(initialValue: showClashDemo)
+        self._showJournalSheet = State(initialValue: false)
+        self._showCalendarSheet = State(initialValue: false)
+        self._showIngredientClashDetail = State(initialValue: false)
+        self._showManageRoutinesView = State(initialValue: false)
+        self._showEditRoutineView = State(initialValue: false)
+        self.onResetStartup = nil
+        self.usesInjectedSteps = true
+        let model = ContentViewStepModel(amSteps: amSteps, amClashSteps: amClashSteps, pmSteps: pmSteps)
+        self.stepModel = model
+        self._observedStepModel = ObservedObject(wrappedValue: model)
+        self._routineStore = ObservedObject(wrappedValue: routineStore)
     }
-
-    // AM Steps (Normal)
-    @State private var amSteps: [RoutineStepItem] = [
-        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete),
-        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active),
-        RoutineStepItem(stepNumber: 3, title: "Daily Moisturizer", subtitle: "Pending · Step 3", state: .incomplete),
-        RoutineStepItem(stepNumber: 4, title: "SPF 46", subtitle: "Pending · Step 4", state: .incomplete)
-    ]
-    
-    // AM Steps (Clash Demo State)
-    @State private var amClashSteps: [RoutineStepItem] = [
-        RoutineStepItem(stepNumber: 1, title: "Gentle Cleanser", subtitle: "Completed · Step 1", state: .complete, hasClash: false),
-        RoutineStepItem(stepNumber: 2, title: "Vitamin C Serum", subtitle: "Ready · Step 2", state: .active, hasClash: true),
-        RoutineStepItem(stepNumber: 3, title: "Retinol Night Cream", subtitle: "Ready · Step 3", state: .active, hasClash: true),
-        RoutineStepItem(stepNumber: 4, title: "Daily Moisturizer", subtitle: "Pending · Step 4", state: .incomplete, hasClash: false),
-        RoutineStepItem(stepNumber: 5, title: "SPF 46", subtitle: "Pending · Step 5", state: .incomplete, hasClash: false)
-    ]
-    
-    // PM Steps
-    @State private var pmSteps: [RoutineStepItem] = [
-        RoutineStepItem(stepNumber: 1, title: "Oil Cleanser", subtitle: "Completed · Step 1", state: .complete),
-        RoutineStepItem(stepNumber: 2, title: "Gentle Cleanser", subtitle: "Ready · Step 2", state: .active),
-        RoutineStepItem(stepNumber: 3, title: "Niacinamide Serum", subtitle: "Pending · Step 3", state: .incomplete),
-        RoutineStepItem(stepNumber: 4, title: "Night Recovery Cream", subtitle: "Pending · Step 4", state: .incomplete),
-        RoutineStepItem(stepNumber: 5, title: "Hydrating Eye Balm", subtitle: "Pending · Step 5", state: .incomplete)
-    ]
     
     var currentSteps: [RoutineStepItem] {
-        if selectedPeriod == .am {
-            return showClashDemo ? amClashSteps : amSteps
-        } else {
-            return pmSteps
+        if usesInjectedSteps {
+            if selectedPeriod == .am {
+                return showClashDemo ? stepModel.amClashSteps : stepModel.amSteps
+            }
+            return stepModel.pmSteps
         }
+        return routineStore.routines.first(where: { $0.period == selectedPeriod })?.steps ?? []
+    }
+
+    private var displayedAMStepCount: Int {
+        if usesInjectedSteps { return stepModel.amSteps.count }
+        return routineStore.routines.first(where: { $0.period == .am })?.steps.count ?? 0
+    }
+
+    private var displayedPMStepCount: Int {
+        if usesInjectedSteps { return stepModel.pmSteps.count }
+        return routineStore.routines.first(where: { $0.period == .pm })?.steps.count ?? 0
+    }
+
+    private var selectedRoutineDisplayName: String {
+        if let name = selectedPeriodRoutine?.name {
+            return name
+        }
+        return selectedPeriod == .am ? "AM routine" : "PM routine"
+    }
+
+    /// Saved routine for the currently selected AM/PM period, if any.
+    var selectedPeriodRoutine: RoutineRecord? {
+        routineStore.routines.first(where: { $0.period == selectedPeriod })
+    }
+
+    /// Production Home must not show a numeric compatibility score as a real assessment.
+    var showsMockCompatibilityScore: Bool {
+        usesInjectedSteps
     }
     
     var emptyRoutineMessage: String? {
@@ -185,20 +306,50 @@ struct ContentView: View {
                                 showManageRoutinesView = false
                             }
                         })
-                    } else if showEditRoutineView {
+                    } else if showEditRoutineView, let routine = selectedPeriodRoutine {
                         EditRoutineView(
-                            routine: RoutineRepository.shared.routines.first ?? RoutineRecord(name: "AM Glow"),
+                            routine: routine,
                             onBack: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     showEditRoutineView = false
                                 }
                             },
-                            onSave: { updated in
-                                if let index = RoutineRepository.shared.routines.firstIndex(where: { $0.id == updated.id }) {
-                                    RoutineRepository.shared.routines[index] = updated
+                            onSave: { updatedRoutine in
+                                do {
+                                    try routineStore.update(updatedRoutine)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showEditRoutineView = false
+                                        routineEditorError = nil
+                                    }
+                                    return true
+                                } catch {
+                                    routineEditorError = "Could not save your \(selectedPeriod.rawValue) routine changes. Please try again."
+                                    return false
                                 }
+                            }
+                        )
+                    } else if showCreateRoutineView || (showEditRoutineView && selectedPeriodRoutine == nil) {
+                        CreateRoutineView(
+                            initialName: selectedPeriod == .am ? "Morning Routine" : "Evening Routine",
+                            initialPeriod: selectedPeriod,
+                            onCancel: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
+                                    showCreateRoutineView = false
                                     showEditRoutineView = false
+                                }
+                            },
+                            onSaveRoutine: { newRoutine in
+                                do {
+                                    try routineStore.save(newRoutine)
+                                    withAnimation(.easeInOut(duration: 0.2)) {
+                                        showCreateRoutineView = false
+                                        showEditRoutineView = false
+                                        routineEditorError = nil
+                                    }
+                                    return true
+                                } catch {
+                                    routineEditorError = "Could not create your \(selectedPeriod.rawValue) routine. Please try again."
+                                    return false
                                 }
                             }
                         )
@@ -249,6 +400,9 @@ struct ContentView: View {
                 onFinish: { showSkinProfileSetupSheet = false }
             )
         }
+        .onAppear {
+            RoutineRepository.shared.load()
+        }
     }
     
     // MARK: - Tab Views (All Scrollable)
@@ -256,13 +410,35 @@ struct ContentView: View {
     private var homeContentView: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 20) {
-                // Top Demo Banner
-                demoClashBanner
+                // Demo clash toggle only for explicitly injected sample Home layouts
+                if usesInjectedSteps {
+                    demoClashBanner
+                }
                 
                 // Header (Home & Welcome)
                 headerSection
+
+                if let routineEditorError {
+                    HStack(alignment: .top, spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(Color(hex: "#842029"))
+                        Text(routineEditorError)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(hex: "#842029"))
+                        Spacer(minLength: 0)
+                        Button("Dismiss") {
+                            self.routineEditorError = nil
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#842029"))
+                    }
+                    .padding(12)
+                    .background(Color(hex: "#F8D7DA"))
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .accessibilityIdentifier("home.routineEditorError")
+                }
                 
-                if showClashDemo && selectedPeriod == .am {
+                if usesInjectedSteps && showClashDemo && selectedPeriod == .am {
                     // Ingredient Clash Warning Banner
                     ingredientClashAlertBanner
                     
@@ -272,7 +448,7 @@ struct ContentView: View {
                     // Why this order card
                     whyThisOrderCard
                     
-                    // Other sections below routine
+                    // Labeled sample score only for injected demo layouts
                     confidenceScoreCard
                     manageRoutinesRow
                     editRoutineCard
@@ -280,7 +456,10 @@ struct ContentView: View {
                 } else {
                     manageRoutinesRow
                     editRoutineCard
-                    confidenceScoreCard
+                    // No numeric compatibility score on production Home (would be a fake assessment).
+                    if showsMockCompatibilityScore {
+                        confidenceScoreCard
+                    }
                     todaysRoutineCard
                     whyThisOrderCard
                     skinJournalSection
@@ -387,21 +566,29 @@ struct ContentView: View {
         .accessibilityIdentifier("routine-manage")
     }
     
-    // MARK: - 3. Edit Routine Card
+    // MARK: - 3. Edit / Create Routine Card
     private var editRoutineCard: some View {
-        Button(action: {
+        let hasRoutine = selectedPeriodRoutine != nil
+        return Button(action: {
             withAnimation(.easeInOut(duration: 0.2)) {
-                showEditRoutineView = true
+                routineEditorError = nil
+                if hasRoutine {
+                    showCreateRoutineView = false
+                    showEditRoutineView = true
+                } else {
+                    showEditRoutineView = false
+                    showCreateRoutineView = true
+                }
             }
         }) {
             HStack {
-                Text("Edit routine")
+                Text(hasRoutine ? "Edit routine" : "Create routine")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(Constants.semanticInkAccent)
                 
                 Spacer()
                 
-                Text("AM Glow ›")
+                Text(hasRoutine ? "\(selectedRoutineDisplayName) ›" : "Add \(selectedPeriod.rawValue) ›")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(Constants.semanticInkSecondary)
             }
@@ -417,15 +604,19 @@ struct ContentView: View {
             )
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier(hasRoutine ? "home.editRoutine" : "home.createRoutine")
     }
     
-    // MARK: - 4. Confidence Score Card
+    // MARK: - 4. Confidence Score Card (sample/demo layouts only)
     private var confidenceScoreCard: some View {
         ConfidenceCard(
             score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
-            subtitle: (showClashDemo && selectedPeriod == .am) ? "Active clash detected" : "Routine compatibility",
-            amSteps: amSteps.count,
-            pmSteps: pmSteps.count,
+            title: "SAMPLE CONFIDENCE SCORE",
+            subtitle: (showClashDemo && selectedPeriod == .am)
+                ? "Sample demo · active clash"
+                : "Sample demo · not a real assessment",
+            amSteps: displayedAMStepCount,
+            pmSteps: displayedPMStepCount,
             onTap: {
                 showAnalysisSheet = true
             }
@@ -484,7 +675,7 @@ struct ContentView: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Constants.semanticInkPrimary)
 
-                        Text("The sample routine isn't available right now.")
+                        Text("Save a \(selectedPeriod.rawValue) routine to see its steps here.")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Constants.semanticInkSecondary)
                     }
@@ -657,6 +848,29 @@ struct ContentView: View {
     }
     
     private func toggleStep(_ step: RoutineStepItem) {
+        if usesInjectedSteps {
+            toggleInjectedStep(step)
+            return
+        }
+
+        guard var routine = routineStore.routines.first(where: { $0.period == selectedPeriod }),
+              let idx = routine.steps.firstIndex(where: { $0.id == step.id }) else {
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.15)) {
+            switch routine.steps[idx].state {
+            case .complete:
+                routine.steps[idx].state = .incomplete
+            case .active:
+                routine.steps[idx].state = .complete
+            case .incomplete:
+                routine.steps[idx].state = .active
+            }
+            try? routineStore.update(routine)
+        }
+    }
+
+    private func toggleInjectedStep(_ step: RoutineStepItem) {
         if selectedPeriod == .am {
             if showClashDemo {
                 if let idx = amClashSteps.firstIndex(where: { $0.id == step.id }) {
@@ -671,31 +885,27 @@ struct ContentView: View {
                         }
                     }
                 }
-            } else {
-                if let idx = amSteps.firstIndex(where: { $0.id == step.id }) {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        switch amSteps[idx].state {
-                        case .complete:
-                            amSteps[idx].state = .incomplete
-                        case .active:
-                            amSteps[idx].state = .complete
-                        case .incomplete:
-                            amSteps[idx].state = .active
-                        }
+            } else if let idx = amSteps.firstIndex(where: { $0.id == step.id }) {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    switch amSteps[idx].state {
+                    case .complete:
+                        amSteps[idx].state = .incomplete
+                    case .active:
+                        amSteps[idx].state = .complete
+                    case .incomplete:
+                        amSteps[idx].state = .active
                     }
                 }
             }
-        } else {
-            if let idx = pmSteps.firstIndex(where: { $0.id == step.id }) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    switch pmSteps[idx].state {
-                    case .complete:
-                        pmSteps[idx].state = .incomplete
-                    case .active:
-                        pmSteps[idx].state = .complete
-                    case .incomplete:
-                        pmSteps[idx].state = .active
-                    }
+        } else if let idx = pmSteps.firstIndex(where: { $0.id == step.id }) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                switch pmSteps[idx].state {
+                case .complete:
+                    pmSteps[idx].state = .incomplete
+                case .active:
+                    pmSteps[idx].state = .complete
+                case .incomplete:
+                    pmSteps[idx].state = .active
                 }
             }
         }

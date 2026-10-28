@@ -47,7 +47,7 @@ struct RoutineProductPicker: View {
     }
 
     private func row(_ product: RoutineProductSnapshot) -> some View {
-        let alreadyAdded = steps.contains { $0.product?.reference == product.reference }
+        let alreadyAdded = steps.contains { $0.product?.reference == product.reference || $0.productId == product.productID }
         return VStack(alignment: .leading, spacing: 8) {
             Text(product.name).font(.headline)
             if let brand = product.brand { Text(brand).font(.subheadline) }

@@ -30,12 +30,13 @@ public struct EditRoutineView: View {
     
     // Callbacks
     public var onBack: () -> Void
-    public var onSave: (RoutineRecord) -> Void
+    /// Persist changes. Return `true` to dismiss; return `false` to keep the editor open and show an error.
+    public var onSave: (RoutineRecord) -> Bool
     
     public init(
         routine: RoutineRecord,
         onBack: @escaping () -> Void = {},
-        onSave: @escaping (RoutineRecord) -> Void = { _ in }
+        onSave: @escaping (RoutineRecord) -> Bool = { _ in true }
     ) {
         self._routine = State(wrappedValue: routine)
         self._routineName = State(wrappedValue: routine.name)
@@ -327,8 +328,13 @@ public struct EditRoutineView: View {
             updated.name = routineName.trimmingCharacters(in: .whitespacesAndNewlines)
             updated.period = selectedPeriod
             updated.steps = RoutineEditor.numbered(steps)
-            onSave(updated)
-            dismiss()
+            if onSave(updated) {
+                dismiss()
+            } else {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    showNetworkError = true
+                }
+            }
         }
         .accessibilityIdentifier("routine-save")
         .padding(.top, 8)

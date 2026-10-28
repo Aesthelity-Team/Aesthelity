@@ -156,6 +156,49 @@ final class ProfileUITests: XCTestCase {
     }
 
     @MainActor
+    func testAliasUnknownAndAmbiguousEntriesStayDistinct() throws {
+        let app = launchFresh()
+        let entries = [
+            ("Aqua", "Recognized as Water"),
+            ("Glycerol", "Recognized as Glycerin"),
+            ("Nicotinamide", "Recognized as Niacinamide")
+        ]
+        for (index, entry) in entries.enumerated() {
+            addIngredient(entry.0, index: index, in: app)
+            let match = app.staticTexts["ingredient-match-\(index)"]
+            reveal(match, in: app)
+            XCTAssertEqual(match.label, entry.1)
+        }
+        addIngredient("Unobtainium Extract", index: 3, in: app)
+        let unknown = app.staticTexts["ingredient-warning-3"]
+        reveal(unknown, in: app)
+        XCTAssertTrue(unknown.label.contains("does not match"))
+        addIngredient("Vitamin C", index: 4, in: app)
+        let ambiguous = app.staticTexts["ingredient-warning-4"]
+        reveal(ambiguous, in: app)
+        XCTAssertTrue(ambiguous.label.contains("could refer"))
+        addIngredient("Niacinimide", index: 5, in: app)
+        let suggestion = app.buttons["ingredient-suggestion-5-niacinamide"]
+        reveal(suggestion, in: app)
+        XCTAssertTrue(app.staticTexts["ingredient-warning-5"].exists)
+        XCTAssertNotEqual(app.textFields["ingredient-input-5"].value as? String, "Niacinamide")
+
+        app.buttons["profile-continue"].tap()
+        openProfile(in: app)
+        reveal(app.staticTexts["profile-summary-ingredient-5"], in: app)
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-0"].label, "Water")
+        XCTAssertEqual(app.staticTexts["profile-summary-original-0"].label, "Entered as Aqua")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-1"].label, "Glycerin")
+        XCTAssertEqual(app.staticTexts["profile-summary-original-1"].label, "Entered as Glycerol")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-2"].label, "Niacinamide")
+        XCTAssertEqual(app.staticTexts["profile-summary-original-2"].label, "Entered as Nicotinamide")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-3"].label, "Unobtainium Extract")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-4"].label, "Vitamin C")
+        XCTAssertEqual(app.staticTexts["profile-summary-ingredient-5"].label, "Niacinimide")
+        XCTAssertFalse(app.staticTexts["profile-summary-original-5"].exists)
+    }
+
+    @MainActor
     func testEmptyOptionalProfileCompletesWithoutInventingChoices() throws {
         let app = launchFresh()
         app.buttons["profile-continue"].tap()
@@ -164,18 +207,6 @@ final class ProfileUITests: XCTestCase {
         XCTAssertEqual(app.staticTexts["profile-summary-skin-type"].label, "Not provided")
         reveal(app.staticTexts["profile-summary-concerns"], in: app)
         XCTAssertEqual(app.staticTexts["profile-summary-concerns"].label, "None provided")
-    }
-
-    @MainActor
-    func testExample() throws {
-        XCUIApplication().launch()
-    }
-
-    @MainActor
-    func testLaunchPerformance() throws {
-        measure(metrics: [XCTApplicationLaunchMetric()]) {
-            XCUIApplication().launch()
-        }
     }
 }
 
@@ -315,7 +346,7 @@ final class RoutineEditorUITests: XCTestCase {
     private func launch() -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
-        app.launchArguments = ["--pd02-ui-testing", "--pd02-reset-products"]
+        app.launchArguments = ["--pd02-ui-testing", "--pd02-reset-products", "--rt02-ui-testing", "--reset-routines"]
         app.launch()
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 10))
         return app
@@ -344,8 +375,7 @@ final class RoutineEditorUITests: XCTestCase {
     private func name(_ text: String, in app: XCUIApplication) {
         reveal(app.textFields["routine-name"], in: app, upwards: true)
         app.textFields["routine-name"].tap()
-        app.textFields["routine-name"].typeText(text)
-        app.keyboards.buttons["Done"].tap()
+        app.textFields["routine-name"].typeText(text + "\n")
     }
 
     @MainActor
@@ -419,8 +449,7 @@ final class RoutineEditorUITests: XCTestCase {
         app.buttons["routine-add-product"].tap()
         let search = app.searchFields.firstMatch
         search.tap()
-        search.typeText("Routine manual serum")
-        app.keyboards.buttons["Search"].tap()
+        search.typeText("Routine manual serum\n")
         let manual = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "routine-pick-manual-")).firstMatch
         reveal(manual, in: app)
         manual.tap()
@@ -432,5 +461,69 @@ final class RoutineEditorUITests: XCTestCase {
         XCTAssertTrue(warning.exists)
         app.buttons["Cancel"].tap()
         XCTAssertFalse(app.buttons["routine-card-Cancelled routine"].exists)
+    }
+
+    @MainActor
+    func testCatalogAndManualRoutineSaveReopenAndRestart() {
+        let app = launch()
+        app.buttons["tab.library"].tap()
+        app.buttons["manual-add"].tap()
+        app.textFields["manual-name"].tap()
+        app.textFields["manual-name"].typeText("RT smoke manual")
+        app.textViews["manual-ingredients"].tap()
+        app.textViews["manual-ingredients"].typeText("Water, Vitamin C")
+        app.buttons["Done"].tap()
+        reveal(app.buttons["manual-review"], in: app)
+        app.buttons["manual-review"].tap()
+        reveal(app.buttons["manual-save"], in: app)
+        app.buttons["manual-save"].tap()
+        app.buttons["tab.home"].tap()
+        create(in: app)
+        name("RT restart smoke", in: app)
+        pick("cleanser_gel", in: app)
+        reveal(app.buttons["routine-add-product"], in: app)
+        app.buttons["routine-add-product"].tap()
+        let search = app.searchFields.firstMatch
+        search.tap()
+        search.typeText("RT smoke manual\n")
+        let manual = app.buttons.matching(NSPredicate(format: "identifier BEGINSWITH %@", "routine-pick-manual-")).firstMatch
+        reveal(manual, in: app)
+        manual.tap()
+        pick("cleanser_oil", in: app)
+        reveal(app.buttons["routine-down-0"], in: app, upwards: true)
+        app.buttons["routine-down-0"].tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("RT smoke manual"))
+        reveal(app.buttons["routine-remove-2"], in: app)
+        app.buttons["routine-remove-2"].tap()
+        app.buttons["Remove product"].tap()
+        reveal(app.buttons["routine-save"], in: app)
+        app.buttons["routine-save"].tap()
+        let card = app.buttons["routine-card-RT restart smoke"]
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("RT smoke manual"))
+        XCTAssertTrue(app.staticTexts["routine-step-1"].label.contains("Gentle Gel Cleanser"))
+        app.terminate()
+        app.launchArguments = ["--pd02-ui-testing", "--rt02-ui-testing"]
+        app.launch()
+        reveal(app.buttons["routine-manage"], in: app)
+        app.buttons["routine-manage"].tap()
+        XCTAssertTrue(card.waitForExistence(timeout: 5))
+        card.tap()
+        XCTAssertTrue(app.staticTexts["routine-step-0"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["routine-step-0"].label.contains("RT smoke manual"))
+        XCTAssertTrue(app.staticTexts["routine-step-1"].label.contains("Gentle Gel Cleanser"))
+        XCTAssertFalse(app.staticTexts["routine-step-2"].exists)
+        let details = app.buttons["Ingredient details"].firstMatch
+        reveal(details, in: app)
+        details.tap()
+        let warning = app.staticTexts.containing(NSPredicate(format: "label CONTAINS %@", "could refer")).firstMatch
+        reveal(warning, in: app)
+        XCTAssertTrue(warning.exists)
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "RT-02 routine restored after restart"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 }

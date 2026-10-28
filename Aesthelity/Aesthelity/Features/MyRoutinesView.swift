@@ -36,6 +36,21 @@ public struct MyRoutinesView: View {
             // Header
             headerBar
             
+            if let error = repository.loadError {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.system(size: 14))
+                        .foregroundStyle(Color(hex: "#842029"))
+                    Text(error)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hex: "#842029"))
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(Color(hex: "#F8D7DA"))
+            }
+            
             if displayedRoutines.isEmpty {
                 // Empty state view
                 emptyStateView
@@ -45,13 +60,21 @@ public struct MyRoutinesView: View {
             }
         }
         .background(Color(hex: "#F7F3ED"))
+        .onAppear {
+            repository.load()
+        }
         .sheet(isPresented: $showCreateRoutineSheet) {
             CreateRoutineView(
                 onCancel: { showCreateRoutineSheet = false },
                 onSaveRoutine: { newRoutine in
-                    repository.routines.append(newRoutine)
-                    showEmptyStateDemo = false
-                    showCreateRoutineSheet = false
+                    do {
+                        try repository.save(newRoutine)
+                        showEmptyStateDemo = false
+                        showCreateRoutineSheet = false
+                        return true
+                    } catch {
+                        return false
+                    }
                 }
             )
         }
@@ -60,10 +83,13 @@ public struct MyRoutinesView: View {
                 routine: routine,
                 onBack: { selectedRoutineToEdit = nil },
                 onSave: { updatedRoutine in
-                    if let index = repository.routines.firstIndex(where: { $0.id == updatedRoutine.id }) {
-                        repository.routines[index] = updatedRoutine
+                    do {
+                        try repository.update(updatedRoutine)
+                        selectedRoutineToEdit = nil
+                        return true
+                    } catch {
+                        return false
                     }
-                    selectedRoutineToEdit = nil
                 }
             )
         }
@@ -133,6 +159,7 @@ public struct MyRoutinesView: View {
                 BrandPillButton("Create routine") {
                     showCreateRoutineSheet = true
                 }
+                .accessibilityIdentifier("routine-create")
                 .padding(.top, 8)
             }
             .padding(32)

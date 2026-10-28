@@ -2,49 +2,283 @@
 //  CreateRoutineView.swift
 //  Aesthelity
 //
-//  Create / New Routine screen with validation and empty step states.
+//  Create / New Routine screen with validation, step builder, quick-add suggestions,
+//  custom step creation, reordering, and limit management.
 //
 
 import SwiftUI
 
+public final class CreateRoutineViewModel: ObservableObject {
+    @Published public var routineName: String
+    @Published public var selectedPeriod: RoutinePeriod
+    @Published public var isCustomPeriod: Bool
+    @Published public var steps: [RoutineStepItem]
+    
+    // Schedule & Notification settings
+    @Published public var frequency: RoutineFrequency
+    @Published public var reminderTime: String
+    @Published public var activeDays: Set<RoutineWeekday>
+    @Published public var pushRemindersEnabled: Bool
+    @Published public var leadTime: NotificationLeadTime
+    @Published public var quietHoursEnabled: Bool
+    
+    // Validation & Error states
+    @Published public var showErrorBanner: Bool
+    @Published public var hasAttemptedSave: Bool
+    @Published public var showStepLimitWarning: Bool
+    
+    // Navigation sheets
+    @Published public var showScheduleSheet: Bool
+    @Published public var showNotificationSheet: Bool
+    @Published public var showAddProductSheet: Bool
+    @Published public var showReorderSheet: Bool
+    @Published public var showCustomStepSheet: Bool
+    
+    // Custom step inputs
+    @Published public var customStepTitle: String
+    @Published public var customStepCategory: String
+    
+    public init(
+        routineName: String = "",
+        selectedPeriod: RoutinePeriod = .am,
+        isCustomPeriod: Bool = false,
+        steps: [RoutineStepItem] = [],
+        frequency: RoutineFrequency = .everyDay,
+        reminderTime: String = "7:00 AM",
+        activeDays: Set<RoutineWeekday> = [.mon, .wed, .fri],
+        pushRemindersEnabled: Bool = false,
+        leadTime: NotificationLeadTime = .atTime,
+        quietHoursEnabled: Bool = true,
+        showErrorBanner: Bool = false,
+        hasAttemptedSave: Bool = false,
+        showStepLimitWarning: Bool = false,
+        showScheduleSheet: Bool = false,
+        showNotificationSheet: Bool = false,
+        showAddProductSheet: Bool = false,
+        showReorderSheet: Bool = false,
+        showCustomStepSheet: Bool = false,
+        customStepTitle: String = "",
+        customStepCategory: String = ""
+    ) {
+        self.routineName = routineName
+        self.selectedPeriod = selectedPeriod
+        self.isCustomPeriod = isCustomPeriod
+        self.steps = steps
+        self.frequency = frequency
+        self.reminderTime = reminderTime
+        self.activeDays = activeDays
+        self.pushRemindersEnabled = pushRemindersEnabled
+        self.leadTime = leadTime
+        self.quietHoursEnabled = quietHoursEnabled
+        self.showErrorBanner = showErrorBanner
+        self.hasAttemptedSave = hasAttemptedSave
+        self.showStepLimitWarning = showStepLimitWarning
+        self.showScheduleSheet = showScheduleSheet
+        self.showNotificationSheet = showNotificationSheet
+        self.showAddProductSheet = showAddProductSheet
+        self.showReorderSheet = showReorderSheet
+        self.showCustomStepSheet = showCustomStepSheet
+        self.customStepTitle = customStepTitle
+        self.customStepCategory = customStepCategory
+    }
+    
+    public func addStep(_ newStep: RoutineStepItem) {
+        guard steps.count < 8 else {
+            showStepLimitWarning = true
+            return
+        }
+        let item = RoutineStepItem(
+            id: newStep.id,
+            stepNumber: steps.count + 1,
+            title: newStep.title,
+            subtitle: newStep.subtitle.isEmpty ? "Step \(steps.count + 1)" : newStep.subtitle,
+            state: newStep.state,
+            hasClash: newStep.hasClash,
+            productId: newStep.productId,
+            product: newStep.product
+        )
+        steps.append(item)
+        if steps.count < 8 {
+            showStepLimitWarning = false
+        }
+    }
+    
+    public func removeStep(_ step: RoutineStepItem) {
+        var updatedSteps = steps.filter { $0.id != step.id }
+        for index in 0..<updatedSteps.count {
+            let current = updatedSteps[index]
+            updatedSteps[index] = RoutineStepItem(
+                id: current.id,
+                stepNumber: index + 1,
+                title: current.title,
+                subtitle: current.subtitle,
+                state: current.state,
+                hasClash: current.hasClash,
+                productId: current.productId,
+                product: current.product
+            )
+        }
+        steps = updatedSteps
+        if steps.count < 8 {
+            showStepLimitWarning = false
+        }
+    }
+}
+
 public struct CreateRoutineView: View {
     @Environment(\.dismiss) private var dismiss
     
-    // State
-    @State public var routineName: String = ""
-    @State public var selectedPeriod: RoutinePeriod = .am
-    @State public var isCustomPeriod: Bool = false
-    @State public var steps: [RoutineStepItem] = []
+    public let viewModel: CreateRoutineViewModel
+    @ObservedObject private var observedViewModel: CreateRoutineViewModel
+    
+    public var routineName: String {
+        get { viewModel.routineName }
+        nonmutating set { viewModel.routineName = newValue }
+    }
+    public var selectedPeriod: RoutinePeriod {
+        get { viewModel.selectedPeriod }
+        nonmutating set { viewModel.selectedPeriod = newValue }
+    }
+    public var isCustomPeriod: Bool {
+        get { viewModel.isCustomPeriod }
+        nonmutating set { viewModel.isCustomPeriod = newValue }
+    }
+    public var steps: [RoutineStepItem] {
+        get { viewModel.steps }
+        nonmutating set { viewModel.steps = newValue }
+    }
     
     // Schedule & Notification settings
-    @State public var frequency: RoutineFrequency = .everyDay
-    @State public var reminderTime: String = "7:00 AM"
-    @State public var activeDays: Set<RoutineWeekday> = [.mon, .wed, .fri]
-    @State public var pushRemindersEnabled: Bool = false
-    @State public var leadTime: NotificationLeadTime = .atTime
-    @State public var quietHoursEnabled: Bool = true
+    public var frequency: RoutineFrequency {
+        get { viewModel.frequency }
+        nonmutating set { viewModel.frequency = newValue }
+    }
+    public var reminderTime: String {
+        get { viewModel.reminderTime }
+        nonmutating set { viewModel.reminderTime = newValue }
+    }
+    public var activeDays: Set<RoutineWeekday> {
+        get { viewModel.activeDays }
+        nonmutating set { viewModel.activeDays = newValue }
+    }
+    public var pushRemindersEnabled: Bool {
+        get { viewModel.pushRemindersEnabled }
+        nonmutating set { viewModel.pushRemindersEnabled = newValue }
+    }
+    public var leadTime: NotificationLeadTime {
+        get { viewModel.leadTime }
+        nonmutating set { viewModel.leadTime = newValue }
+    }
+    public var quietHoursEnabled: Bool {
+        get { viewModel.quietHoursEnabled }
+        nonmutating set { viewModel.quietHoursEnabled = newValue }
+    }
     
     // Validation & Error states
-    @State public var showErrorBanner: Bool = false
-    @State public var hasAttemptedSave: Bool = false
+    public var showErrorBanner: Bool {
+        get { viewModel.showErrorBanner }
+        nonmutating set { viewModel.showErrorBanner = newValue }
+    }
+    public var hasAttemptedSave: Bool {
+        get { viewModel.hasAttemptedSave }
+        nonmutating set { viewModel.hasAttemptedSave = newValue }
+    }
+    public var showStepLimitWarning: Bool {
+        get { viewModel.showStepLimitWarning }
+        nonmutating set { viewModel.showStepLimitWarning = newValue }
+    }
     
     // Navigation sheets
-    @State public var showScheduleSheet: Bool = false
-    @State public var showNotificationSheet: Bool = false
-    @State public var showAddProductSheet: Bool = false
+    public var showScheduleSheet: Bool {
+        get { viewModel.showScheduleSheet }
+        nonmutating set { viewModel.showScheduleSheet = newValue }
+    }
+    public var showNotificationSheet: Bool {
+        get { viewModel.showNotificationSheet }
+        nonmutating set { viewModel.showNotificationSheet = newValue }
+    }
+    public var showAddProductSheet: Bool {
+        get { viewModel.showAddProductSheet }
+        nonmutating set { viewModel.showAddProductSheet = newValue }
+    }
+    public var showReorderSheet: Bool {
+        get { viewModel.showReorderSheet }
+        nonmutating set { viewModel.showReorderSheet = newValue }
+    }
+    public var showCustomStepSheet: Bool {
+        get { viewModel.showCustomStepSheet }
+        nonmutating set { viewModel.showCustomStepSheet = newValue }
+    }
+    
+    // Custom step inputs
+    public var customStepTitle: String {
+        get { viewModel.customStepTitle }
+        nonmutating set { viewModel.customStepTitle = newValue }
+    }
+    public var customStepCategory: String {
+        get { viewModel.customStepCategory }
+        nonmutating set { viewModel.customStepCategory = newValue }
+    }
+    
+    // Quick Add Suggestions
+    public struct QuickStepSuggestion: Identifiable, Equatable {
+        public let id = UUID()
+        public let title: String
+        public let category: String
+        public let period: RoutinePeriod
+    }
+    
+    private let commonAMSteps: [QuickStepSuggestion] = [
+        QuickStepSuggestion(title: "Gentle Cleanser", category: "Purifying", period: .am),
+        QuickStepSuggestion(title: "Hydrating Toner", category: "Balancing", period: .am),
+        QuickStepSuggestion(title: "Vitamin C Serum", category: "Brightening", period: .am),
+        QuickStepSuggestion(title: "Daily Moisturizer", category: "Hydrating", period: .am),
+        QuickStepSuggestion(title: "SPF 50 Sunscreen", category: "Protection", period: .am)
+    ]
+    
+    private let commonPMSteps: [QuickStepSuggestion] = [
+        QuickStepSuggestion(title: "Cleansing Oil", category: "Pre-cleanse", period: .pm),
+        QuickStepSuggestion(title: "Foaming Cleanser", category: "Purifying", period: .pm),
+        QuickStepSuggestion(title: "BHA Exfoliant", category: "Pore care", period: .pm),
+        QuickStepSuggestion(title: "Retinol Serum", category: "Renewal", period: .pm),
+        QuickStepSuggestion(title: "Barrier Night Cream", category: "Moisturizing", period: .pm),
+        QuickStepSuggestion(title: "Lip Sleep Mask", category: "Nourishing", period: .pm)
+    ]
+    
+    private var currentSuggestions: [QuickStepSuggestion] {
+        selectedPeriod == .pm ? commonPMSteps : commonAMSteps
+    }
     
     // Callbacks
     public var onCancel: () -> Void
-    public var onSaveRoutine: (RoutineRecord) -> Void
+    /// Persist the new routine. Return `true` when saved; `false` keeps the form open.
+    public var onSaveRoutine: (RoutineRecord) -> Bool
     
     public init(
         initialName: String = "",
         initialPeriod: RoutinePeriod = .am,
+        initialSteps: [RoutineStepItem] = [],
         onCancel: @escaping () -> Void = {},
-        onSaveRoutine: @escaping (RoutineRecord) -> Void = { _ in }
+        onSaveRoutine: @escaping (RoutineRecord) -> Bool = { _ in true }
     ) {
-        self._routineName = State(wrappedValue: initialName)
-        self._selectedPeriod = State(wrappedValue: initialPeriod)
+        let model = CreateRoutineViewModel(
+            routineName: initialName,
+            selectedPeriod: initialPeriod,
+            steps: initialSteps
+        )
+        self.viewModel = model
+        self._observedViewModel = ObservedObject(wrappedValue: model)
+        self.onCancel = onCancel
+        self.onSaveRoutine = onSaveRoutine
+    }
+    
+    public init(
+        viewModel: CreateRoutineViewModel,
+        onCancel: @escaping () -> Void = {},
+        onSaveRoutine: @escaping (RoutineRecord) -> Bool = { _ in true }
+    ) {
+        self.viewModel = viewModel
+        self._observedViewModel = ObservedObject(wrappedValue: viewModel)
         self.onCancel = onCancel
         self.onSaveRoutine = onSaveRoutine
     }
@@ -71,7 +305,7 @@ public struct CreateRoutineView: View {
                     // Routine Period Selector
                     periodSelectorSection
                     
-                    // Steps Section (Empty state or List)
+                    // Steps Section (Empty state, step list, quick suggestions, and add buttons)
                     stepsSection
                     
                     // Settings Navigation Rows (Schedule & Notifications)
@@ -79,8 +313,7 @@ public struct CreateRoutineView: View {
                     
                     if hasAttemptedSave && !RoutineEditor.validationErrors(name: routineName, steps: steps).isEmpty {
                         Text(RoutineEditor.validationErrors(name: routineName, steps: steps).joined(separator: " "))
-                            .foregroundStyle(.red)
-                            .accessibilityIdentifier("routine-validation")
+                            .foregroundStyle(.red).accessibilityIdentifier("routine-validation")
                     }
                     // Save Button
                     saveButton
@@ -89,30 +322,44 @@ public struct CreateRoutineView: View {
             }
         }
         .background(Color(hex: "#F7F3ED"))
-        .sheet(isPresented: $showAddProductSheet) {
+        .sheet(isPresented: $observedViewModel.showScheduleSheet) {
+            RoutineScheduleView(
+                frequency: $observedViewModel.frequency,
+                reminderTime: $observedViewModel.reminderTime,
+                activeDays: $observedViewModel.activeDays,
+                onBack: { showScheduleSheet = false },
+                onSave: { showScheduleSheet = false }
+            )
+        }
+        .sheet(isPresented: $observedViewModel.showNotificationSheet) {
+            RoutineNotificationSettingsView(
+                pushRemindersEnabled: $observedViewModel.pushRemindersEnabled,
+                leadTime: $observedViewModel.leadTime,
+                quietHoursEnabled: $observedViewModel.quietHoursEnabled,
+                onBack: { showNotificationSheet = false },
+                onPreview: {},
+                onSave: { showNotificationSheet = false }
+            )
+        }
+        .sheet(isPresented: $observedViewModel.showAddProductSheet) {
             RoutineProductPicker(steps: steps) { step in
                 steps = RoutineEditor.adding(step, to: steps)
                 showAddProductSheet = false
             }
         }
-        .sheet(isPresented: $showScheduleSheet) {
-            RoutineScheduleView(
-                frequency: $frequency,
-                reminderTime: $reminderTime,
-                activeDays: $activeDays,
-                onBack: { showScheduleSheet = false },
-                onSave: { showScheduleSheet = false }
+        .sheet(isPresented: $observedViewModel.showReorderSheet) {
+            ReorderStepsView(
+                routineName: routineName.isEmpty ? "New routine" : routineName,
+                steps: steps,
+                onBack: { showReorderSheet = false },
+                onSaveOrder: { newSteps in
+                    steps = newSteps
+                    showReorderSheet = false
+                }
             )
         }
-        .sheet(isPresented: $showNotificationSheet) {
-            RoutineNotificationSettingsView(
-                pushRemindersEnabled: $pushRemindersEnabled,
-                leadTime: $leadTime,
-                quietHoursEnabled: $quietHoursEnabled,
-                onBack: { showNotificationSheet = false },
-                onPreview: {},
-                onSave: { showNotificationSheet = false }
-            )
+        .sheet(isPresented: $observedViewModel.showCustomStepSheet) {
+            customStepSheet
         }
     }
     
@@ -160,8 +407,11 @@ public struct CreateRoutineView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Color(hex: "#842029"))
                 
-                Text(RoutineEditor.validationErrors(name: routineName, steps: steps).joined(separator: " "))
-                    .accessibilityIdentifier("routine-validation-banner")
+                Text(
+                    routineName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        ? "Add a routine name, then try again."
+                        : "Your routine could not be saved. Please try again."
+                )
                     .font(.system(size: 13))
                     .foregroundStyle(Color(hex: "#842029").opacity(0.9))
             }
@@ -193,13 +443,13 @@ public struct CreateRoutineView: View {
                 .foregroundStyle(Color(hex: "#625478"))
             
             HStack {
-                TextField("e.g. Morning Glow", text: $routineName, prompt: Text("e.g. Morning Glow").foregroundStyle(Color(hex: "#625478")))
+                TextField("e.g. Morning Glow", text: $observedViewModel.routineName, prompt: Text("e.g. Morning Glow").foregroundStyle(Color(hex: "#625478")))
                     .accessibilityIdentifier("routine-name")
                     .submitLabel(.done)
                     .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color(hex: "#1A1628"))
-                    .onChange(of: routineName) { _, newValue in
+                    .onChange(of: viewModel.routineName) { _, newValue in
                         if !newValue.isEmpty && showErrorBanner {
                             showErrorBanner = false
                         }
@@ -277,11 +527,230 @@ public struct CreateRoutineView: View {
         .buttonStyle(.plain)
     }
     
+    // MARK: - Step Limit Warning Banner
+    private var stepLimitWarningBanner: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "exclamationmark.circle.fill")
+                .font(.system(size: 18))
+                .foregroundStyle(Color(hex: "#6F4E37"))
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Steps · 8 · max")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color(hex: "#6F4E37"))
+                
+                Text("Step limit reached — routines can have up to 8 steps.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(hex: "#6F4E37").opacity(0.9))
+            }
+            
+            Spacer()
+        }
+        .padding(14)
+        .background(Color(hex: "#FECA9B"))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+    
     // MARK: - Steps Section
     private var stepsSection: some View {
-        RoutineStepsEditor(steps: $steps, onAdd: { showAddProductSheet = true })
+        RoutineStepsEditor(steps: $observedViewModel.steps, onAdd: { showAddProductSheet = true })
     }
 
+    // MARK: - Step Row
+    private func stepRow(step: RoutineStepItem) -> some View {
+        HStack(spacing: 12) {
+            Text("\(step.stepNumber)")
+                .font(.system(size: 14, weight: .bold))
+                .foregroundStyle(Color(hex: "#50578F"))
+                .frame(width: 28, height: 28)
+                .background(Color(hex: "#DFD8F5"))
+                .clipShape(Circle())
+            
+            VStack(alignment: .leading, spacing: 2) {
+                Text(step.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(Color(hex: "#1A1628"))
+                
+                Text(step.subtitle)
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(hex: "#625478"))
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                removeStep(step)
+            }) {
+                Text("Remove")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(hex: "#D9534F"))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Color(hex: "#F8D7DA"))
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
+        )
+    }
+    
+    // MARK: - Quick Add Suggestions Card
+    private var quickAddSuggestionsCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#50578F"))
+                    Text("QUICK ADD SUGGESTIONS")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(hex: "#625478"))
+                }
+                
+                Spacer()
+                
+                Text("Tap to add")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color(hex: "#625478").opacity(0.8))
+            }
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(currentSuggestions) { suggestion in
+                        let isAlreadyAdded = steps.contains { $0.title == suggestion.title }
+                        Button(action: {
+                            if !isAlreadyAdded {
+                                addStep(
+                                    RoutineStepItem(
+                                        stepNumber: steps.count + 1,
+                                        title: suggestion.title,
+                                        subtitle: "\(suggestion.category) · Step \(steps.count + 1)",
+                                        state: .active
+                                    )
+                                )
+                            }
+                        }) {
+                            HStack(spacing: 6) {
+                                Image(systemName: isAlreadyAdded ? "checkmark" : "plus")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text(suggestion.title)
+                                    .font(.system(size: 13, weight: .semibold))
+                            }
+                            .foregroundStyle(isAlreadyAdded ? Color(hex: "#2E5224") : Color(hex: "#50578F"))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(isAlreadyAdded ? Color(hex: "#D4EDDA") : Color(hex: "#DFD8F5"))
+                            .clipShape(Capsule())
+                        }
+                        .disabled(isAlreadyAdded || steps.count >= 8)
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+        }
+        .padding(14)
+        .background(Color.white)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
+        )
+    }
+    
+    // MARK: - Custom Step Sheet
+    private var customStepSheet: some View {
+        VStack(spacing: 20) {
+            HStack {
+                Text("Add custom step")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Color(hex: "#1A1628"))
+                
+                Spacer()
+                
+                Button(action: { showCustomStepSheet = false }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 22))
+                        .foregroundStyle(Color(hex: "#625478"))
+                }
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("STEP OR PRODUCT NAME")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(hex: "#625478"))
+                
+                TextField("e.g. Rosewater Mist", text: $observedViewModel.customStepTitle)
+                    .font(.system(size: 15))
+                    .padding(14)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
+                    )
+            }
+            
+            VStack(alignment: .leading, spacing: 6) {
+                Text("CATEGORY OR NOTE (OPTIONAL)")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color(hex: "#625478"))
+                
+                TextField("e.g. Hydrating mist", text: $observedViewModel.customStepCategory)
+                    .font(.system(size: 15))
+                    .padding(14)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
+                    )
+            }
+            
+            LabeledButton("Add to routine", variant: .primary) {
+                let trimmed = customStepTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return }
+                let categoryTrimmed = customStepCategory.trimmingCharacters(in: .whitespacesAndNewlines)
+                let subtitle = categoryTrimmed.isEmpty ? "Step \(steps.count + 1)" : "\(categoryTrimmed) · Step \(steps.count + 1)"
+                addStep(
+                    RoutineStepItem(
+                        stepNumber: steps.count + 1,
+                        title: trimmed,
+                        subtitle: subtitle,
+                        state: .active
+                    )
+                )
+                customStepTitle = ""
+                customStepCategory = ""
+                showCustomStepSheet = false
+            }
+            .disabled(customStepTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            
+            Spacer()
+        }
+        .padding(24)
+        .background(Color(hex: "#F7F3ED"))
+    }
+    
+    // MARK: - Step Management Methods
+    public func addStep(_ newStep: RoutineStepItem) {
+        withAnimation {
+            viewModel.addStep(newStep)
+        }
+    }
+    
+    public func removeStep(_ step: RoutineStepItem) {
+        withAnimation {
+            viewModel.removeStep(step)
+        }
+    }
+    
     // MARK: - Settings Navigation Section
     private var settingsNavigationSection: some View {
         VStack(spacing: 10) {
@@ -374,7 +843,9 @@ public struct CreateRoutineView: View {
                     leadTime: leadTime,
                     quietHoursEnabled: quietHoursEnabled
                 )
-                onSaveRoutine(newRecord)
+                if !onSaveRoutine(newRecord) {
+                    withAnimation { showErrorBanner = true }
+                }
             }
         }
         .accessibilityIdentifier("routine-save")

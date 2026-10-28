@@ -5,6 +5,7 @@
 //  Main application entry point for Aesthelity Routine Optimizer.
 //
 
+import FirebaseCore
 import SwiftUI
 
 @main
@@ -12,8 +13,13 @@ struct AesthelityApp: App {
     @AppStorage("hasCompletedStartup") private var hasCompletedStartup: Bool = false
     @StateObject private var profileStore: SkinProfileStore
     @StateObject private var manualProductStore: ManualProductStore
+    @StateObject private var authService = FirebaseAuthService.shared
+    @StateObject private var syncService = FirestoreSyncService.shared
 
     init() {
+        if FirebaseApp.app() == nil {
+            FirebaseApp.configure()
+        }
         let arguments = ProcessInfo.processInfo.arguments
         let testing = arguments.contains("--pf01-ui-testing")
         if arguments.contains("-resetStartupForUITests") {
@@ -48,6 +54,13 @@ struct AesthelityApp: App {
         }
         _hasCompletedStartup = AppStorage(wrappedValue: false, "hasCompletedStartup", store: defaults)
         _profileStore = StateObject(wrappedValue: SkinProfileStore(fileURL: fileURL))
+
+        if arguments.contains("--seed-routines") {
+            try? RoutineStore.shared.seedDefaults()
+        }
+        if arguments.contains("--reset-routines") {
+            try? RoutineStore.shared.resetToEmpty()
+        }
     }
     
     var body: some Scene {
@@ -72,6 +85,31 @@ struct AesthelityApp: App {
             }
             .environmentObject(profileStore)
             .environmentObject(manualProductStore)
+            .environmentObject(authService)
+            .environmentObject(syncService)
+            .task {
+                // Cloud routine/profile sync stays off until isolation, rules, and DB ID are verified.
+                guard CloudSyncConfiguration.isEnabled else {
+                    syncService.stopRoutineListener()
+                    return
+                }
+                guard !isRunningInTestEnvironment else { return }
+                await authService.ensureAuthenticated()
+                if let userId = authService.userId {
+                    syncService.startRoutineListener(for: userId)
+                }
+            }
         }
+    }
+    
+    private var isRunningInTestEnvironment: Bool {
+        let env = ProcessInfo.processInfo.environment
+        let args = ProcessInfo.processInfo.arguments
+        return args.contains("--pf01-ui-testing") ||
+               args.contains("--pd02-ui-testing") ||
+               args.contains("-resetStartupForUITests") ||
+               env["XCTestConfigurationFilePath"] != nil ||
+               env["XCInjectBundleInto"] != nil ||
+               NSClassFromString("XCTestCase") != nil
     }
 }

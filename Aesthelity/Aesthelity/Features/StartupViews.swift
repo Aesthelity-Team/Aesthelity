@@ -30,7 +30,12 @@ public struct StartupFlowView: View {
     @State private var loadedDraft = false
     @State private var attemptedSubmit = false
     @State private var saveError: String?
-    private let normalizer = try? IngredientNormalizer(catalog: .loadBundled())
+    private let ingredientLookup = Result { try IngredientNormalizer(catalog: .loadBundled()) }
+    private var normalizer: IngredientNormalizer? { try? ingredientLookup.get() }
+    private var ingredientLookupError: String? {
+        if case .failure(let error) = ingredientLookup { return error.localizedDescription }
+        return nil
+    }
     public var onFinish: () -> Void
     public var onCancel: (() -> Void)?
     
@@ -76,7 +81,7 @@ public struct StartupFlowView: View {
                         OnboardingConcernsView(
                             draft: $draft,
                             errors: attemptedSubmit ? draft.validationErrors() : [],
-                            saveError: saveError ?? profileStore.loadError,
+                            saveError: saveError ?? ingredientLookupError ?? profileStore.loadError,
                             normalizer: normalizer,
                             onBack: {
                                 if let onCancel {
@@ -95,6 +100,7 @@ public struct StartupFlowView: View {
                         AuthSignInView(
                             initialMode: .normal,
                             onSuccess: finishSignIn,
+                            onContinueWithoutAccount: finishSignIn,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -106,6 +112,7 @@ public struct StartupFlowView: View {
                         AuthSignInView(
                             initialMode: .invalid,
                             onSuccess: finishSignIn,
+                            onContinueWithoutAccount: finishSignIn,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -117,6 +124,7 @@ public struct StartupFlowView: View {
                         AuthSignInView(
                             initialMode: .failed,
                             onSuccess: finishSignIn,
+                            onContinueWithoutAccount: finishSignIn,
                             onSwitchToSetup: {
                                 withAnimation(.easeInOut(duration: 0.25)) {
                                     currentScreen = .welcome
@@ -149,7 +157,7 @@ public struct StartupFlowView: View {
     private func submitProfile() {
         attemptedSubmit = true
         guard let normalizer else {
-            saveError = "Ingredient lookup is unavailable. Please try again."
+            saveError = ingredientLookupError ?? "Ingredient reference data could not be loaded."
             return
         }
         if case .completed(let profile) = draft.submit(using: normalizer) {
@@ -272,14 +280,23 @@ public struct AuthSignInView: View {
     @State public var password: String
     @State public var isRetrying: Bool = false
     @State public var showForgotPasswordAlert: Bool = false
+    @State public var authStatusMessage: String? = nil
+    @State public var isAuthenticating: Bool = false
     
     public var onSuccess: () -> Void
+    public var onContinueWithoutAccount: () -> Void
     public var onSwitchToSetup: () -> Void
+    /// Injectable email sign-in for tests. Defaults to Firebase email/password sign-in.
+    public var performEmailSignIn: (String, String) async throws -> Void
     
     public init(
         initialMode: AuthMode = .normal,
         onSuccess: @escaping () -> Void = {},
-        onSwitchToSetup: @escaping () -> Void = {}
+        onContinueWithoutAccount: @escaping () -> Void = {},
+        onSwitchToSetup: @escaping () -> Void = {},
+        performEmailSignIn: @escaping (String, String) async throws -> Void = { email, password in
+            try await FirebaseAuthService.shared.signIn(email: email, password: password)
+        }
     ) {
         self._mode = State(initialValue: initialMode)
         switch initialMode {
@@ -294,7 +311,9 @@ public struct AuthSignInView: View {
             self._password = State(initialValue: "")
         }
         self.onSuccess = onSuccess
+        self.onContinueWithoutAccount = onContinueWithoutAccount
         self.onSwitchToSetup = onSwitchToSetup
+        self.performEmailSignIn = performEmailSignIn
     }
     
     public var body: some View {
@@ -312,6 +331,14 @@ public struct AuthSignInView: View {
                 
                 // Credentials Input Fields
                 credentialsSection
+
+                if let authStatusMessage {
+                    Text(authStatusMessage)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hex: "#8A1538"))
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .accessibilityIdentifier("auth.statusMessage")
+                }
                 
                 // Primary Action Button
                 primaryActionButton
@@ -321,6 +348,7 @@ public struct AuthSignInView: View {
                     Button(action: {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             mode = .normal
+                            authStatusMessage = nil
                         }
                     }) {
                         Text("Back to sign in")
@@ -343,8 +371,18 @@ public struct AuthSignInView: View {
                 orDivider
                     .padding(.vertical, 4)
                 
-                // Social Sign In Buttons (Google & Apple)
+                // Social Sign In Buttons (Google & Apple) — not implemented
                 socialButtonsSection
+
+                Button(action: onContinueWithoutAccount) {
+                    Text("Continue without signing in")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#625478"))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("auth.continueWithoutAccount")
                 
                 // Footer Links
                 footerLinksSection
@@ -585,29 +623,64 @@ public struct AuthSignInView: View {
     
     private var primaryActionButton: some View {
         Button(action: handlePrimaryAction) {
-            Text(mode == .invalid ? "Try again" : "Sign in")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(mode == .invalid ? Color(hex: "#1A1628") : Color.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 52)
-                .background(Color(hex: "#7C83BC"))
-                .clipShape(Capsule())
-                .shadow(color: Color(hex: "#7C83BC").opacity(0.35), radius: 6, x: 0, y: 3)
+            HStack(spacing: 8) {
+                if isAuthenticating {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .scaleEffect(0.85)
+                }
+                Text(mode == .invalid ? "Try again" : "Sign in")
+                    .font(.system(size: 16, weight: .semibold))
+            }
+            .foregroundStyle(mode == .invalid ? Color(hex: "#1A1628") : Color.white)
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .background(Color(hex: "#7C83BC"))
+            .clipShape(Capsule())
+            .shadow(color: Color(hex: "#7C83BC").opacity(0.35), radius: 6, x: 0, y: 3)
         }
         .buttonStyle(.plain)
+        .disabled(isAuthenticating)
+        .accessibilityIdentifier("auth.signInButton")
     }
     
     private func handlePrimaryAction() {
+        // Leaving invalid mode must keep the user's typed email/password so they can correct it.
         if mode == .invalid {
-            // Fix credentials to valid format and switch to normal
-            email = "maya@aesthelity.app"
-            password = "password123"
+            authStatusMessage = nil
             withAnimation(.easeInOut(duration: 0.2)) {
                 mode = .normal
             }
-        } else {
-            // Sign in successfully
-            onSuccess()
+        }
+
+        isAuthenticating = true
+        authStatusMessage = nil
+        let capturedEmail = email
+        let capturedPassword = password
+        let signIn = performEmailSignIn
+        Task { @MainActor in
+            defer { isAuthenticating = false }
+            let outcome = await AuthEmailSignIn.attempt(
+                email: capturedEmail,
+                password: capturedPassword,
+                signIn: signIn
+            )
+            switch outcome {
+            case .succeeded:
+                onSuccess()
+            case .continuedWithoutAccount:
+                onContinueWithoutAccount()
+            case .invalidForm(let message):
+                authStatusMessage = message
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    mode = .invalid
+                }
+            case .failed(let message):
+                authStatusMessage = message
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    mode = .failed
+                }
+            }
         }
     }
     
@@ -633,50 +706,57 @@ public struct AuthSignInView: View {
     
     private var socialButtonsSection: some View {
         VStack(spacing: 12) {
-            // Google Button
-            Button(action: onSuccess) {
+            Text("Google and Apple sign-in are not available yet.")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(Color(hex: "#625478"))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Google Button — intentionally disabled until social auth is implemented
+            Button(action: {}) {
                 HStack(spacing: 12) {
                     googleLogo
                         .frame(width: 20, height: 20)
                     
-                    Text("Continue with Google")
+                    Text("Continue with Google (coming soon)")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color(hex: "#1A1628"))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(Color.white)
+                .background(Color.white.opacity(0.7))
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
                         .stroke(Color(hex: "#D8CFF0"), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityIdentifier("auth.googleComingSoon")
             
-            // Apple Button
-            Button(action: onSuccess) {
+            // Apple Button — intentionally disabled until social auth is implemented
+            Button(action: {}) {
                 HStack(spacing: 12) {
                     Image(systemName: "apple.logo")
                         .font(.system(size: 20, weight: .regular))
                         .foregroundStyle(Color(hex: "#1A1628"))
                     
-                    Text("Continue with Apple")
+                    Text("Continue with Apple (coming soon)")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color(hex: "#1A1628"))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(Color.white)
+                .background(Color.white.opacity(0.7))
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
                         .stroke(Color(hex: "#D8CFF0"), lineWidth: 1)
                 )
-                .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
             }
             .buttonStyle(.plain)
+            .disabled(true)
+            .accessibilityIdentifier("auth.appleComingSoon")
         }
     }
     

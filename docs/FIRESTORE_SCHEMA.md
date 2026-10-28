@@ -5,8 +5,10 @@
 The shared product catalog is imported and verified.
 
 User profiles, user-added products, routines, and analysis results below
-describe proposed storage contracts. Their persistence features and
-authorization are implemented under their respective issues.
+describe proposed storage contracts. The iOS app currently persists
+routines and skin profile **locally only**; Firestore user-document sync
+is gated off until account isolation, reconciliation, rules, and database
+ID are verified (see FIRESTORE_SETUP.md).
 
 ## Collection paths
 

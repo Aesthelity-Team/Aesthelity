@@ -1,12 +1,12 @@
 import Foundation
 
-public enum RoutineProductReference: Equatable, Hashable {
+public enum RoutineProductReference: Equatable, Hashable, Codable {
     case catalog(String)
     case manual(UUID)
 }
 
 /// Product information captured when a step is added; no safety conclusion is inferred.
-public struct RoutineProductSnapshot: Equatable {
+public struct RoutineProductSnapshot: Equatable, Codable {
     public let reference: RoutineProductReference
     public let name: String
     public let brand: String?
@@ -39,8 +39,15 @@ public struct RoutineProductSnapshot: Equatable {
         }
     }
 
+    var productID: UUID {
+        switch reference {
+        case .catalog(let id): return CatalogProductIdentity.uuid(forCatalogId: id)
+        case .manual(let id): return id
+        }
+    }
+
     var step: RoutineStepItem {
-        RoutineStepItem(stepNumber: 1, title: name, subtitle: brand ?? provenance, state: .incomplete, product: self)
+        RoutineStepItem(stepNumber: 1, title: name, subtitle: brand ?? provenance, state: .incomplete, productId: productID, product: self)
     }
 }
 
@@ -58,7 +65,7 @@ enum RoutineEditor {
     static func numbered(_ steps: [RoutineStepItem]) -> [RoutineStepItem] {
         steps.enumerated().map { index, step in
             RoutineStepItem(id: step.id, stepNumber: index + 1, title: step.title,
-                            subtitle: step.subtitle, state: step.state, hasClash: step.hasClash, product: step.product)
+                            subtitle: step.subtitle, state: step.state, hasClash: step.hasClash, productId: step.productId, product: step.product)
         }
     }
 
@@ -66,6 +73,8 @@ enum RoutineEditor {
         guard steps.count < maximumSteps else { return steps }
         if let reference = step.product?.reference,
            steps.contains(where: { $0.product?.reference == reference }) { return steps }
+        if let productID = step.productId,
+           steps.contains(where: { $0.productId == productID }) { return steps }
         return numbered(steps + [step])
     }
 
