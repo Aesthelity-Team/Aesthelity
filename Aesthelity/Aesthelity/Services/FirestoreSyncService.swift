@@ -29,7 +29,14 @@ public final class FirestoreSyncService: ObservableObject {
     // MARK: - Real-time Routine Listener
 
     /// Starts real-time listening to Firestore routines for the given user ID.
+    /// No-op while `CloudSyncConfiguration.isEnabled` is false.
     public func startRoutineListener(for userId: String) {
+        guard CloudSyncConfiguration.isEnabled else {
+            CloudSyncConfiguration.noteBlockedServiceCall()
+            stopRoutineListener()
+            return
+        }
+
         routineListener?.remove()
 
         let collection = db.collection("users").document(userId).collection("routines")
@@ -72,6 +79,10 @@ public final class FirestoreSyncService: ObservableObject {
 
     /// Saves a single routine to Firestore under `users/{userId}/routines/{id}`.
     public func saveRoutine(_ routine: RoutineRecord, for userId: String) async {
+        guard CloudSyncConfiguration.isEnabled else {
+            CloudSyncConfiguration.noteBlockedServiceCall()
+            return
+        }
         guard !isApplyingRemoteUpdate else { return }
         let collection = db.collection("users").document(userId).collection("routines")
         do {
@@ -84,6 +95,10 @@ public final class FirestoreSyncService: ObservableObject {
 
     /// Deletes a routine from Firestore.
     public func deleteRoutine(id: UUID, for userId: String) async {
+        guard CloudSyncConfiguration.isEnabled else {
+            CloudSyncConfiguration.noteBlockedServiceCall()
+            return
+        }
         guard !isApplyingRemoteUpdate else { return }
         let collection = db.collection("users").document(userId).collection("routines")
         do {
@@ -96,6 +111,10 @@ public final class FirestoreSyncService: ObservableObject {
 
     /// Uploads all local routines in a single batch write.
     public func uploadAllLocalRoutines(_ routines: [RoutineRecord], for userId: String) {
+        guard CloudSyncConfiguration.isEnabled else {
+            CloudSyncConfiguration.noteBlockedServiceCall()
+            return
+        }
         let batch = db.batch()
         let collection = db.collection("users").document(userId).collection("routines")
         for routine in routines {
@@ -117,6 +136,10 @@ public final class FirestoreSyncService: ObservableObject {
 
     /// Syncs user skin profile to Firestore at `users/{userId}/profile/skinProfile`.
     func saveSkinProfile(_ profile: SkinProfile, for userId: String) async {
+        guard CloudSyncConfiguration.isEnabled else {
+            CloudSyncConfiguration.noteBlockedServiceCall()
+            return
+        }
         do {
             let data = try JSONEncoder().encode(profile)
             guard let dict = try JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
@@ -130,6 +153,10 @@ public final class FirestoreSyncService: ObservableObject {
 
     /// Fetches skin profile from Firestore if it exists.
     func fetchSkinProfile(for userId: String) async -> SkinProfile? {
+        guard CloudSyncConfiguration.isEnabled else {
+            CloudSyncConfiguration.noteBlockedServiceCall()
+            return nil
+        }
         let docRef = db.collection("users").document(userId).collection("profile").document("skinProfile")
         do {
             let doc = try await docRef.getDocument()

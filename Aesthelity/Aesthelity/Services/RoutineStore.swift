@@ -95,12 +95,7 @@ public final class RoutineStore: ObservableObject {
             updatedRoutines.append(routine)
         }
         try persist(routines: updatedRoutines)
-        
-        if let userId = FirebaseAuthService.shared.userId {
-            Task {
-                await FirestoreSyncService.shared.saveRoutine(routine, for: userId)
-            }
-        }
+        enqueueCloudSave(routine)
     }
 
     /// Explicitly updates an existing routine, throwing if the routine ID is not found.
@@ -111,12 +106,7 @@ public final class RoutineStore: ObservableObject {
         }
         updatedRoutines[index] = routine
         try persist(routines: updatedRoutines)
-        
-        if let userId = FirebaseAuthService.shared.userId {
-            Task {
-                await FirestoreSyncService.shared.saveRoutine(routine, for: userId)
-            }
-        }
+        enqueueCloudSave(routine)
     }
 
     /// Saves the given list of routines to disk atomically.
@@ -132,11 +122,66 @@ public final class RoutineStore: ObservableObject {
         }
         updatedRoutines.remove(at: index)
         try persist(routines: updatedRoutines)
-        
-        if let userId = FirebaseAuthService.shared.userId {
-            Task {
-                await FirestoreSyncService.shared.deleteRoutine(id: id, for: userId)
-            }
+        enqueueCloudDelete(id: id)
+    }
+
+    /// Adds a product step to the first routine for `period`, creating that routine if needed.
+    @discardableResult
+    public func addProduct(
+        title: String,
+        subtitle: String,
+        period: RoutinePeriod,
+        productId: UUID?
+    ) throws -> RoutineRecord {
+        let periodName = period == .am ? "Morning" : "Evening"
+        if let existing = routines.first(where: { $0.period == period }) {
+            var updated = existing
+            let newStep = RoutineStepItem(
+                stepNumber: updated.steps.count + 1,
+                title: title,
+                subtitle: subtitle,
+                state: .incomplete,
+                hasClash: false,
+                productId: productId
+            )
+            updated.steps.append(newStep)
+            try save(updated)
+            return updated
+        }
+
+        let newRoutine = RoutineRecord(
+            name: "\(periodName) Routine",
+            period: period,
+            steps: [
+                RoutineStepItem(
+                    stepNumber: 1,
+                    title: title,
+                    subtitle: subtitle,
+                    state: .incomplete,
+                    hasClash: false,
+                    productId: productId
+                )
+            ]
+        )
+        try save(newRoutine)
+        return newRoutine
+    }
+
+    private func enqueueCloudSave(_ routine: RoutineRecord) {
+        guard CloudSyncConfiguration.isEnabled else { return }
+        CloudSyncConfiguration.noteSyncInvocation()
+        guard let userId = FirebaseAuthService.shared.userId else { return }
+        Task {
+            await FirestoreSyncService.shared.saveRoutine(routine, for: userId)
+        }
+    }
+
+    private func enqueueCloudDelete(id: UUID) {
+        guard CloudSyncConfiguration.isEnabled else { return }
+        CloudSyncConfiguration.noteSyncInvocation()
+        guard let userId = FirebaseAuthService.shared.userId else { return }
+        Task {
+            await FirestoreSyncService.shared.deleteRoutine(id: id, for: userId)
         }
     }
 

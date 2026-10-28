@@ -67,6 +67,11 @@ struct AesthelityApp: App {
             .environmentObject(authService)
             .environmentObject(syncService)
             .task {
+                // Cloud routine/profile sync stays off until isolation, rules, and DB ID are verified.
+                guard CloudSyncConfiguration.isEnabled else {
+                    syncService.stopRoutineListener()
+                    return
+                }
                 guard !isRunningInTestEnvironment else { return }
                 await authService.ensureAuthenticated()
                 if let userId = authService.userId {

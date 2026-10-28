@@ -55,6 +55,7 @@ public struct SettingsView: View {
     
     // MARK: - Local State
     @ObservedObject private var authService = FirebaseAuthService.shared
+    @ObservedObject private var syncService = FirestoreSyncService.shared
     @State public var amRoutineReminder: Bool
     @State public var pmRoutineReminder: Bool
     @State public var scanAlertsEnabled: Bool
@@ -348,19 +349,23 @@ public struct SettingsView: View {
             
             HStack(alignment: .center) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(authService.isAuthenticated && !authService.isAnonymous ? (authService.userEmail ?? "Logged In") : "Guest Account")
+                    Text(authService.isAuthenticated && !authService.isAnonymous ? (authService.userEmail ?? "Signed in") : "Using this device")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Constants.semanticInkBrand)
                     
-                    Text(authService.isAuthenticated ? "Firebase Cloud Sync Active" : "Local Storage Mode")
+                    Text(CloudSyncConfiguration.isEnabled
+                         ? "Cloud sync is enabled"
+                         : "Routines and skin profile stay on this device. Cloud sync is not enabled.")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Constants.semanticInkAccent)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 
-                Spacer()
+                Spacer(minLength: 8)
                 
                 if authService.isAuthenticated && !authService.isAnonymous {
                     Button("Sign Out") {
+                        syncService.stopRoutineListener()
                         try? authService.signOut()
                     }
                     .font(.system(size: 14, weight: .semibold))
