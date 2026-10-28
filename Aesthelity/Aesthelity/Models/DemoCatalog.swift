@@ -6,7 +6,7 @@ enum DemoProductCategory: String, Decodable, CaseIterable {
     case cleanser, serum, treatment, moisturizer, sunscreen, toner, mist, mask
 }
 
-enum IngredientListStatus: String, Decodable, CaseIterable {
+enum IngredientListStatus: String, Codable, Equatable, CaseIterable {
     case complete, partial, unavailable
 }
 
