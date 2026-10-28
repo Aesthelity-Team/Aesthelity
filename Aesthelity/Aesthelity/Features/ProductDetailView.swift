@@ -764,25 +764,21 @@ public struct ProductDetailView: View {
 
     private func commitAddToRoutine(period: RoutinePeriod) {
         let routineName = period == .am ? "AM Routine" : "PM Routine"
-        if let existing = RoutineStore.shared.routines.first(where: { $0.period == period }) {
-            var updated = existing
-            var updatedSteps = updated.steps
-            let newStep = RoutineStepItem(
-                id: UUID(),
-                stepNumber: updatedSteps.count + 1,
+        showAddToRoutineSheet = false
+        do {
+            _ = try RoutineStore.shared.addProduct(
                 title: product.title,
-                subtitle: "\(product.brand) · Step \(updatedSteps.count + 1)",
-                state: .incomplete,
-                hasClash: false,
+                subtitle: "\(product.brand) · \(product.category.rawValue)",
+                period: period,
                 productId: product.id
             )
-            updatedSteps.append(newStep)
-            updated.steps = updatedSteps
-            try? RoutineStore.shared.save(updated)
-        }
-        showAddToRoutineSheet = false
-        withAnimation {
-            routineToastMessage = "Added \(product.title) to \(routineName)!"
+            withAnimation {
+                routineToastMessage = "Added \(product.title) to \(routineName)!"
+            }
+        } catch {
+            withAnimation {
+                routineToastMessage = "Could not save \(product.title) to \(routineName). Please try again."
+            }
         }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) {
             withAnimation {
@@ -792,20 +788,21 @@ public struct ProductDetailView: View {
     }
 
     private func toastBanner(_ message: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: "checkmark.circle.fill")
-                .foregroundStyle(Color(hex: "#2E5224"))
+        let isError = message.localizedCaseInsensitiveContains("could not save")
+        return HStack(spacing: 8) {
+            Image(systemName: isError ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(isError ? Color(hex: "#842029") : Color(hex: "#2E5224"))
             Text(message)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Color(hex: "#1A1628"))
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(Color(hex: "#EAF2EC"))
+        .background(isError ? Color(hex: "#F8D7DA") : Color(hex: "#EAF2EC"))
         .clipShape(Capsule())
         .overlay(
             Capsule()
-                .stroke(Color(hex: "#D4EDDA"), lineWidth: 1)
+                .stroke(isError ? Color(hex: "#F5C2C7") : Color(hex: "#D4EDDA"), lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
     }

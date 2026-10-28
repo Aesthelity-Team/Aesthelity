@@ -126,13 +126,15 @@ struct DemoCatalogTests {
         #expect(detail.ingredients.contains("Squalane"))
         #expect(detail.ingredientGuidance != nil)
         #expect(detail.ingredientGuidance?.contains("PM") == true)
+        #expect(detail.ingredientGuidance?.localizedCaseInsensitiveContains("not a safety assessment") == true)
+        #expect(detail.id == CatalogProductIdentity.uuid(forCatalogId: "serum_retinol"))
         
-        // Check routine compatibility logic for Retinol
+        // Category tips only — not suitability/safety claims
         let amFit = detail.routineFits.first { $0.routineName.contains("AM") }
         let pmFit = detail.routineFits.first { $0.routineName.contains("PM") }
         
-        #expect(amFit?.badgeText == "Avoid", "Retinol should be avoided in morning")
-        #expect(pmFit?.badgeText == "Best", "Retinol is best suited for PM routine")
+        #expect(amFit?.badgeText == "AM tip")
+        #expect(pmFit?.badgeText == "PM tip")
     }
 
     // Scenario 3: Given a user searches for a product that is not available, When the search is submitted, Then the app displays a clear empty-results message.
@@ -199,10 +201,12 @@ struct DemoCatalogTests {
         #expect(detail.ingredientsUnavailable)
         #expect(detail.ingredients.isEmpty)
         #expect(detail.ingredientGuidance != nil)
-        #expect(detail.ingredientGuidance?.contains("Caution") == true)
+        #expect(detail.ingredientGuidance?.localizedCaseInsensitiveContains("unavailable") == true)
+        #expect(detail.ingredientGuidance?.localizedCaseInsensitiveContains("Suitable for daily") != true)
+        #expect(detail.routineFits.allSatisfy { $0.badgeText == "AM tip" || $0.badgeText == "PM tip" })
     }
 
-    // Sunscreen Morning Suitability Guidance
+    // Sunscreen category tip (not a suitability assessment)
     @Test func testSunscreenProductGuidance() {
         guard let sunscreen = catalog.products.first(where: { $0.category == .sunscreen && $0.ingredientListStatus != .unavailable }) else {
             Issue.record("Expected available sunscreen in catalog")
@@ -213,9 +217,11 @@ struct DemoCatalogTests {
         let amFit = detail.routineFits.first { $0.routineName.contains("AM") }
         let pmFit = detail.routineFits.first { $0.routineName.contains("PM") }
         
-        #expect(amFit?.badgeText == "Best")
-        #expect(pmFit?.badgeText == "Avoid", "Sunscreen is not recommended for overnight PM routines")
-        #expect(detail.ingredientGuidance?.contains("morning") == true || detail.ingredientGuidance?.contains("Sun Protection") == true)
+        #expect(amFit?.badgeText == "AM tip")
+        #expect(pmFit?.badgeText == "PM tip")
+        #expect(detail.ingredientGuidance?.localizedCaseInsensitiveContains("not a safety assessment") == true)
+        #expect(detail.ingredientGuidance?.localizedCaseInsensitiveContains("AM") == true
+                || detail.ingredientGuidance?.localizedCaseInsensitiveContains("sunscreen") == true)
     }
 
     // Add to Routine Callback Integration

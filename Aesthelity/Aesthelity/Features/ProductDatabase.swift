@@ -279,12 +279,15 @@ public class ProductDatabase {
         )
         register(foamingMicellar)
 
-        // 9. Load DemoCatalog products into dedicated demo registry
+        // 9. Load DemoCatalog products with stable IDs into demo + UUID registries
         if let catalog = try? DemoCatalog.load() {
             for demo in catalog.products {
                 let item = ProductDetailItem(demoProduct: demo)
                 demoDatabase[demo.id] = item
                 demoDatabase[demo.name] = item
+                databaseById[item.id] = item
+                database[demo.id] = item
+                database[item.title] = item
             }
         }
     }

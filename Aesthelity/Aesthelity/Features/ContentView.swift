@@ -155,7 +155,7 @@ struct ContentView: View {
     @State var selectedPeriod: RoutinePeriod = .am
     @State var selectedTab: Int = 0
     @State var showAnalysisSheet: Bool = false
-    @State var showClashDemo: Bool = true
+    @State var showClashDemo: Bool = false
     @State var showJournalSheet: Bool = false
     @State var showCalendarSheet: Bool = false
     @State var showIngredientClashDetail: Bool = false
@@ -164,9 +164,12 @@ struct ContentView: View {
     @State var showStartupFlowSheet: Bool = false
     @State private var showSkinProfileSetupSheet = false
     public var onResetStartup: (() -> Void)? = nil
-    
+
+    /// When false, Home reads steps from `routineStore` for the selected period.
+    private let usesInjectedSteps: Bool
     let stepModel: ContentViewStepModel
     @ObservedObject private var observedStepModel: ContentViewStepModel
+    @ObservedObject private var routineStore: RoutineStore
     
     var amSteps: [RoutineStepItem] {
         get { stepModel.amSteps }
@@ -185,13 +188,14 @@ struct ContentView: View {
         selectedPeriod: RoutinePeriod = .am,
         selectedTab: Int = 0,
         showAnalysisSheet: Bool = false,
-        showClashDemo: Bool = true,
+        showClashDemo: Bool = false,
         showJournalSheet: Bool = false,
         showCalendarSheet: Bool = false,
         showIngredientClashDetail: Bool = false,
         showManageRoutinesView: Bool = false,
         showEditRoutineView: Bool = false,
-        onResetStartup: (() -> Void)? = nil
+        onResetStartup: (() -> Void)? = nil,
+        routineStore: RoutineStore = .shared
     ) {
         self._selectedPeriod = State(initialValue: selectedPeriod)
         self._selectedTab = State(initialValue: selectedTab)
@@ -203,9 +207,12 @@ struct ContentView: View {
         self._showManageRoutinesView = State(initialValue: showManageRoutinesView)
         self._showEditRoutineView = State(initialValue: showEditRoutineView)
         self.onResetStartup = onResetStartup
-        let model = ContentViewStepModel()
+        self.usesInjectedSteps = false
+        // Empty placeholders — live Home uses `routineStore`.
+        let model = ContentViewStepModel(amSteps: [], amClashSteps: [], pmSteps: [])
         self.stepModel = model
         self._observedStepModel = ObservedObject(wrappedValue: model)
+        self._routineStore = ObservedObject(wrappedValue: routineStore)
     }
     
     init(
@@ -213,7 +220,8 @@ struct ContentView: View {
         showClashDemo: Bool = true,
         amSteps: [RoutineStepItem],
         amClashSteps: [RoutineStepItem],
-        pmSteps: [RoutineStepItem]
+        pmSteps: [RoutineStepItem],
+        routineStore: RoutineStore = .shared
     ) {
         self._selectedPeriod = State(initialValue: selectedPeriod)
         self._selectedTab = State(initialValue: 0)
@@ -225,17 +233,38 @@ struct ContentView: View {
         self._showManageRoutinesView = State(initialValue: false)
         self._showEditRoutineView = State(initialValue: false)
         self.onResetStartup = nil
+        self.usesInjectedSteps = true
         let model = ContentViewStepModel(amSteps: amSteps, amClashSteps: amClashSteps, pmSteps: pmSteps)
         self.stepModel = model
         self._observedStepModel = ObservedObject(wrappedValue: model)
+        self._routineStore = ObservedObject(wrappedValue: routineStore)
     }
     
     var currentSteps: [RoutineStepItem] {
-        if selectedPeriod == .am {
-            return showClashDemo ? stepModel.amClashSteps : stepModel.amSteps
-        } else {
+        if usesInjectedSteps {
+            if selectedPeriod == .am {
+                return showClashDemo ? stepModel.amClashSteps : stepModel.amSteps
+            }
             return stepModel.pmSteps
         }
+        return routineStore.routines.first(where: { $0.period == selectedPeriod })?.steps ?? []
+    }
+
+    private var displayedAMStepCount: Int {
+        if usesInjectedSteps { return stepModel.amSteps.count }
+        return routineStore.routines.first(where: { $0.period == .am })?.steps.count ?? 0
+    }
+
+    private var displayedPMStepCount: Int {
+        if usesInjectedSteps { return stepModel.pmSteps.count }
+        return routineStore.routines.first(where: { $0.period == .pm })?.steps.count ?? 0
+    }
+
+    private var selectedRoutineDisplayName: String {
+        if let name = routineStore.routines.first(where: { $0.period == selectedPeriod })?.name {
+            return name
+        }
+        return selectedPeriod == .am ? "AM routine" : "PM routine"
     }
     
     var emptyRoutineMessage: String? {
@@ -262,7 +291,12 @@ struct ContentView: View {
                         })
                     } else if showEditRoutineView {
                         EditRoutineView(
-                            routine: RoutineRepository.shared.routines.first ?? RoutineRecord(name: "AM Glow"),
+                            routine: routineStore.routines.first(where: { $0.period == selectedPeriod })
+                                ?? routineStore.routines.first
+                                ?? RoutineRecord(
+                                    name: selectedPeriod == .am ? "Morning Routine" : "Evening Routine",
+                                    period: selectedPeriod
+                                ),
                             onBack: {
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     showEditRoutineView = false
@@ -271,9 +305,9 @@ struct ContentView: View {
                             onSave: { updatedRoutine in
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     do {
-                                        try RoutineRepository.shared.update(updatedRoutine)
+                                        try routineStore.update(updatedRoutine)
                                     } catch {
-                                        try? RoutineRepository.shared.save(updatedRoutine)
+                                        try? routineStore.save(updatedRoutine)
                                     }
                                     showEditRoutineView = false
                                 }
@@ -480,7 +514,7 @@ struct ContentView: View {
                 
                 Spacer()
                 
-                Text("AM Glow ›")
+                Text("\(selectedRoutineDisplayName) ›")
                     .font(.system(size: 13, weight: .regular))
                     .foregroundStyle(Constants.semanticInkSecondary)
             }
@@ -501,10 +535,10 @@ struct ContentView: View {
     // MARK: - 4. Confidence Score Card
     private var confidenceScoreCard: some View {
         ConfidenceCard(
-            score: (showClashDemo && selectedPeriod == .am) ? 64 : 82,
-            subtitle: (showClashDemo && selectedPeriod == .am) ? "Active clash detected" : "Routine compatibility",
-            amSteps: amSteps.count,
-            pmSteps: pmSteps.count,
+            score: (usesInjectedSteps && showClashDemo && selectedPeriod == .am) ? 64 : 82,
+            subtitle: (usesInjectedSteps && showClashDemo && selectedPeriod == .am) ? "Active clash detected" : "Routine compatibility",
+            amSteps: displayedAMStepCount,
+            pmSteps: displayedPMStepCount,
             onTap: {
                 showAnalysisSheet = true
             }
@@ -563,7 +597,7 @@ struct ContentView: View {
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Constants.semanticInkPrimary)
 
-                        Text("The sample routine isn't available right now.")
+                        Text("Save a \(selectedPeriod.rawValue) routine to see its steps here.")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Constants.semanticInkSecondary)
                     }
@@ -736,6 +770,29 @@ struct ContentView: View {
     }
     
     private func toggleStep(_ step: RoutineStepItem) {
+        if usesInjectedSteps {
+            toggleInjectedStep(step)
+            return
+        }
+
+        guard var routine = routineStore.routines.first(where: { $0.period == selectedPeriod }),
+              let idx = routine.steps.firstIndex(where: { $0.id == step.id }) else {
+            return
+        }
+        withAnimation(.easeInOut(duration: 0.15)) {
+            switch routine.steps[idx].state {
+            case .complete:
+                routine.steps[idx].state = .incomplete
+            case .active:
+                routine.steps[idx].state = .complete
+            case .incomplete:
+                routine.steps[idx].state = .active
+            }
+            try? routineStore.update(routine)
+        }
+    }
+
+    private func toggleInjectedStep(_ step: RoutineStepItem) {
         if selectedPeriod == .am {
             if showClashDemo {
                 if let idx = amClashSteps.firstIndex(where: { $0.id == step.id }) {
@@ -750,31 +807,27 @@ struct ContentView: View {
                         }
                     }
                 }
-            } else {
-                if let idx = amSteps.firstIndex(where: { $0.id == step.id }) {
-                    withAnimation(.easeInOut(duration: 0.15)) {
-                        switch amSteps[idx].state {
-                        case .complete:
-                            amSteps[idx].state = .incomplete
-                        case .active:
-                            amSteps[idx].state = .complete
-                        case .incomplete:
-                            amSteps[idx].state = .active
-                        }
+            } else if let idx = amSteps.firstIndex(where: { $0.id == step.id }) {
+                withAnimation(.easeInOut(duration: 0.15)) {
+                    switch amSteps[idx].state {
+                    case .complete:
+                        amSteps[idx].state = .incomplete
+                    case .active:
+                        amSteps[idx].state = .complete
+                    case .incomplete:
+                        amSteps[idx].state = .active
                     }
                 }
             }
-        } else {
-            if let idx = pmSteps.firstIndex(where: { $0.id == step.id }) {
-                withAnimation(.easeInOut(duration: 0.15)) {
-                    switch pmSteps[idx].state {
-                    case .complete:
-                        pmSteps[idx].state = .incomplete
-                    case .active:
-                        pmSteps[idx].state = .complete
-                    case .incomplete:
-                        pmSteps[idx].state = .active
-                    }
+        } else if let idx = pmSteps.firstIndex(where: { $0.id == step.id }) {
+            withAnimation(.easeInOut(duration: 0.15)) {
+                switch pmSteps[idx].state {
+                case .complete:
+                    pmSteps[idx].state = .incomplete
+                case .active:
+                    pmSteps[idx].state = .complete
+                case .incomplete:
+                    pmSteps[idx].state = .active
                 }
             }
         }

@@ -261,8 +261,9 @@ struct AesthelityTests {
         let detailViewByStringID = ProductDetailView(productId: ProductDatabase.hydrabioCreamCleanserID.uuidString)
         #expect(detailViewByStringID.product.title == "Hydrabio Cream Cleanser")
         
-        // 7. Verify all unique products in database
-        #expect(db.allProducts.count == 14)
+        // 7. Seed products plus demo-catalog products registered with stable UUIDs
+        let demoCount = (try? DemoCatalog.load())?.products.count ?? 0
+        #expect(db.allProducts.count == 14 + demoCount)
         #expect(db.allProducts.contains { $0.id == ProductDatabase.hydrabioCreamCleanserID })
     }
     
@@ -511,11 +512,17 @@ struct AesthelityTests {
     }
     
     @Test func contentViewClashDemoStateDefaultsAndSteps() throws {
-        let contentView = ContentView()
+        let clashSteps = ContentViewStepModel.defaultAMClashSteps
+        let contentView = ContentView(
+            selectedPeriod: .am,
+            showClashDemo: true,
+            amSteps: ContentViewStepModel.defaultAMSteps,
+            amClashSteps: clashSteps,
+            pmSteps: ContentViewStepModel.defaultPMSteps
+        )
         #expect(contentView.showClashDemo == true)
         #expect(contentView.selectedPeriod == .am)
         
-        // In default clash demo state for AM
         let steps = contentView.currentSteps
         #expect(steps.count == 5)
         #expect(steps[0].title == "Gentle Cleanser")
@@ -531,7 +538,13 @@ struct AesthelityTests {
     }
     
     @Test func contentViewToggleClashDemoState() throws {
-        let contentView = ContentView(showClashDemo: false)
+        let contentView = ContentView(
+            selectedPeriod: .am,
+            showClashDemo: false,
+            amSteps: ContentViewStepModel.defaultAMSteps,
+            amClashSteps: ContentViewStepModel.defaultAMClashSteps,
+            pmSteps: ContentViewStepModel.defaultPMSteps
+        )
         
         let normalSteps = contentView.currentSteps
         #expect(normalSteps.count == 4)
@@ -543,13 +556,25 @@ struct AesthelityTests {
     }
     
     @Test func contentViewPopulatedRoutineHasNoEmptyMessage() throws {
-        #expect(ContentView(selectedPeriod: .am).emptyRoutineMessage == nil)
-        #expect(ContentView(selectedPeriod: .am, showClashDemo: false).emptyRoutineMessage == nil)
-        #expect(ContentView(selectedPeriod: .pm).emptyRoutineMessage == nil)
+        let injected = ContentView(
+            selectedPeriod: .am,
+            showClashDemo: false,
+            amSteps: ContentViewStepModel.defaultAMSteps,
+            amClashSteps: ContentViewStepModel.defaultAMClashSteps,
+            pmSteps: ContentViewStepModel.defaultPMSteps
+        )
+        #expect(injected.emptyRoutineMessage == nil)
+        #expect(ContentView(
+            selectedPeriod: .pm,
+            showClashDemo: false,
+            amSteps: ContentViewStepModel.defaultAMSteps,
+            amClashSteps: ContentViewStepModel.defaultAMClashSteps,
+            pmSteps: ContentViewStepModel.defaultPMSteps
+        ).emptyRoutineMessage == nil)
     }
 
     @Test func contentViewEmptySelectedRoutineShowsMessage() throws {
-        let sampleAM = ContentView(selectedPeriod: .am, showClashDemo: false).currentSteps
+        let sampleAM = ContentViewStepModel.defaultAMSteps
 
         let emptyPM = ContentView(selectedPeriod: .pm, amSteps: sampleAM, amClashSteps: sampleAM, pmSteps: [])
         #expect(emptyPM.currentSteps.isEmpty)

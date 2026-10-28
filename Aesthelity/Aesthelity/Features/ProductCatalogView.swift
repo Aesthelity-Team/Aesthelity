@@ -605,36 +605,23 @@ public struct ProductCatalogView: View {
     private func add(product: DemoProduct, to period: RoutinePeriod) {
         if let onAddToRoutine = onAddToRoutine {
             onAddToRoutine(product, period)
+            routineToastMessage = "Added to \(period == .am ? "AM" : "PM") routine"
         } else {
             let cat = ProductCategory(demoCategory: product.category)
-            let periodName = period == .am ? "Morning" : "Evening"
-            let existing = RoutineStore.shared.routines.first { $0.period == period }
-            let nextStepNumber = (existing?.steps.count ?? 0) + 1
-
-            let newStep = RoutineStepItem(
-                stepNumber: nextStepNumber,
-                title: product.name,
-                subtitle: "\(product.brand) · \(cat.rawValue)",
-                state: .incomplete,
-                hasClash: false,
-                productId: UUID()
-            )
-
-            if let routine = existing {
-                var updated = routine
-                updated.steps.append(newStep)
-                try? RoutineStore.shared.save(updated)
-            } else {
-                let newRoutine = RoutineRecord(
-                    name: "\(periodName) Routine",
+            let detail = ProductDatabase.shared.detail(forDemoProduct: product)
+            do {
+                _ = try RoutineStore.shared.addProduct(
+                    title: product.name,
+                    subtitle: "\(product.brand) · \(cat.rawValue)",
                     period: period,
-                    steps: [newStep]
+                    productId: detail.id
                 )
-                try? RoutineStore.shared.save(newRoutine)
+                routineToastMessage = "Added to \(period == .am ? "AM" : "PM") routine"
+            } catch {
+                routineToastMessage = "Could not save to your \(period == .am ? "AM" : "PM") routine. Please try again."
             }
         }
 
-        routineToastMessage = "Added to \(period == .am ? "AM" : "PM") routine"
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
             routineToastMessage = nil
         }

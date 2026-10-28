@@ -89,56 +89,59 @@ public struct ProductDetailItem: Identifiable, Equatable {
         let amBadge: String
         let pmBadge: String
 
+        // Category heuristics only — not a safety or suitability assessment.
         if isSpf {
-            amNote = "Crucial final step before sun exposure"
-            pmNote = "Remove thoroughly before sleep"
-            amBadge = "Best"
-            pmBadge = "Avoid"
+            amNote = "Often used as a daytime final step"
+            pmNote = "Usually removed before sleep"
+            amBadge = "AM tip"
+            pmBadge = "PM tip"
         } else if isRetinol {
-            amNote = "Degrades in UV light; causes sun sensitivity"
-            pmNote = "Promotes overnight cellular renewal"
-            amBadge = "Avoid"
-            pmBadge = "Best"
+            amNote = "Often reserved for evening use"
+            pmNote = "Commonly used in evening routines"
+            amBadge = "AM tip"
+            pmBadge = "PM tip"
         } else if isVitaminC {
-            amNote = "Antioxidant protection under SPF"
-            pmNote = "Avoid combining with evening retinol"
-            amBadge = "Best"
-            pmBadge = "Avoid"
+            amNote = "Often paired with daytime SPF"
+            pmNote = "May conflict with some evening actives"
+            amBadge = "AM tip"
+            pmBadge = "PM tip"
         } else if isAha {
-            amNote = "Increases photosensitivity; use SPF if worn in day"
-            pmNote = "Exfoliates surface cells overnight"
-            amBadge = "Caution"
-            pmBadge = "Best"
-        } else if isCleanser {
-            amNote = "Gentle morning cleanse"
-            pmNote = "Essential evening cleanse"
-            amBadge = "Best"
-            pmBadge = "Best"
-        } else if isToner {
-            amNote = "Preps skin for daytime hydration"
-            pmNote = "Restores post-cleanse barrier balance"
-            amBadge = "Best"
-            pmBadge = "Best"
+            amNote = "Can increase sun sensitivity"
+            pmNote = "Often used in evening routines"
+            amBadge = "AM tip"
+            pmBadge = "PM tip"
+        } else if isCleanser || isToner {
+            amNote = "Common morning step"
+            pmNote = "Common evening step"
+            amBadge = "AM tip"
+            pmBadge = "PM tip"
         } else {
-            amNote = "Nourishes and supports skin barrier"
-            pmNote = "Deeply hydrates during sleep"
-            amBadge = "Best"
-            pmBadge = "Best"
+            amNote = "General product category tip only"
+            pmNote = "General product category tip only"
+            amBadge = "AM tip"
+            pmBadge = "PM tip"
         }
 
         let guidance: String? = {
-            if demoProduct.ingredientListStatus == .unavailable {
-                return "Full ingredient list is unavailable for this product. Caution: routine clash analysis cannot be verified."
-            } else if isRetinol {
-                return "Contains Retinoid: Recommended for PM routine use only. Increases photosensitivity; always wear SPF during the day. Do not layer with AHA/BHA or Vitamin C at the same time."
-            } else if isVitaminC {
-                return "Contains Vitamin C: High-potency antioxidant. Excellent under morning SPF. Avoid mixing with retinol or direct acids in the same application."
-            } else if isAha {
-                return "Contains Exfoliating Acid: Use 2-3 times weekly at night. Avoid pairing with strong retinoids on the same evening."
-            } else if isSpf {
-                return "Daily Sun Protection: Apply as the final step in your AM routine 15 minutes before sun exposure. Reapply every 2 hours outdoors."
-            } else {
-                return "Formulated with skin-compatible hydrators and gentle conditioning agents. Suitable for daily AM and PM use."
+            switch demoProduct.ingredientListStatus {
+            case .unavailable:
+                return "Ingredient list unavailable. No safety or clash assessment can be made from this record."
+            case .partial:
+                return "Ingredient list is partial. Treat category tips as incomplete information, not a suitability judgment."
+            case .complete:
+                if isRetinol {
+                    return "Category tip (not a safety assessment): retinoid-type products are often used in PM routines; daytime SPF is commonly advised."
+                }
+                if isVitaminC {
+                    return "Category tip (not a safety assessment): vitamin C products are often used in AM routines under SPF."
+                }
+                if isAha {
+                    return "Category tip (not a safety assessment): exfoliating acids are often limited to a few PM uses per week."
+                }
+                if isSpf {
+                    return "Category tip (not a safety assessment): sunscreen products are often applied as a final AM step."
+                }
+                return "Category tip only. This is not a verified suitability or safety assessment."
             }
         }()
 
@@ -150,7 +153,7 @@ public struct ProductDetailItem: Identifiable, Equatable {
         }
 
         self.init(
-            id: UUID(),
+            id: CatalogProductIdentity.uuid(forCatalogId: demoProduct.id),
             title: demoProduct.name,
             subtitle: subtitleText,
             brand: demoProduct.brand,
