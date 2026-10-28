@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "negative",
+  "fixtureID": "an02-negative-suggested-limonene",
+  "summary": "A recorded limonene allergy does not match a suggested ID.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "am",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": [
+        "limonene"
+      ]
+    },
+    "products": [
+      {
+        "productID": "example-suggestion",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Limonene",
+            "mapping": "uncertain",
+            "suggestedID": "limonene"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "am",
+    "activeCatalogVersion": 3,
+    "outcome": "findings",
+    "completeness": "incomplete",
+    "productIDs": [
+      "example-suggestion"
+    ],
+    "findings": [
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. The recorded allergy names limonene, but this row only suggests it.",
+        "reason": "Proposed. suggestedID is not a confirmed match.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "coverage.unresolved-row",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "productIDs": [
+          "example-suggestion"
+        ],
+        "ingredientIDs": [],
+        "originalText": "Limonene",
+        "rowIndex": 0,
+        "reasonCode": "uncertain"
+      }
+    ],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "negative",
+  "fixtureID": "an02-negative-niacinamide-ascorbic",
+  "summary": "Niacinamide plus ascorbic acid has no v1 interaction finding.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "am",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": []
+    },
+    "products": [
+      {
+        "productID": "example-niacinamide",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Niacinamide",
+            "mapping": "confirmed",
+            "ingredientID": "niacinamide"
+          }
+        ]
+      },
+      {
+        "productID": "example-ascorbic-acid",
+        "listStatus": "complete",
+        "catalogVersion": 3,
+        "ingredients": [
+          {
+            "originalText": "Ascorbic Acid",
+            "mapping": "confirmed",
+            "ingredientID": "ascorbic-acid"
+          }
+        ]
+      }
+    ]
+  },
+  "expected": {
+    "period": "am",
+    "activeCatalogVersion": 3,
+    "outcome": "noFindings",
+    "completeness": "complete",
+    "productIDs": [
+      "example-niacinamide",
+      "example-ascorbic-acid"
+    ],
+    "findings": [],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}

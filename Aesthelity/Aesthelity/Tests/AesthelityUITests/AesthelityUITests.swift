@@ -9,6 +9,7 @@ final class AesthelityUITests: XCTestCase {
     @MainActor
     private func launchAppToHome() -> XCUIApplication {
         let app = XCUIApplication()
+        app.launchArguments.append("--seed-routines")
         app.launch()
 
         // If onboarding appears, complete the sample setup flow.

@@ -29,6 +29,9 @@ struct SkinProfileTests {
         )
 
         let restored = try roundTrip(profile)
+        let saved = try JSONSerialization.jsonObject(with: JSONEncoder().encode(profile)) as? [String: Any]
+        let savedIngredients = try #require(saved?["avoidedIngredients"] as? [[String: Any]])
+        #expect(savedIngredients.allSatisfy { $0["mapping"] != nil && $0["status"] == nil })
 
         #expect(restored == profile)
         #expect(restored.schemaVersion == 1)
@@ -74,6 +77,31 @@ struct SkinProfileTests {
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(object["schemaVersion"] as? Int == 2)
         #expect(try roundTrip(profile) == profile)
+    }
+
+    @Test func legacyIngredientStatusInASavedProfileDoesNotConfirmSuggestions() throws {
+        let json = """
+        {"schemaVersion":1,"skinType":"dry","concerns":["barrier-repair"],"setupStatus":"completed","avoidedIngredients":[
+          {"originalText":"Parfum","status":{"matched":{"ingredientID":"fragrance"}}},
+          {"originalText":"Niacinimide","status":{"uncertain":{"suggestedID":"niacinamide"}},"warning":{"input":"Niacinimide","message":"review"}},
+          {"originalText":"Vitamin C","status":{"ambiguous":{"candidateIDs":["ascorbic-acid","ascorbyl-glucoside"]}}},
+          {"originalText":"Nope","status":{"unmatched":{}}}
+        ]}
+        """
+        let profile = try JSONDecoder().decode(SkinProfile.self, from: Data(json.utf8))
+        #expect(profile.avoidedIngredients.map(\.originalText) == ["Parfum", "Niacinimide", "Vitamin C", "Nope"])
+        #expect(profile.avoidedIngredients.map(\.ingredientID) == ["fragrance", nil, nil, nil])
+        #expect(profile.avoidedIngredients.map(\.needsReview) == [false, true, true, true])
+        #expect(profile.avoidedIngredients[1].suggestedID == "niacinamide")
+
+        let malformed = """
+        {"schemaVersion":1,"skinType":"dry","concerns":["barrier-repair"],"setupStatus":"completed","avoidedIngredients":[
+          {"originalText":"Water","status":{"matched":{"ingredientID":"   "}}}
+        ]}
+        """
+        #expect(throws: DecodingError.self) {
+            try JSONDecoder().decode(SkinProfile.self, from: Data(malformed.utf8))
+        }
     }
 
     @Test func profilesWithoutSchemaVersionDecodeAsVersionOne() throws {

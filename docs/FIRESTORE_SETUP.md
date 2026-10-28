@@ -95,3 +95,30 @@ Private collection structures are documented in FIRESTORE_SCHEMA.md.
 Authentication, user authorization, routine persistence, manual product
 entry, and saved analysis history are implemented by their respective
 feature issues.
+
+## iOS app: local-only routines and profile (current PR path)
+
+The iOS client keeps routines and skin profile on-device
+(`Application Support/Routines/routines.json` and
+`Application Support/SkinProfile/profile.json`).
+
+**Cloud routine/profile sync is disabled** via
+`CloudSyncConfiguration.isEnabled == false` until the team agrees and
+verifies:
+
+1. Account isolation for local files (sign-out / account change policy)
+2. Safe reconciliation (no silent upload of guest data; no blind overwrite)
+3. Client security rules for `users/{uid}/…` (the checked-in
+   `firestore.rules` currently denies all client access; that file is
+   **not** proof of what is deployed)
+4. Database ID alignment: setup docs and Python tooling target `ogdb`,
+   while `Firestore.firestore()` in the app uses the **default** database
+   unless explicitly configured otherwise
+
+While sync is disabled, Firebase Auth UI may still be present for sign-in
+experiments, but the app must not start routine listeners or write
+routines/profiles to Firestore. Settings copy states that data stays on
+this device and that cloud sync is not enabled.
+
+Do not enable `CloudSyncConfiguration.isEnabled` without emulator or
+staging verification of the items above.
