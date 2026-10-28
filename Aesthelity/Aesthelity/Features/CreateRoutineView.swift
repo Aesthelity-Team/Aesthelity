@@ -77,6 +77,11 @@ public struct CreateRoutineView: View {
                     // Settings Navigation Rows (Schedule & Notifications)
                     settingsNavigationSection
                     
+                    if hasAttemptedSave && !RoutineEditor.validationErrors(name: routineName, steps: steps).isEmpty {
+                        Text(RoutineEditor.validationErrors(name: routineName, steps: steps).joined(separator: " "))
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("routine-validation")
+                    }
                     // Save Button
                     saveButton
                 }
@@ -84,6 +89,12 @@ public struct CreateRoutineView: View {
             }
         }
         .background(Color(hex: "#F7F3ED"))
+        .sheet(isPresented: $showAddProductSheet) {
+            RoutineProductPicker(steps: steps) { step in
+                steps = RoutineEditor.adding(step, to: steps)
+                showAddProductSheet = false
+            }
+        }
         .sheet(isPresented: $showScheduleSheet) {
             RoutineScheduleView(
                 frequency: $frequency,
@@ -149,7 +160,8 @@ public struct CreateRoutineView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(Color(hex: "#842029"))
                 
-                Text("Add a routine name, then try again.")
+                Text(RoutineEditor.validationErrors(name: routineName, steps: steps).joined(separator: " "))
+                    .accessibilityIdentifier("routine-validation-banner")
                     .font(.system(size: 13))
                     .foregroundStyle(Color(hex: "#842029").opacity(0.9))
             }
@@ -181,7 +193,10 @@ public struct CreateRoutineView: View {
                 .foregroundStyle(Color(hex: "#625478"))
             
             HStack {
-                TextField("e.g. Morning Glow", text: $routineName)
+                TextField("e.g. Morning Glow", text: $routineName, prompt: Text("e.g. Morning Glow").foregroundStyle(Color(hex: "#625478")))
+                    .accessibilityIdentifier("routine-name")
+                    .submitLabel(.done)
+                    .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color(hex: "#1A1628"))
                     .onChange(of: routineName) { _, newValue in
@@ -264,100 +279,9 @@ public struct CreateRoutineView: View {
     
     // MARK: - Steps Section
     private var stepsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("STEPS")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color(hex: "#625478"))
-                
-                Spacer()
-                
-                Text("\(steps.count) steps")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: "#625478"))
-            }
-            
-            if steps.isEmpty {
-                // Empty state card
-                VStack(spacing: 14) {
-                    RoutineEmptyIllustration(size: 64)
-                    
-                    VStack(spacing: 4) {
-                        Text("No steps yet")
-                            .font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Color(hex: "#1A1628"))
-                        
-                        Text("Add your first step to start building this routine")
-                            .font(.system(size: 13))
-                            .foregroundStyle(Color(hex: "#625478"))
-                            .multilineTextAlignment(.center)
-                    }
-                    
-                    Button(action: {
-                        // Demo add step
-                        steps.append(
-                            RoutineStepItem(
-                                stepNumber: 1,
-                                title: "Gentle Cleanser",
-                                subtitle: "Purifying · Step 1",
-                                state: .active
-                            )
-                        )
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus")
-                                .font(.system(size: 14, weight: .semibold))
-                            Text("Add step")
-                                .font(.system(size: 14, weight: .semibold))
-                        }
-                        .foregroundStyle(Color(hex: "#50578F"))
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 10)
-                        .background(Color(hex: "#DFD8F5"))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(24)
-                .background(Color.white)
-                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
-                )
-            } else {
-                VStack(spacing: 10) {
-                    ForEach(steps) { step in
-                        HStack(spacing: 12) {
-                            Text("\(step.stepNumber)")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundStyle(Color(hex: "#50578F"))
-                                .frame(width: 28, height: 28)
-                                .background(Color(hex: "#DFD8F5"))
-                                .clipShape(Circle())
-                            
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(step.title)
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Color(hex: "#1A1628"))
-                                
-                                Text(step.subtitle)
-                                    .font(.system(size: 13))
-                                    .foregroundStyle(Color(hex: "#625478"))
-                            }
-                            
-                            Spacer()
-                        }
-                        .padding(14)
-                        .background(Color.white)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    }
-                }
-            }
-        }
+        RoutineStepsEditor(steps: $steps, onAdd: { showAddProductSheet = true })
     }
-    
+
     // MARK: - Settings Navigation Section
     private var settingsNavigationSection: some View {
         VStack(spacing: 10) {
@@ -435,17 +359,17 @@ public struct CreateRoutineView: View {
     private var saveButton: some View {
         LabeledButton("Save routine", variant: .primary) {
             hasAttemptedSave = true
-            if routineName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            if !RoutineEditor.validationErrors(name: routineName, steps: steps).isEmpty {
                 withAnimation { showErrorBanner = true }
             } else {
                 let newRecord = RoutineRecord(
-                    name: routineName,
+                    name: routineName.trimmingCharacters(in: .whitespacesAndNewlines),
                     period: selectedPeriod,
                     status: .active,
                     frequency: frequency,
                     reminderTime: reminderTime,
                     activeDays: activeDays,
-                    steps: steps,
+                    steps: RoutineEditor.numbered(steps),
                     pushRemindersEnabled: pushRemindersEnabled,
                     leadTime: leadTime,
                     quietHoursEnabled: quietHoursEnabled
@@ -453,6 +377,7 @@ public struct CreateRoutineView: View {
                 onSaveRoutine(newRecord)
             }
         }
+        .accessibilityIdentifier("routine-save")
         .padding(.top, 8)
     }
 }

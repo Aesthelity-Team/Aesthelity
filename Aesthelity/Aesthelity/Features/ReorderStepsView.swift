@@ -174,21 +174,7 @@ public struct ReorderStepsView: View {
     private func moveStep(from source: Int, to destination: Int) {
         guard destination >= 0 && destination < steps.count else { return }
         withAnimation(.easeInOut(duration: 0.2)) {
-            var reordered = steps
-            let item = reordered.remove(at: source)
-            reordered.insert(item, at: destination)
-            // Renumber
-            for i in 0..<reordered.count {
-                let s = reordered[i]
-                reordered[i] = RoutineStepItem(
-                    stepNumber: i + 1,
-                    title: s.title,
-                    subtitle: s.subtitle,
-                    state: s.state,
-                    hasClash: s.hasClash
-                )
-            }
-            steps = reordered
+            steps = RoutineEditor.moving(steps, from: source, to: destination)
         }
     }
 }

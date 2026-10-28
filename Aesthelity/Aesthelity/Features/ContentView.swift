@@ -56,14 +56,17 @@ public enum StepState: Equatable {
 }
 
 public struct RoutineStepItem: Identifiable {
-    public let id = UUID()
+    public let id: UUID
+    public let product: RoutineProductSnapshot?
     public let stepNumber: Int
     public let title: String
     public let subtitle: String
     public var state: StepState
     public var hasClash: Bool = false
     
-    public init(stepNumber: Int, title: String, subtitle: String, state: StepState, hasClash: Bool = false) {
+    public init(id: UUID = UUID(), stepNumber: Int, title: String, subtitle: String, state: StepState, hasClash: Bool = false, product: RoutineProductSnapshot? = nil) {
+        self.id = id
+        self.product = product
         self.stepNumber = stepNumber
         self.title = title
         self.subtitle = subtitle
@@ -190,7 +193,10 @@ struct ContentView: View {
                                     showEditRoutineView = false
                                 }
                             },
-                            onSave: { _ in
+                            onSave: { updated in
+                                if let index = RoutineRepository.shared.routines.firstIndex(where: { $0.id == updated.id }) {
+                                    RoutineRepository.shared.routines[index] = updated
+                                }
                                 withAnimation(.easeInOut(duration: 0.2)) {
                                     showEditRoutineView = false
                                 }
@@ -378,6 +384,7 @@ struct ContentView: View {
             .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("routine-manage")
     }
     
     // MARK: - 3. Edit Routine Card

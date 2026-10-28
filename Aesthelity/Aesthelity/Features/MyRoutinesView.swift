@@ -165,6 +165,7 @@ public struct MyRoutinesView: View {
                 LabeledButton("Create routine", variant: .primary) {
                     showCreateRoutineSheet = true
                 }
+                .accessibilityIdentifier("routine-create")
                 .padding(.horizontal, 20)
                 .padding(.top, 12)
                 .padding(.bottom, 24)
@@ -233,5 +234,6 @@ public struct MyRoutinesView: View {
             .shadow(color: Color.black.opacity(0.03), radius: 3, x: 0, y: 2)
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("routine-card-\(routine.name)")
     }
 }

@@ -1045,3 +1045,89 @@ struct AesthelityTests {
         #expect(skipCalled == true)
     }
 }
+
+struct RoutineEditorTests {
+    private func manual(name: String = "Serum") throws -> RoutineStepItem {
+        let normalizer = IngredientNormalizer(catalog: try .loadBundled())
+        return RoutineProductSnapshot(ManualProduct(name: name, rawIngredientList: "Water, Vitamin C, Water",
+                                                    ingredients: normalizer.normalize(["Water", "Vitamin C", "Water"]))).step
+    }
+
+    @Test func incompleteRoutinesReportAllRequiredInformation() throws {
+        #expect(RoutineEditor.validationErrors(name: " \n ", steps: []).count == 2)
+        #expect(RoutineEditor.validationErrors(name: "Morning", steps: []).count == 1)
+        #expect(RoutineEditor.validationErrors(name: "Morning", steps: [try manual()]).isEmpty)
+    }
+
+    @Test func additionPreservesProductIdentityAndUnresolvedIngredientDetails() throws {
+        let step = try manual()
+        let added = RoutineEditor.adding(step, to: [])
+        #expect(added.first?.id == step.id)
+        #expect(added.first?.product == step.product)
+        #expect(added.first?.product?.normalizedIngredients.warnings.count == 1)
+        #expect(added.first?.product?.ingredientNames == ["Water", "Vitamin C", "Water"])
+        #expect(added.first?.stepNumber == 1)
+    }
+
+    @Test func catalogStepsRetainStableReferencesAndIncompleteLists() throws {
+        let catalog = try DemoCatalog.load()
+        let product = try #require(catalog.products.first { $0.ingredientListStatus == .unavailable })
+        let snapshot = RoutineProductSnapshot(product)
+        #expect(snapshot.reference == .catalog(product.id))
+        #expect(snapshot.listStatus == "unavailable")
+        #expect(snapshot.ingredientNames.isEmpty)
+        #expect(snapshot.step.product == snapshot)
+    }
+
+    @Test func sameProductIsNotAddedTwiceButSameNamesWithDistinctIDsAreAllowed() throws {
+        let step = try manual()
+        let duplicate = RoutineEditor.adding(step.product!.step, to: [step])
+        #expect(duplicate.count == 1)
+        #expect(duplicate.first?.id == step.id)
+        let distinct = try manual()
+        #expect(RoutineEditor.adding(distinct, to: [step]).count == 2)
+    }
+
+    @Test func reorderPreservesIDsReferencesWarningsAndContiguousNumbers() throws {
+        let first = try manual(name: "First")
+        let second = try manual(name: "Second")
+        let reordered = RoutineEditor.moving([first, second], from: 0, to: 1)
+        #expect(reordered.map(\.id) == [second.id, first.id])
+        #expect(reordered.map(\.product) == [second.product, first.product])
+        #expect(reordered.map(\.stepNumber) == [1, 2])
+    }
+
+    @Test func removalTargetsStepIDAndRetainsOtherProductMetadata() throws {
+        let first = try manual()
+        let second = try manual()
+        let remaining = RoutineEditor.removing(first.id, from: [first, second])
+        #expect(remaining.map(\.id) == [second.id])
+        #expect(remaining.first?.product == second.product)
+        #expect(remaining.first?.stepNumber == 1)
+        #expect(RoutineEditor.removing(second.id, from: remaining).isEmpty)
+    }
+
+    @Test func outOfBoundsMovesDoNotChangeTheDraft() throws {
+        let steps = [try manual()]
+        #expect(RoutineEditor.moving(steps, from: 0, to: -1) == steps)
+        #expect(RoutineEditor.moving(steps, from: 5, to: 0) == steps)
+    }
+
+    @Test func maximumStepCountIsConsistentForAddingAndSaving() throws {
+        let steps = try (0..<8).map { try manual(name: "Product \($0)") }
+        #expect(RoutineEditor.adding(try manual(), to: steps) == steps)
+        #expect(RoutineEditor.validationErrors(name: "Routine", steps: steps).isEmpty)
+        #expect(!RoutineEditor.validationErrors(name: "Routine", steps: steps + [try manual()]).isEmpty)
+    }
+
+    @Test func unsavedDraftChangesDoNotMutateRepository() throws {
+        let repository = RoutineRepository()
+        let original = RoutineRecord(name: "Original", steps: [try manual()])
+        repository.routines = [original]
+        var draft = original
+        draft.name = "Unsaved"
+        draft.steps = RoutineEditor.removing(draft.steps[0].id, from: draft.steps)
+        #expect(repository.routines == [original])
+        #expect(!RoutineEditor.validationErrors(name: draft.name, steps: draft.steps).isEmpty)
+    }
+}

@@ -20,6 +20,7 @@ public struct EditRoutineView: View {
     // States for Banners & Modals
     @State public var showStepLimitWarning: Bool = false
     @State public var showNetworkError: Bool = false
+    @State private var hasAttemptedSave = false
     @State public var removedStepBannerText: String? = nil
     @State public var stepPendingRemoval: RoutineStepItem? = nil
     
@@ -92,6 +93,11 @@ public struct EditRoutineView: View {
                     // Steps List Section
                     stepsSection
                     
+                    if hasAttemptedSave && !RoutineEditor.validationErrors(name: routineName, steps: steps).isEmpty {
+                        Text(RoutineEditor.validationErrors(name: routineName, steps: steps).joined(separator: " "))
+                            .foregroundStyle(.red)
+                            .accessibilityIdentifier("routine-validation")
+                    }
                     // Save Button
                     saveButton
                 }
@@ -109,7 +115,7 @@ public struct EditRoutineView: View {
         ) {
             Button("Remove product", role: .destructive) {
                 if let item = stepPendingRemoval {
-                    removeStep(item)
+                    steps = RoutineEditor.removing(item.id, from: steps)
                 }
                 stepPendingRemoval = nil
             }
@@ -131,15 +137,10 @@ public struct EditRoutineView: View {
             )
         }
         .sheet(isPresented: $showAddProductSheet) {
-            AddProductToRoutineView(
-                currentRoutineName: routineName,
-                existingStepTitles: Set(steps.map { $0.title }),
-                onProductSelected: { newStep in
-                    addStep(newStep)
-                    showAddProductSheet = false
-                },
-                onCancel: { showAddProductSheet = false }
-            )
+            RoutineProductPicker(steps: steps) { step in
+                steps = RoutineEditor.adding(step, to: steps)
+                showAddProductSheet = false
+            }
         }
     }
     
@@ -220,7 +221,10 @@ public struct EditRoutineView: View {
                 .foregroundStyle(Color(hex: "#625478"))
             
             HStack {
-                TextField("Routine name", text: $routineName)
+                TextField("Routine name", text: $routineName, prompt: Text("Routine name").foregroundStyle(Color(hex: "#625478")))
+                    .accessibilityIdentifier("routine-name")
+                    .submitLabel(.done)
+                    .onSubmit { UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil) }
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(Color(hex: "#1A1628"))
                 
@@ -308,142 +312,26 @@ public struct EditRoutineView: View {
     
     // MARK: - Steps List Section
     private var stepsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("STEPS · \(steps.count)")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundStyle(Color(hex: "#625478"))
-                
-                Spacer()
-                
-                Button(action: {
-                    showReorderSheet = true
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "arrow.up.arrow.down")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text("Reorder")
-                            .font(.system(size: 13, weight: .semibold))
-                    }
-                    .foregroundStyle(Color(hex: "#50578F"))
-                }
-            }
-            
-            VStack(spacing: 10) {
-                ForEach(steps) { step in
-                    stepRow(step: step)
-                }
-            }
-            
-            // Add Step Button
-            LabeledButton("Add step", systemImage: "plus", variant: .secondary) {
-                if steps.count >= 8 {
-                    withAnimation { showStepLimitWarning = true }
-                } else {
-                    showAddProductSheet = true
-                }
-            }
-            .padding(.top, 4)
+        VStack {
+            Button("Reorder steps") { showReorderSheet = true }
+            RoutineStepsEditor(steps: $steps, onAdd: { showAddProductSheet = true })
         }
     }
-    
-    private func stepRow(step: RoutineStepItem) -> some View {
-        HStack(spacing: 14) {
-            // Radio circle indicator
-            ZStack {
-                Circle()
-                    .stroke(Color(hex: "#DFD8F5"), lineWidth: 2)
-                    .frame(width: 22, height: 22)
-                
-                if step.state == .complete || step.state == .active {
-                    Circle()
-                        .fill(Color(hex: "#7C83BC"))
-                        .frame(width: 12, height: 12)
-                }
-            }
-            
-            VStack(alignment: .leading, spacing: 2) {
-                Text(step.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color(hex: "#1A1628"))
-                
-                Text(step.subtitle)
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color(hex: "#625478"))
-            }
-            
-            Spacer()
-            
-            // Edit / Remove trigger
-            Button(action: {
-                stepPendingRemoval = step
-            }) {
-                Text("Remove")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(hex: "#D9534F"))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
-                    .background(Color(hex: "#F8D7DA"))
-                    .clipShape(Capsule())
-            }
-            .buttonStyle(.plain)
-        }
-        .padding(14)
-        .background(Color.white)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color(hex: "#DFD8F5"), lineWidth: 1)
-        )
-    }
-    
+
     // MARK: - Save Button
     private var saveButton: some View {
         LabeledButton("Save changes", variant: .primary) {
+            hasAttemptedSave = true
+            guard RoutineEditor.validationErrors(name: routineName, steps: steps).isEmpty else { return }
             var updated = routine
-            updated.name = routineName
+            updated.name = routineName.trimmingCharacters(in: .whitespacesAndNewlines)
             updated.period = selectedPeriod
-            updated.steps = steps
+            updated.steps = RoutineEditor.numbered(steps)
             onSave(updated)
             dismiss()
         }
+        .accessibilityIdentifier("routine-save")
         .padding(.top, 8)
     }
     
-    // Step removal logic
-    private func removeStep(_ step: RoutineStepItem) {
-        withAnimation {
-            var updatedSteps = steps.filter { $0.id != step.id }
-            // Recalculate step numbers
-            for index in 0..<updatedSteps.count {
-                let current = updatedSteps[index]
-                updatedSteps[index] = RoutineStepItem(
-                    stepNumber: index + 1,
-                    title: current.title,
-                    subtitle: current.subtitle,
-                    state: current.state,
-                    hasClash: current.hasClash
-                )
-            }
-            steps = updatedSteps
-            removedStepBannerText = "\(step.title) removed · \(steps.count) steps left"
-            if steps.count < 8 {
-                showStepLimitWarning = false
-            }
-        }
-    }
-    
-    // Step addition logic
-    private func addStep(_ newStep: RoutineStepItem) {
-        withAnimation {
-            let item = RoutineStepItem(
-                stepNumber: steps.count + 1,
-                title: newStep.title,
-                subtitle: newStep.subtitle,
-                state: newStep.state,
-                hasClash: newStep.hasClash
-            )
-            steps.append(item)
-        }
-    }
 }
