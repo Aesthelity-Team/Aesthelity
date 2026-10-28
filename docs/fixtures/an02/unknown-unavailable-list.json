@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "contractStatus": "proposed",
+  "caseRole": "unknown",
+  "fixtureID": "an02-unknown-unavailable",
+  "summary": "An empty unavailable list is unknown coverage, not noFindings.",
+  "catalogMode": "bundled",
+  "input": {
+    "period": "am",
+    "recordedAllergies": {
+      "status": "known",
+      "ingredientIDs": []
+    },
+    "products": [
+      {
+        "productID": "sunscreen_unknown",
+        "listStatus": "unavailable",
+        "catalogVersion": 3,
+        "ingredients": []
+      }
+    ]
+  },
+  "expected": {
+    "period": "am",
+    "activeCatalogVersion": 3,
+    "outcome": "findings",
+    "completeness": "incomplete",
+    "productIDs": [
+      "sunscreen_unknown"
+    ],
+    "findings": [
+      {
+        "ruleStatus": "proposed",
+        "explanation": "Proposed. sunscreen_unknown has no ingredient rows, so no ingredient could be checked.",
+        "reason": "Proposed. listStatus is unavailable and the ingredient array is empty.",
+        "limitations": [
+          "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+        ],
+        "ruleID": "coverage.unavailable-list",
+        "outcome": "unknown",
+        "categoryID": "coverage-gap",
+        "productIDs": [
+          "sunscreen_unknown"
+        ],
+        "ingredientIDs": []
+      }
+    ],
+    "limitations": [
+      "Proposed rules only. This is not a team-approved safety assessment. Severity, when present, is display priority and not a clinical grade."
+    ]
+  }
+}
