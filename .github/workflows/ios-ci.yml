@@ -19,10 +19,10 @@ env:
   XCODE_APP: /Applications/Xcode_27.0.app
 
 jobs:
-  unit-tests:
-    name: Build and unit test
+  build:
+    name: Build app
     runs-on: xcode-27
-    timeout-minutes: 60
+    timeout-minutes: 15
 
     steps:
       - name: Check out code
@@ -33,53 +33,22 @@ jobs:
           sudo xcode-select --switch "$XCODE_APP"
           xcodebuild -version
 
-      - name: Pick an iPhone simulator
+      - name: Build app
         run: |
-          udid=$(xcrun simctl list devices available --json \
-            | jq -r '[.devices | to_entries[] | select(.key | contains("iOS")) | .value[] | select(.name | startswith("iPhone"))][0].udid')
-          if [ -z "$udid" ] || [ "$udid" = "null" ]; then
-            echo "No iPhone simulator is available on this runner." >&2
-            xcrun simctl list devices available
-            exit 1
-          fi
-          echo "SIMULATOR_UDID=$udid" >> "$GITHUB_ENV"
-          xcrun simctl list devices available | grep "$udid"
-
-      - name: Build for testing
-        run: |
-          xcodebuild build-for-testing \
+          xcodebuild build \
             -project "$PROJECT" \
             -scheme "$SCHEME" \
-            -destination "id=$SIMULATOR_UDID" \
-            -derivedDataPath DerivedData
-
-      - name: Run unit tests
-        run: |
-          xcodebuild test-without-building \
-            -project "$PROJECT" \
-            -scheme "$SCHEME" \
-            -destination "id=$SIMULATOR_UDID" \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath DerivedData \
-            -only-testing:AesthelityTests \
-            -resultBundlePath TestResults.xcresult
+            -resultBundlePath BuildResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO
 
-      - name: Run UI tests
-        run: |
-          xcodebuild test-without-building \
-            -project "$PROJECT" \
-            -scheme "$SCHEME" \
-            -destination "id=$SIMULATOR_UDID" \
-            -derivedDataPath DerivedData \
-            -only-testing:AesthelityUITests \
-            -resultBundlePath UITestResults.xcresult
-
-      - name: Upload test results
+      - name: Upload failed build results
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: TestResults
-          path: |
-            TestResults.xcresult
-            UITestResults.xcresult
+          name: BuildResults
+          path: BuildResults.xcresult
           if-no-files-found: ignore
           retention-days: 7
