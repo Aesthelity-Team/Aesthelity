@@ -205,33 +205,30 @@ struct BackendAnalysisAPI {
         return LiveAnalysisResult(response: result, productNames: names)
     }
 
-    func baseURL() throws -> URL {
-        let configured = Bundle.main.object(forInfoDictionaryKey: "AesthelityAPIBaseURL") as? String
-            ?? "http://127.0.0.1:8765"
-        guard let url = URL(string: configured), url.scheme != nil, url.host != nil else {
-            throw BackendAnalysisAPIError.badURL
-        }
-        return url
-    }
-
-    func requireSuccess(_ response: URLResponse, data: Data) throws {
-        guard let http = response as? HTTPURLResponse else {
-            throw BackendAnalysisAPIError.invalidResponse
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            let problem = try? decoder.decode(APIErrorEnvelope.self, from: data)
-            throw BackendAnalysisAPIError.server(
-                status: http.statusCode,
-                message: problem?.error.message ?? "Analysis API request failed (HTTP \(http.statusCode))."
+    /// Protected analysis for real inputs; never substitutes a fictional scenario.
+    /// The caller owns loading/error presentation and retains local data on failure.
+    @MainActor
+    static func analyzeAuthenticated(
+        payload: AnalysisRequestPayload,
+        expectedCatalogVersion: Int,
+        baseURL: URL,
+        token: @escaping () async throws -> String = FirebaseAPITokenProvider.token
+    ) async throws -> AnalysisResponsePayload {
+        let client = try AuthenticatedAPIClient(baseURL: baseURL, token: token)
+        let result = try await client.post(
+            ["api", "v1", "analyses"], body: payload, as: AnalysisResponsePayload.self
+        )
+        guard result.contractVersion == 1 else { throw APIClientError.invalidResponse }
+        guard result.activeCatalogVersion == expectedCatalogVersion else {
+            throw BackendAnalysisAPIError.catalogVersionMismatch(
+                expected: expectedCatalogVersion, received: result.activeCatalogVersion
             )
         }
+        guard result.period == payload.period,
+              Set(result.productIDs) == Set(payload.products.map(\.productID)) else {
+            throw APIClientError.invalidResponse
+        }
+        return result
     }
-}
 
-private struct APIErrorEnvelope: Decodable {
-    struct Problem: Decodable {
-        let code: String
-        let message: String
-    }
-    let error: Problem
-}
+    func baseURL() throws -> URL {
