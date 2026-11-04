@@ -58,5 +58,17 @@
       "The 2002 microsphere study kept 87% of tretinoin after 24 hours. No conflict here means this is not the 1998 mixture, not that the amount was unchanged."
     ],
     "displayLabel": "No recorded conflicts"
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "CUTIS-2002",
+      "title": "The stability of tretinoin in tretinoin gel microsphere 0.1% (Cutis, 2002)",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/12469785/"
+    },
+    {
+      "sourceID": "AN02-RULES",
+      "title": "Aesthelity AN-02 v1 approved rules and fixture contract",
+      "reference": "AN-02 rules and coverage contract"
+    }
+  ]
 }

@@ -62,11 +62,21 @@
         "productIDs": [
           "mist_fragranced"
         ],
-        "ingredientIDs": []
+        "ingredientIDs": [],
+        "sourceIDs": [
+          "AN02-RULES"
+        ]
       }
     ],
     "limitations": [
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ]
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "AN02-RULES",
+      "title": "Aesthelity AN-02 v1 approved rules and fixture contract",
+      "reference": "AN-02 rules and coverage contract"
+    }
+  ]
 }

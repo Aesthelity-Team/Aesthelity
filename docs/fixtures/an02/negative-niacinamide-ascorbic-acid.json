@@ -52,5 +52,17 @@
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ],
     "displayLabel": "No recorded conflicts"
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "DGCH-NIACINAMIDE",
+      "title": "German Chemical Society cosmetic monograph: Niacinamide",
+      "url": "https://www.gdch.de/fileadmin/downloads/Netzwerk_und_Strukturen/Fachgruppen/Lebensmittelchemiker/Arbeitsgruppen/kosmetik/DB_Niacinamid_final_englisch.pdf"
+    },
+    {
+      "sourceID": "AN02-RULES",
+      "title": "Aesthelity AN-02 v1 approved rules and fixture contract",
+      "reference": "AN-02 rules and coverage contract"
+    }
+  ]
 }

@@ -80,11 +80,22 @@
         "ingredientIDs": [
           "benzoyl-peroxide",
           "tretinoin"
+        ],
+        "sourceIDs": [
+          "BJD-1998"
         ]
       }
     ],
     "limitations": [
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ]
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "BJD-1998",
+      "title": "Martin et al., British Journal of Dermatology (1998), tretinoin and benzoyl peroxide mixture study",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/9990414/",
+      "doi": "10.1046/j.1365-2133.1998.1390s2008.x"
+    }
+  ]
 }

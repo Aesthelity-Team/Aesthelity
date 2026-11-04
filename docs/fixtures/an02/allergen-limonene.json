@@ -68,11 +68,27 @@
         ],
         "ingredientIDs": [
           "limonene"
+        ],
+        "sourceIDs": [
+          "EU-2023-1545",
+          "EU-FRAGRANCE-LABELING"
         ]
       }
     ],
     "limitations": [
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ]
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "EU-2023-1545",
+      "title": "Commission Regulation (EU) 2023/1545, Annex III, entry 88",
+      "url": "https://eur-lex.europa.eu/eli/reg/2023/1545/oj/eng"
+    },
+    {
+      "sourceID": "EU-FRAGRANCE-LABELING",
+      "title": "European Commission, Fragrance allergens labelling",
+      "url": "https://single-market-economy.ec.europa.eu/sectors/cosmetics/cosmetic-products-specific-topics/fragrance-allergens-labelling_en"
+    }
+  ]
 }

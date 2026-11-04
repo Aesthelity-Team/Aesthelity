@@ -75,7 +75,10 @@
         "ingredientIDs": [],
         "originalText": "Vitamin C",
         "rowIndex": 0,
-        "reasonCode": "ambiguous"
+        "reasonCode": "ambiguous",
+        "sourceIDs": [
+          "AN02-RULES"
+        ]
       },
       {
         "ruleStatus": "approved",
@@ -93,7 +96,10 @@
         "ingredientIDs": [],
         "originalText": "Niacinimide",
         "rowIndex": 1,
-        "reasonCode": "uncertain"
+        "reasonCode": "uncertain",
+        "sourceIDs": [
+          "AN02-RULES"
+        ]
       },
       {
         "ruleStatus": "approved",
@@ -111,7 +117,10 @@
         "ingredientIDs": [],
         "originalText": "Unobtainium Extract",
         "rowIndex": 2,
-        "reasonCode": "unmatched"
+        "reasonCode": "unmatched",
+        "sourceIDs": [
+          "AN02-RULES"
+        ]
       },
       {
         "ruleStatus": "approved",
@@ -129,11 +138,21 @@
         "ingredientIDs": [],
         "originalText": "Not a catalog ingredient",
         "rowIndex": 3,
-        "reasonCode": "absent-catalog-id"
+        "reasonCode": "absent-catalog-id",
+        "sourceIDs": [
+          "AN02-RULES"
+        ]
       }
     ],
     "limitations": [
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ]
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "AN02-RULES",
+      "title": "Aesthelity AN-02 v1 approved rules and fixture contract",
+      "reference": "AN-02 rules and coverage contract"
+    }
+  ]
 }

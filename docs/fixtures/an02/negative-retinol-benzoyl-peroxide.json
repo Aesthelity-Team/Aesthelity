@@ -52,5 +52,18 @@
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ],
     "displayLabel": "No recorded conflicts"
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "BJD-1998",
+      "title": "Martin et al., British Journal of Dermatology (1998), tretinoin and benzoyl peroxide mixture study",
+      "url": "https://pubmed.ncbi.nlm.nih.gov/9990414/",
+      "doi": "10.1046/j.1365-2133.1998.1390s2008.x"
+    },
+    {
+      "sourceID": "AN02-RULES",
+      "title": "Aesthelity AN-02 v1 approved rules and fixture contract",
+      "reference": "AN-02 rules and coverage contract"
+    }
+  ]
 }

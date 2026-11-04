@@ -84,11 +84,21 @@
         ],
         "matchedClassIDs": [
           "exfoliant"
+        ],
+        "sourceIDs": [
+          "AAD-EXFOLIATION"
         ]
       }
     ],
     "limitations": [
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ]
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "AAD-EXFOLIATION",
+      "title": "American Academy of Dermatology, How to safely exfoliate at home",
+      "url": "https://www.aad.org/public/everyday-care/skin-care-secrets/routine/safely-exfoliate-at-home"
+    }
+  ]
 }

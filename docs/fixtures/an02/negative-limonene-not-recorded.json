@@ -54,5 +54,17 @@
       "Team-approved v1 rules. This is not clinically validated or a safety guarantee. Severity, when present, is display priority and not a clinical grade."
     ],
     "displayLabel": "No recorded conflicts"
-  }
+  },
+  "sources": [
+    {
+      "sourceID": "EU-2023-1545",
+      "title": "Commission Regulation (EU) 2023/1545, Annex III, entry 88",
+      "url": "https://eur-lex.europa.eu/eli/reg/2023/1545/oj/eng"
+    },
+    {
+      "sourceID": "AN02-RULES",
+      "title": "Aesthelity AN-02 v1 approved rules and fixture contract",
+      "reference": "AN-02 rules and coverage contract"
+    }
+  ]
 }
