@@ -167,3 +167,62 @@ struct DemoAnalysisTests {
         }
     }
 }
+
+@MainActor
+struct DemoAnalysisRequestStateTests {
+    private func response(_ name: String) -> LiveAnalysisResult {
+        LiveAnalysisResult(response: AnalysisResponsePayload(
+            contractVersion: 1, ruleVersion: "test", period: "pm",
+            activeCatalogVersion: 1, outcome: "unknown", completeness: "incomplete",
+            productIDs: [name], findings: [], limitations: [], displayLabel: name
+        ), productNames: [:])
+    }
+
+    @Test func changedSelectionRejectsLateSuccessAndPreservesNewRequest() async {
+        var pending: [CheckedContinuation<LiveAnalysisResult, Error>] = []
+        let state = DemoAnalysisRequestState { _ in
+            try await withCheckedThrowingContinuation { pending.append($0) }
+        }
+        let old = state.run(scenario: .cautionPM)
+        while pending.count < 1 { await Task.yield() }
+        state.invalidate()
+        #expect(state.result == nil)
+        #expect(!state.isLoading)
+        let current = state.run(scenario: .noFindingAM)
+        while pending.count < 2 { await Task.yield() }
+        pending[0].resume(returning: response("old"))
+        await old.value
+        #expect(state.result == nil)
+        #expect(state.isLoading)
+        pending[1].resume(returning: response("current"))
+        await current.value
+        #expect(state.result?.response.productIDs == ["current"])
+        #expect(!state.isLoading)
+        state.invalidate()
+        #expect(state.result == nil)
+    }
+
+    @Test func dismissedSessionRejectsLateErrorAndAllowsRetry() async {
+        struct Failure: Error {}
+        var pending: CheckedContinuation<LiveAnalysisResult, Error>?
+        let state = DemoAnalysisRequestState { _ in
+            try await withCheckedThrowingContinuation { pending = $0 }
+        }
+        let old = state.run(scenario: .cautionPM)
+        while pending == nil { await Task.yield() }
+        state.invalidate()
+        pending?.resume(throwing: Failure())
+        await old.value
+        #expect(state.errorMessage == nil)
+        #expect(!state.isLoading)
+        pending = nil
+        let retry = state.run(scenario: .cautionPM)
+        while pending == nil { await Task.yield() }
+        pending?.resume(throwing: Failure())
+        await retry.value
+        #expect(state.errorMessage != nil)
+        #expect(!state.isLoading)
+        state.invalidate()
+        #expect(state.errorMessage == nil)
+    }
+}

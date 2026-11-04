@@ -1240,9 +1240,11 @@ struct ContentView: View {
     
     // MARK: - Sheets
     private var analysisDetailSheet: some View {
-        LiveAnalysisView(onDismiss: {
-            showAnalysisSheet = false
-        })
+        RoutineAnalysisView(
+            routineName: selectedRoutineDisplayName,
+            steps: currentSteps,
+            onDismiss: { showAnalysisSheet = false }
+        )
     }
     
     private var journalDetailSheet: some View {

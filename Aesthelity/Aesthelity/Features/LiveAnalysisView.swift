@@ -4,12 +4,9 @@ struct LiveAnalysisView: View {
     @Environment(\.dismiss) private var dismiss
     let onDismiss: (() -> Void)?
 
+    @StateObject private var request = DemoAnalysisRequestState()
     @State private var selectedScenario: AnalysisDemoScenario = .cautionPM
     @State private var selectedReferenceSampleID: String = DemoAnalysis.scenarioChoices[0].scenarioID
-    @State private var result: LiveAnalysisResult?
-    @State private var errorMessage: String?
-    @State private var isLoading = false
-    private let api = BackendAnalysisAPI()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -18,10 +15,10 @@ struct LiveAnalysisView: View {
                 VStack(alignment: .leading, spacing: 18) {
                     header
                     scenarioPicker
-                    Button(action: { Task { await runAnalysis() } }) {
+                    Button(action: { request.run(scenario: selectedScenario) }) {
                         HStack(spacing: 8) {
-                            if isLoading { ProgressView().tint(.white) }
-                            Text(isLoading ? "Analyzing…" : "Analyze with backend")
+                            if request.isLoading { ProgressView().tint(.white) }
+                            Text(request.isLoading ? "Analyzing…" : "Analyze with backend")
                                 .font(.system(size: 15, weight: .semibold))
                         }
                         .foregroundStyle(.white)
@@ -31,13 +28,13 @@ struct LiveAnalysisView: View {
                         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                     }
                     .buttonStyle(.plain)
-                    .disabled(isLoading)
+                    .disabled(request.isLoading)
                     .accessibilityIdentifier("run-backend-analysis")
 
-                    if let errorMessage {
+                    if let errorMessage = request.errorMessage {
                         errorCard(errorMessage)
                     }
-                    if let result {
+                    if let result = request.result {
                         resultSection(result)
                     }
                     referenceExamples
@@ -51,18 +48,19 @@ struct LiveAnalysisView: View {
             }
         }
         .background(AppTheme.Semantic.surfaceBase.ignoresSafeArea())
+        .onDisappear { request.invalidate() }
     }
 
     private var navigationBar: some View {
         HStack {
             Button(action: close) {
-                Label("Home", systemImage: "chevron.left")
+                Label("Back", systemImage: "chevron.left")
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(AppTheme.Semantic.inkBrand)
             }
             .buttonStyle(.plain)
             Spacer()
-            Text("Routine analysis")
+            Text("Demo / Dev Mode")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(AppTheme.Semantic.inkPrimary)
             Spacer()
@@ -95,7 +93,13 @@ struct LiveAnalysisView: View {
             Text("Demo routine")
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(AppTheme.Semantic.inkPrimary)
-            Picker("Demo routine", selection: $selectedScenario) {
+            Picker("Demo routine", selection: Binding(
+                get: { selectedScenario },
+                set: { scenario in
+                    request.invalidate()
+                    selectedScenario = scenario
+                }
+            )) {
                 ForEach(AnalysisDemoScenario.allCases) { scenario in
                     Text(scenario.title).tag(scenario)
                 }
@@ -305,20 +309,8 @@ struct LiveAnalysisView: View {
         }
     }
 
-    @MainActor
-    private func runAnalysis() async {
-        isLoading = true
-        errorMessage = nil
-        result = nil
-        defer { isLoading = false }
-        do {
-            result = try await api.analyze(scenario: selectedScenario)
-        } catch {
-            errorMessage = error.localizedDescription
-        }
-    }
-
     private func close() {
+        request.invalidate()
         if let onDismiss { onDismiss() } else { dismiss() }
     }
 }
