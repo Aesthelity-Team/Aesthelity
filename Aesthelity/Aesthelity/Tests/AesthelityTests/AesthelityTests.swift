@@ -1608,3 +1608,80 @@ struct RoutineEditorTests {
         #expect(RoutineEditor.adding(candidate, to: [existing]) == [existing])
     }
 }
+
+@MainActor
+struct AuthenticatedAPIClientTests {
+    private struct Payload: Codable { let value: String }
+    private let url = URL(string: "https://api.example.com")!
+
+    @Test func attachesFreshTokenEncodesBodyAndDecodesResponse() async throws {
+        var tokens = 0
+        var requests = 0
+        let client = try AuthenticatedAPIClient(baseURL: url, token: {
+            tokens += 1
+            return "token-\(tokens)"
+        }, transport: { request in
+            requests += 1
+            #expect(request.url?.path == "/api/v1/analyses")
+            #expect(request.httpMethod == "POST")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token-\(requests)")
+            #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
+            let body = try JSONDecoder().decode(Payload.self, from: #require(request.httpBody))
+            #expect(body.value == "input")
+            return (Data(#"{"value":"result"}"#.utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        for _ in 0..<2 {
+            let result = try await client.post(["api", "v1", "analyses"], body: Payload(value: "input"), as: Payload.self)
+            #expect(result.value == "result")
+        }
+        #expect(tokens == 2)
+    }
+
+    @Test(arguments: [401, 403, 500, 302])
+    func mapsHTTPFailuresWithoutReplayingOrExposingBody(status: Int) async throws {
+        var requests = 0
+        let client = try AuthenticatedAPIClient(baseURL: url, token: { "token" }, transport: { request in
+            requests += 1
+            return (Data("private server details".utf8), HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+        })
+        let expected: APIClientError = status == 401 ? .signInRequired : status == 403 ? .forbidden : .server(status)
+        await #expect(throws: expected) {
+            try await client.post(["analyses"], body: Payload(value: "input"), as: Payload.self)
+        }
+        #expect(requests == 1)
+        #expect(!expected.localizedDescription.contains("private"))
+    }
+
+    @Test func missingSessionNeverSendsRequest() async throws {
+        let client = try AuthenticatedAPIClient(baseURL: url, token: { throw APIClientError.signInRequired }, transport: { _ in
+            Issue.record("Unauthenticated request reached transport")
+            throw URLError(.badServerResponse)
+        })
+        await #expect(throws: APIClientError.signInRequired) {
+            try await client.post(["analyses"], body: Payload(value: "input"), as: Payload.self)
+        }
+    }
+
+    @Test func networkAndDecodeFailuresAreDistinct() async throws {
+        let offline = try AuthenticatedAPIClient(baseURL: url, token: { "token" }, transport: { _ in throw URLError(.notConnectedToInternet) })
+        await #expect(throws: APIClientError.unavailable) {
+            try await offline.post(["analyses"], body: Payload(value: "input"), as: Payload.self)
+        }
+        let invalid = try AuthenticatedAPIClient(baseURL: url, token: { "token" }, transport: { request in
+            (Data("invalid".utf8), HTTPURLResponse(url: request.url!, statusCode: 200, httpVersion: nil, headerFields: nil)!)
+        })
+        await #expect(throws: APIClientError.invalidResponse) {
+            try await invalid.post(["analyses"], body: Payload(value: "input"), as: Payload.self)
+        }
+    }
+
+    @Test func rejectsInsecureConfigurationAndPreservesCancellation() async throws {
+        #expect(throws: APIClientError.configuration) {
+            try AuthenticatedAPIClient(baseURL: URL(string: "http://127.0.0.1:8765")!, token: { "token" })
+        }
+        let client = try AuthenticatedAPIClient(baseURL: url, token: { "token" }, transport: { _ in throw URLError(.cancelled) })
+        await #expect(throws: CancellationError.self) {
+            try await client.post(["analyses"], body: Payload(value: "input"), as: Payload.self)
+        }
+    }
+}
