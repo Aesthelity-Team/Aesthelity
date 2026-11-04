@@ -181,6 +181,32 @@ struct BackendAnalysisAPI {
         return LiveAnalysisResult(response: result, productNames: names)
     }
 
+    /// Protected analysis for real inputs; never substitutes a fictional scenario.
+    /// The caller owns loading/error presentation and retains local data on failure.
+    @MainActor
+    static func analyzeAuthenticated(
+        payload: AnalysisRequestPayload,
+        expectedCatalogVersion: Int,
+        baseURL: URL,
+        token: @escaping () async throws -> String = FirebaseAPITokenProvider.token
+    ) async throws -> AnalysisResponsePayload {
+        let client = try AuthenticatedAPIClient(baseURL: baseURL, token: token)
+        let result = try await client.post(
+            ["api", "v1", "analyses"], body: payload, as: AnalysisResponsePayload.self
+        )
+        guard result.contractVersion == 1 else { throw APIClientError.invalidResponse }
+        guard result.activeCatalogVersion == expectedCatalogVersion else {
+            throw BackendAnalysisAPIError.catalogVersionMismatch(
+                expected: expectedCatalogVersion, received: result.activeCatalogVersion
+            )
+        }
+        guard result.period == payload.period,
+              Set(result.productIDs) == Set(payload.products.map(\.productID)) else {
+            throw APIClientError.invalidResponse
+        }
+        return result
+    }
+
     private func baseURL() throws -> URL {
         let configured = Bundle.main.object(forInfoDictionaryKey: "AesthelityAPIBaseURL") as? String
             ?? "http://127.0.0.1:8765"
