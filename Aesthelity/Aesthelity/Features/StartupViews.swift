@@ -14,6 +14,7 @@ import SwiftUI
 public enum StartupScreen: String, CaseIterable, Identifiable {
     case welcome = "Welcome"
     case concerns = "Concerns"
+    case register = "Create Account"
     case signInNormal = "Sign In"
     case signInInvalid = "Invalid Form"
     case signInFailed = "Network Error"
@@ -93,9 +94,27 @@ public struct StartupFlowView: View {
                                 }
                             },
                             onContinue: submitProfile,
-                            onSkip: skipProfile
+                            onSkip: skipProfile,
+                            onSignIn: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    currentScreen = .signInNormal
+                                }
+                            }
                         )
                         
+                    case .register:
+                        AuthSignInView(
+                            initialMode: .normal,
+                            isRegistering: true,
+                            onSuccess: finishSignIn,
+                            onContinueWithoutAccount: finishSignIn,
+                            onSwitchToSetup: {
+                                withAnimation(.easeInOut(duration: 0.25)) {
+                                    currentScreen = .welcome
+                                }
+                            }
+                        )
+
                     case .signInNormal:
                         AuthSignInView(
                             initialMode: .normal,
@@ -161,27 +180,36 @@ public struct StartupFlowView: View {
             return
         }
         if case .completed(let profile) = draft.submit(using: normalizer) {
-            saveAndFinish(profile)
+            handleProfileCompleted(profile)
         }
     }
 
-    private func skipProfile() { saveAndFinish(draft.skip()) }
-
-    private func finishSignIn() {
-        if profileStore.profile.setupStatus == .notStarted {
-            skipProfile()
-        } else {
-            onFinish()
-        }
+    private func skipProfile() {
+        handleProfileCompleted(draft.skip())
     }
 
-    private func saveAndFinish(_ profile: SkinProfile) {
+    private func handleProfileCompleted(_ profile: SkinProfile) {
         do {
             try profileStore.save(profile)
-            onFinish()
         } catch {
             saveError = "Your choices could not be saved. They are still here; please try again."
+            return
         }
+
+        let isUITesting = ProcessInfo.processInfo.arguments.contains("--pf01-ui-testing")
+        let alreadyAuthenticated = FirebaseAuthService.shared.isAuthenticated && !FirebaseAuthService.shared.isAnonymous
+        if onCancel != nil || isUITesting || alreadyAuthenticated {
+            onFinish()
+        } else {
+            // Prompt user to create account AFTER questionnaire during getting started!
+            withAnimation(.easeInOut(duration: 0.25)) {
+                currentScreen = .register
+            }
+        }
+    }
+
+    private func finishSignIn() {
+        onFinish()
     }
     
     // Shared Background Wallpaper
@@ -276,6 +304,8 @@ public enum AuthMode: Equatable {
 
 public struct AuthSignInView: View {
     @State public var mode: AuthMode
+    @State public var isRegistering: Bool
+    @State public var username: String = ""
     @State public var email: String
     @State public var password: String
     @State public var isRetrying: Bool = false
@@ -288,40 +318,100 @@ public struct AuthSignInView: View {
     public var onSwitchToSetup: () -> Void
     /// Injectable email sign-in for tests. Defaults to Firebase email/password sign-in.
     public var performEmailSignIn: (String, String) async throws -> Void
+    /// Injectable email sign-up for tests. Defaults to Firebase email/password registration.
+    public var performEmailSignUp: (String, String, String?) async throws -> UserAccount
     
     public init(
         initialMode: AuthMode = .normal,
+        isRegistering: Bool = false,
+        initialEmail: String = "",
+        initialPassword: String = "",
         onSuccess: @escaping () -> Void = {},
         onContinueWithoutAccount: @escaping () -> Void = {},
         onSwitchToSetup: @escaping () -> Void = {},
         performEmailSignIn: @escaping (String, String) async throws -> Void = { email, password in
             try await FirebaseAuthService.shared.signIn(email: email, password: password)
+        },
+        performEmailSignUp: @escaping (String, String, String?) async throws -> UserAccount = { email, password, username in
+            try await FirebaseAuthService.shared.signUp(email: email, password: password, username: username)
         }
     ) {
         self._mode = State(initialValue: initialMode)
+        self._isRegistering = State(initialValue: isRegistering)
         switch initialMode {
         case .invalid:
-            self._email = State(initialValue: "maya")
-            self._password = State(initialValue: "")
+            self._email = State(initialValue: initialEmail.isEmpty ? "maya" : initialEmail)
+            self._password = State(initialValue: initialPassword)
         case .failed:
-            self._email = State(initialValue: "maya@aesthelity.app")
-            self._password = State(initialValue: "")
+            self._email = State(initialValue: initialEmail.isEmpty ? "maya@aesthelity.app" : initialEmail)
+            self._password = State(initialValue: initialPassword)
         case .normal:
-            self._email = State(initialValue: "maya@aesthelity.app")
-            self._password = State(initialValue: "")
+            self._email = State(initialValue: initialEmail)
+            self._password = State(initialValue: initialPassword)
         }
         self.onSuccess = onSuccess
         self.onContinueWithoutAccount = onContinueWithoutAccount
         self.onSwitchToSetup = onSwitchToSetup
         self.performEmailSignIn = performEmailSignIn
+        self.performEmailSignUp = performEmailSignUp
+    }
+
+    public init(
+        initialMode: AuthMode = .normal,
+        isRegistering: Bool = false,
+        initialEmail: String = "",
+        initialPassword: String = "",
+        onSuccess: @escaping () -> Void = {},
+        onContinueWithoutAccount: @escaping () -> Void = {},
+        onSwitchToSetup: @escaping () -> Void = {},
+        performEmailSignIn: @escaping (String, String) async throws -> Void,
+        performEmailSignUp: @escaping (String, String) async throws -> UserAccount
+    ) {
+        self.init(
+            initialMode: initialMode,
+            isRegistering: isRegistering,
+            initialEmail: initialEmail,
+            initialPassword: initialPassword,
+            onSuccess: onSuccess,
+            onContinueWithoutAccount: onContinueWithoutAccount,
+            onSwitchToSetup: onSwitchToSetup,
+            performEmailSignIn: performEmailSignIn,
+            performEmailSignUp: { email, password, _ in
+                try await performEmailSignUp(email, password)
+            }
+        )
     }
     
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: 20) {
+                // Top Navigation Bar
+                HStack {
+                    Button(action: onSwitchToSetup) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "chevron.left")
+                            Text("Back")
+                        }
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color(hex: "#1A1628"))
+                    }
+                    .buttonStyle(.plain)
+                    
+                    Spacer()
+                    
+                    Button(action: onContinueWithoutAccount) {
+                        Text("Skip")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Color(hex: "#625478"))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("auth.skipRegistration")
+                }
+                .padding(.horizontal, 4)
+                .padding(.top, 4)
+
                 // Top Logo & Dynamic Header
                 headerSection
-                    .padding(.top, 12)
                 
                 // Network Error Card (Visible in Failed mode)
                 if mode == .failed {
@@ -409,7 +499,7 @@ public struct AuthSignInView: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
             
             // Dynamic Title
-            Text(mode == .invalid ? "Check your details" : "Sign in")
+            Text(mode == .invalid ? "Check your details" : (isRegistering ? "Create account" : "Sign in"))
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(Color(hex: "#1A1628"))
                 .multilineTextAlignment(.center)
@@ -418,11 +508,11 @@ public struct AuthSignInView: View {
             Group {
                 switch mode {
                 case .invalid:
-                    Text("Fix the highlighted fields, then try signing in again.")
+                    Text(isRegistering ? "Fix the highlighted fields, then try creating your account again." : "Fix the highlighted fields, then try signing in again.")
                 case .failed:
                     Text("We couldn't reach Aesthelity. Nothing was lost.")
                 case .normal:
-                    Text("Welcome back. Enter your details to continue.")
+                    Text(isRegistering ? "Enter your email and password to secure your skincare routines." : "Welcome back. Enter your details to continue.")
                 }
             }
             .font(.system(size: 14, weight: .regular))
@@ -516,6 +606,50 @@ public struct AuthSignInView: View {
     
     private var credentialsSection: some View {
         VStack(alignment: .leading, spacing: 16) {
+            // Username Field (Visible when Registering)
+            if isRegistering {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Username")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(hex: "#1A1628"))
+                    
+                    HStack(spacing: 12) {
+                        Image(systemName: "person")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color(hex: "#625478"))
+                        
+                        TextField("Choose a username", text: $username)
+                            .font(.system(size: 15))
+                            .foregroundStyle(Color(hex: "#1A1628"))
+                            .autocapitalization(.none)
+                            .disableAutocorrection(true)
+                            .accessibilityIdentifier("auth.usernameField")
+                        
+                        if !username.isEmpty {
+                            Button(action: { username = "" }) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundStyle(Color(hex: "#A096AF"))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    .padding(.horizontal, 14)
+                    .frame(height: 50)
+                    .background(Color.white)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .stroke(Color(hex: "#D8CFF0"), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
+                    
+                    Text("Choose a handle with at least 3 characters.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Color(hex: "#625478"))
+                }
+            }
+
             // Email Field
             VStack(alignment: .leading, spacing: 6) {
                 Text("Email")
@@ -523,7 +657,7 @@ public struct AuthSignInView: View {
                     .foregroundStyle(Color(hex: "#1A1628"))
                 
                 HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
+                    Image(systemName: "envelope")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Color(hex: "#625478"))
                     
@@ -561,8 +695,12 @@ public struct AuthSignInView: View {
                     Text("Enter a valid email address.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color(hex: "#8A1538"))
+                } else if isRegistering {
+                    Text("We'll use this email for account access and recovery.")
+                        .font(.system(size: 12, weight: .regular))
+                        .foregroundStyle(Color(hex: "#625478"))
                 } else {
-                    Text("Use the email on your Aesthelity account.")
+                    Text("Enter the email associated with your account.")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(Color(hex: "#625478"))
                 }
@@ -575,7 +713,7 @@ public struct AuthSignInView: View {
                     .foregroundStyle(Color(hex: "#1A1628"))
                 
                 HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
+                    Image(systemName: "lock")
                         .font(.system(size: 16, weight: .medium))
                         .foregroundStyle(Color(hex: "#625478"))
                     
@@ -610,6 +748,27 @@ public struct AuthSignInView: View {
                     Text("Password is required.")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color(hex: "#8A1538"))
+                } else if isRegistering {
+                    HStack(spacing: 14) {
+                        HStack(spacing: 4) {
+                            Image(systemName: password.count >= 8 ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 11))
+                                .foregroundStyle(password.count >= 8 ? Color.green : Color(hex: "#A096AF"))
+                            Text("8+ characters")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color(hex: "#625478"))
+                        }
+                        HStack(spacing: 4) {
+                            Image(systemName: password.contains(where: { $0.isNumber }) ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 11))
+                                .foregroundStyle(password.contains(where: { $0.isNumber }) ? Color.green : Color(hex: "#A096AF"))
+                            Text("1+ number")
+                                .font(.system(size: 11))
+                                .foregroundStyle(Color(hex: "#625478"))
+                        }
+                        Spacer()
+                    }
+                    .padding(.top, 2)
                 } else {
                     Text("At least 8 characters.")
                         .font(.system(size: 12, weight: .regular))
@@ -629,7 +788,7 @@ public struct AuthSignInView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.85)
                 }
-                Text(mode == .invalid ? "Try again" : "Sign in")
+                Text(mode == .invalid ? "Try again" : (isRegistering ? "Create account" : "Sign in"))
                     .font(.system(size: 16, weight: .semibold))
             }
             .foregroundStyle(mode == .invalid ? Color(hex: "#1A1628") : Color.white)
@@ -657,28 +816,54 @@ public struct AuthSignInView: View {
         authStatusMessage = nil
         let capturedEmail = email
         let capturedPassword = password
+        let capturedUsername = username
+        let registering = isRegistering
         let signIn = performEmailSignIn
+        let signUp = performEmailSignUp
         Task { @MainActor in
             defer { isAuthenticating = false }
-            let outcome = await AuthEmailSignIn.attempt(
-                email: capturedEmail,
-                password: capturedPassword,
-                signIn: signIn
-            )
-            switch outcome {
-            case .succeeded:
-                onSuccess()
-            case .continuedWithoutAccount:
-                onContinueWithoutAccount()
-            case .invalidForm(let message):
-                authStatusMessage = message
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    mode = .invalid
+            if registering {
+                let outcome = await AuthEmailRegistration.attempt(
+                    email: capturedEmail,
+                    password: capturedPassword,
+                    username: capturedUsername.isEmpty ? nil : capturedUsername,
+                    signUp: signUp
+                )
+                switch outcome {
+                case .succeeded:
+                    onSuccess()
+                case .invalidForm(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .invalid
+                    }
+                case .failed(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .failed
+                    }
                 }
-            case .failed(let message):
-                authStatusMessage = message
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    mode = .failed
+            } else {
+                let outcome = await AuthEmailSignIn.attempt(
+                    email: capturedEmail,
+                    password: capturedPassword,
+                    signIn: signIn
+                )
+                switch outcome {
+                case .succeeded:
+                    onSuccess()
+                case .continuedWithoutAccount:
+                    onContinueWithoutAccount()
+                case .invalidForm(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .invalid
+                    }
+                case .failed(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .failed
+                    }
                 }
             }
         }
@@ -779,16 +964,39 @@ public struct AuthSignInView: View {
     
     private var footerLinksSection: some View {
         VStack(spacing: 12) {
-            Button(action: { showForgotPasswordAlert = true }) {
-                Text("Forgot password?")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(hex: "#625478"))
+            if !isRegistering {
+                Button(action: { showForgotPasswordAlert = true }) {
+                    Text("Forgot password?")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hex: "#625478"))
+                }
+                .buttonStyle(.plain)
+            }
+            
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isRegistering.toggle()
+                    authStatusMessage = nil
+                    if mode == .invalid || mode == .failed {
+                        mode = .normal
+                    }
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Text(isRegistering ? "Already have an account?" : "New to Aesthelity?")
+                        .foregroundStyle(Color(hex: "#625478"))
+                    Text(isRegistering ? "Sign in" : "Create account")
+                        .foregroundStyle(Color(hex: "#1A1628"))
+                        .fontWeight(.semibold)
+                }
+                .font(.system(size: 14))
             }
             .buttonStyle(.plain)
-            
+            .accessibilityIdentifier("auth.toggleRegister")
+
             Button(action: onSwitchToSetup) {
                 HStack(spacing: 4) {
-                    Text("New here?")
+                    Text("Want to set up first?")
                         .foregroundStyle(Color(hex: "#625478"))
                     Text("Continue setup")
                         .foregroundStyle(Color(hex: "#1A1628"))
@@ -910,6 +1118,7 @@ struct OnboardingConcernsView: View {
     var onBack: () -> Void
     var onContinue: () -> Void
     var onSkip: () -> Void
+    var onSignIn: (() -> Void)? = nil
     @FocusState private var focusedEntry: Int?
 
     var body: some View {

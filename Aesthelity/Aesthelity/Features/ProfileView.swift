@@ -22,11 +22,14 @@ public struct ProfileView: View {
     public var onOpenStartup: (() -> Void)?
     public var onEditSkinProfile: (() -> Void)?
     public var onSelectTab: ((Int) -> Void)?
+    public var onSignOut: (() -> Void)?
     
     // MARK: - Local State
     @State private var clashAlertsEnabled: Bool = true
     @State private var routineRemindersEnabled: Bool = true
     @State public var showSettings: Bool = false
+    @ObservedObject private var authService = FirebaseAuthService.shared
+    private let syncService = FirestoreSyncService.shared
     
     public init(
         productsCount: Int = 24,
@@ -41,7 +44,8 @@ public struct ProfileView: View {
         onOpenSettings: (() -> Void)? = nil,
         onOpenStartup: (() -> Void)? = nil,
         onEditSkinProfile: (() -> Void)? = nil,
-        onSelectTab: ((Int) -> Void)? = nil
+        onSelectTab: ((Int) -> Void)? = nil,
+        onSignOut: (() -> Void)? = nil
     ) {
         self.productsCount = productsCount
         self.routinesCount = routinesCount
@@ -56,6 +60,7 @@ public struct ProfileView: View {
         self.onOpenStartup = onOpenStartup
         self.onEditSkinProfile = onEditSkinProfile
         self.onSelectTab = onSelectTab
+        self.onSignOut = onSignOut
     }
     
     public var body: some View {
@@ -67,7 +72,15 @@ public struct ProfileView: View {
                 onBack: {
                     showSettings = false
                 },
-                onSelectTab: onSelectTab
+                onSelectTab: onSelectTab,
+                onSignOut: {
+                    showSettings = false
+                    if let onSignOut {
+                        onSignOut()
+                    } else {
+                        onOpenStartup?()
+                    }
+                }
             )
         } else {
             ScrollView(.vertical, showsIndicators: false) {
@@ -92,6 +105,9 @@ public struct ProfileView: View {
                     
                     // 7. Preferences Section
                     preferencesSection
+                    
+                    // 8. Sign Out Section
+                    signOutSection
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 16)
@@ -460,6 +476,38 @@ public struct ProfileView: View {
                     .stroke(Constants.semanticLineHairline, lineWidth: 1)
             )
         }
+    }
+    
+    // MARK: - 8. Sign Out Section
+    private var signOutSection: some View {
+        Button(role: .destructive, action: {
+            syncService.stopRoutineListener()
+            try? authService.signOut()
+            if let onSignOut {
+                onSignOut()
+            } else {
+                onOpenStartup?()
+            }
+        }) {
+            HStack(spacing: 10) {
+                Spacer()
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Sign Out")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+            }
+            .foregroundStyle(Color(hex: "#DC3545"))
+            .padding(.vertical, 14)
+            .background(Color(hex: "#DC3545").opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color(hex: "#DC3545").opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("profile.signOut")
     }
     
     private func preferenceToggleRow(
