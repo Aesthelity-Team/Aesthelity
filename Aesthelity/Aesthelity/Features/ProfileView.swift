@@ -28,6 +28,8 @@ public struct ProfileView: View {
     @State private var clashAlertsEnabled: Bool = true
     @State private var routineRemindersEnabled: Bool = true
     @State public var showSettings: Bool = false
+    @ObservedObject private var authService = FirebaseAuthService.shared
+    private let syncService = FirestoreSyncService.shared
     
     public init(
         productsCount: Int = 24,
@@ -103,6 +105,9 @@ public struct ProfileView: View {
                     
                     // 7. Preferences Section
                     preferencesSection
+                    
+                    // 8. Sign Out Section
+                    signOutSection
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.top, 16)
@@ -471,6 +476,38 @@ public struct ProfileView: View {
                     .stroke(Constants.semanticLineHairline, lineWidth: 1)
             )
         }
+    }
+    
+    // MARK: - 8. Sign Out Section
+    private var signOutSection: some View {
+        Button(role: .destructive, action: {
+            syncService.stopRoutineListener()
+            try? authService.signOut()
+            if let onSignOut {
+                onSignOut()
+            } else {
+                onOpenStartup?()
+            }
+        }) {
+            HStack(spacing: 10) {
+                Spacer()
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Sign Out")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+            }
+            .foregroundStyle(Color(hex: "#DC3545"))
+            .padding(.vertical, 14)
+            .background(Color(hex: "#DC3545").opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color(hex: "#DC3545").opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("profile.signOut")
     }
     
     private func preferenceToggleRow(

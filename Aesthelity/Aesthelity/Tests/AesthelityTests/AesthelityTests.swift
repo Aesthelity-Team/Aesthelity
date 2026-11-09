@@ -429,6 +429,20 @@ struct AesthelityTests {
         profile.onEditSkinProfile?()
         #expect(opened)
     }
+    
+    @Test func profileViewSignOutCallback() throws {
+        var signedOut = false
+        let profile = ProfileView(onSignOut: { signedOut = true })
+        profile.onSignOut?()
+        #expect(signedOut == true)
+    }
+
+    @Test func settingsViewSignOutCallback() throws {
+        var signedOut = false
+        let settings = SettingsView(onSignOut: { signedOut = true })
+        settings.onSignOut?()
+        #expect(signedOut == true)
+    }
 
     // MARK: - Article Detail Tests
     
