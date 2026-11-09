@@ -10,10 +10,12 @@ import Foundation
 public struct AuthCredentials: Equatable, Sendable {
     public let email: String
     public let password: String
+    public let username: String?
 
-    public init(email: String, password: String) {
+    public init(email: String, password: String, username: String? = nil) {
         self.email = email
         self.password = password
+        self.username = username
     }
 }
 
@@ -29,6 +31,23 @@ public enum AuthValidator {
         let predicate = NSPredicate(format: "SELF MATCHES %@", emailRegex)
         guard predicate.evaluate(with: trimmed) else {
             return .failure(.invalidEmail)
+        }
+        return .success(trimmed)
+    }
+
+    /// Validates username format (at least 3 characters, alphanumeric or underscores/dashes).
+    public static func validateUsername(_ username: String) -> Result<String, AuthError> {
+        let trimmed = username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .failure(.missingFields)
+        }
+        guard trimmed.count >= 3 else {
+            return .failure(.invalidUsername(reason: "Username must be at least 3 characters long."))
+        }
+        let regex = "^[a-zA-Z0-9_.-]{3,30}$"
+        let predicate = NSPredicate(format: "SELF MATCHES %@", regex)
+        guard predicate.evaluate(with: trimmed) else {
+            return .failure(.invalidUsername(reason: "Username can only contain letters, numbers, underscores, and dashes."))
         }
         return .success(trimmed)
     }
@@ -50,11 +69,22 @@ public enum AuthValidator {
     /// Validates all required credentials for account registration or sign-in.
     public static func validateCredentials(
         email: String,
-        password: String
+        password: String,
+        username: String? = nil
     ) -> Result<AuthCredentials, AuthError> {
         let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedEmail.isEmpty, !password.isEmpty else {
             return .failure(.missingFields)
+        }
+
+        var validatedUsername: String? = nil
+        if let username = username, !username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            switch validateUsername(username) {
+            case .failure(let error):
+                return .failure(error)
+            case .success(let validUser):
+                validatedUsername = validUser
+            }
         }
 
         switch validateEmail(trimmedEmail) {
@@ -65,7 +95,7 @@ public enum AuthValidator {
             case .failure(let error):
                 return .failure(error)
             case .success(let validPassword):
-                return .success(AuthCredentials(email: validEmail, password: validPassword))
+                return .success(AuthCredentials(email: validEmail, password: validPassword, username: validatedUsername))
             }
         }
     }

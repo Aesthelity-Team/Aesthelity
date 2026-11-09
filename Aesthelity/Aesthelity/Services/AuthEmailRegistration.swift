@@ -18,10 +18,11 @@ public enum AuthEmailRegistration {
     public static func attempt(
         email: String,
         password: String,
+        username: String? = nil,
         isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--pf01-ui-testing"),
-        signUp: (String, String) async throws -> UserAccount
+        signUp: (String, String, String?) async throws -> UserAccount
     ) async -> AuthRegistrationOutcome {
-        let validationResult = AuthValidator.validateCredentials(email: email, password: password)
+        let validationResult = AuthValidator.validateCredentials(email: email, password: password, username: username)
         let validated: AuthCredentials
         switch validationResult {
         case .success(let credentials):
@@ -34,17 +35,18 @@ public enum AuthEmailRegistration {
             let mockAccount = UserAccount(
                 id: UUID().uuidString,
                 email: validated.email,
+                username: validated.username,
                 isAnonymous: false
             )
             return .succeeded(mockAccount)
         }
 
         do {
-            let account = try await signUp(validated.email, validated.password)
+            let account = try await signUp(validated.email, validated.password, validated.username)
             return .succeeded(account)
         } catch let authError as AuthError {
             switch authError {
-            case .missingFields, .invalidEmail, .weakPassword:
+            case .missingFields, .invalidEmail, .invalidUsername, .weakPassword:
                 return .invalidForm(message: authError.localizedDescription)
             case .emailAlreadyInUse, .invalidCredentials, .sessionExpired, .networkError, .unknown:
                 return .failed(message: authError.localizedDescription)
@@ -57,5 +59,23 @@ public enum AuthEmailRegistration {
                     : message
             )
         }
+    }
+
+    public static func attempt(
+        email: String,
+        password: String,
+        username: String? = nil,
+        isUITesting: Bool = ProcessInfo.processInfo.arguments.contains("--pf01-ui-testing"),
+        signUp: @escaping (String, String) async throws -> UserAccount
+    ) async -> AuthRegistrationOutcome {
+        await attempt(
+            email: email,
+            password: password,
+            username: username,
+            isUITesting: isUITesting,
+            signUp: { email, password, _ in
+                try await signUp(email, password)
+            }
+        )
     }
 }

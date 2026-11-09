@@ -60,12 +60,17 @@ public final class MockAuthService: ObservableObject, AuthServiceProtocol {
     
     @discardableResult
     public func signUp(email: String, password: String) async throws -> UserAccount {
+        try await signUp(email: email, password: password, username: nil)
+    }
+
+    @discardableResult
+    public func signUp(email: String, password: String, username: String?) async throws -> UserAccount {
         if let simulatedError = simulatedError {
             self.authError = simulatedError.localizedDescription
             throw simulatedError
         }
         
-        let validated = try AuthValidator.validateCredentials(email: email, password: password).get()
+        let validated = try AuthValidator.validateCredentials(email: email, password: password, username: username).get()
         let lowerEmail = validated.email.lowercased()
         
         if registeredUsers[lowerEmail] != nil {
@@ -77,6 +82,7 @@ public final class MockAuthService: ObservableObject, AuthServiceProtocol {
         let account = UserAccount(
             id: UUID().uuidString,
             email: lowerEmail,
+            username: validated.username,
             isAnonymous: false
         )
         let salt = PasswordHasher.generateSalt()

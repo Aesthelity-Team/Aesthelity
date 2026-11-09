@@ -22,8 +22,18 @@ public protocol AuthServiceProtocol: AnyObject {
     func signUp(email: String, password: String) async throws -> UserAccount
     
     @discardableResult
+    func signUp(email: String, password: String, username: String?) async throws -> UserAccount
+    
+    @discardableResult
     func signIn(email: String, password: String) async throws -> UserAccount
     
     func signOut() throws
     func ensureAuthenticated() async
+}
+
+extension AuthServiceProtocol {
+    @discardableResult
+    public func signUp(email: String, password: String, username: String?) async throws -> UserAccount {
+        try await signUp(email: email, password: password)
+    }
 }

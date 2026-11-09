@@ -116,6 +116,40 @@ struct AuthModelAndValidationTests {
         #expect(AuthValidator.validateCredentials(email: "valid@example.com", password: "short") == .failure(.weakPassword(reason: "Password must be at least 8 characters long.")))
     }
 
+    // MARK: - AuthValidator: Username Tests
+
+    @Test("Valid usernames pass validation")
+    func validUsernameValidation() {
+        let validUsernames = ["maya", "skincare_lover", "glow-123", "user.name"]
+        for username in validUsernames {
+            let result = AuthValidator.validateUsername(username)
+            #expect(result == .success(username))
+        }
+    }
+
+    @Test("Invalid usernames fail with appropriate errors")
+    func invalidUsernameValidation() {
+        #expect(AuthValidator.validateUsername("") == .failure(.missingFields))
+        #expect(AuthValidator.validateUsername("ab") == .failure(.invalidUsername(reason: "Username must be at least 3 characters long.")))
+        #expect(AuthValidator.validateUsername("bad name with spaces") == .failure(.invalidUsername(reason: "Username can only contain letters, numbers, underscores, and dashes.")))
+    }
+
+    @Test("Combined credential validation succeeds with optional username")
+    func combinedCredentialsWithUsername() {
+        let result = AuthValidator.validateCredentials(
+            email: "valid@example.com",
+            password: "Password123",
+            username: "glow_expert"
+        )
+        guard case .success(let credentials) = result else {
+            Issue.record("Expected successful credential validation with username")
+            return
+        }
+        #expect(credentials.email == "valid@example.com")
+        #expect(credentials.password == "Password123")
+        #expect(credentials.username == "glow_expert")
+    }
+
     // MARK: - AuthError Tests
 
     @Test("AuthError descriptions provide clear, non-sensitive messages")

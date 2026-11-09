@@ -11,6 +11,7 @@ import Foundation
 public enum AuthError: LocalizedError, Equatable, Sendable {
     case missingFields
     case invalidEmail
+    case invalidUsername(reason: String)
     case weakPassword(reason: String)
     case emailAlreadyInUse
     case invalidCredentials
@@ -24,6 +25,8 @@ public enum AuthError: LocalizedError, Equatable, Sendable {
             return "Please enter both your email address and password."
         case .invalidEmail:
             return "Please enter a valid email address."
+        case .invalidUsername(let reason):
+            return reason
         case .weakPassword(let reason):
             return reason
         case .emailAlreadyInUse:
