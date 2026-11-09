@@ -22,6 +22,7 @@ public struct ProfileView: View {
     public var onOpenStartup: (() -> Void)?
     public var onEditSkinProfile: (() -> Void)?
     public var onSelectTab: ((Int) -> Void)?
+    public var onSignOut: (() -> Void)?
     
     // MARK: - Local State
     @State private var clashAlertsEnabled: Bool = true
@@ -41,7 +42,8 @@ public struct ProfileView: View {
         onOpenSettings: (() -> Void)? = nil,
         onOpenStartup: (() -> Void)? = nil,
         onEditSkinProfile: (() -> Void)? = nil,
-        onSelectTab: ((Int) -> Void)? = nil
+        onSelectTab: ((Int) -> Void)? = nil,
+        onSignOut: (() -> Void)? = nil
     ) {
         self.productsCount = productsCount
         self.routinesCount = routinesCount
@@ -56,6 +58,7 @@ public struct ProfileView: View {
         self.onOpenStartup = onOpenStartup
         self.onEditSkinProfile = onEditSkinProfile
         self.onSelectTab = onSelectTab
+        self.onSignOut = onSignOut
     }
     
     public var body: some View {
@@ -67,7 +70,15 @@ public struct ProfileView: View {
                 onBack: {
                     showSettings = false
                 },
-                onSelectTab: onSelectTab
+                onSelectTab: onSelectTab,
+                onSignOut: {
+                    showSettings = false
+                    if let onSignOut {
+                        onSignOut()
+                    } else {
+                        onOpenStartup?()
+                    }
+                }
             )
         } else {
             ScrollView(.vertical, showsIndicators: false) {

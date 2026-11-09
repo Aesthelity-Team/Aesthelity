@@ -61,6 +61,8 @@ struct LiveAnalysisView: View {
                     .foregroundStyle(AppTheme.Semantic.inkBrand)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("Back")
+            .accessibilityLabel("Back")
             Spacer()
             Text("Routine analysis")
                 .font(.system(size: 17, weight: .bold))

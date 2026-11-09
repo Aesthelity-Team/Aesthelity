@@ -276,6 +276,7 @@ public enum AuthMode: Equatable {
 
 public struct AuthSignInView: View {
     @State public var mode: AuthMode
+    @State public var isRegistering: Bool
     @State public var email: String
     @State public var password: String
     @State public var isRetrying: Bool = false
@@ -288,17 +289,24 @@ public struct AuthSignInView: View {
     public var onSwitchToSetup: () -> Void
     /// Injectable email sign-in for tests. Defaults to Firebase email/password sign-in.
     public var performEmailSignIn: (String, String) async throws -> Void
+    /// Injectable email sign-up for tests. Defaults to Firebase email/password registration.
+    public var performEmailSignUp: (String, String) async throws -> UserAccount
     
     public init(
         initialMode: AuthMode = .normal,
+        isRegistering: Bool = false,
         onSuccess: @escaping () -> Void = {},
         onContinueWithoutAccount: @escaping () -> Void = {},
         onSwitchToSetup: @escaping () -> Void = {},
         performEmailSignIn: @escaping (String, String) async throws -> Void = { email, password in
             try await FirebaseAuthService.shared.signIn(email: email, password: password)
+        },
+        performEmailSignUp: @escaping (String, String) async throws -> UserAccount = { email, password in
+            try await FirebaseAuthService.shared.signUp(email: email, password: password)
         }
     ) {
         self._mode = State(initialValue: initialMode)
+        self._isRegistering = State(initialValue: isRegistering)
         switch initialMode {
         case .invalid:
             self._email = State(initialValue: "maya")
@@ -314,6 +322,7 @@ public struct AuthSignInView: View {
         self.onContinueWithoutAccount = onContinueWithoutAccount
         self.onSwitchToSetup = onSwitchToSetup
         self.performEmailSignIn = performEmailSignIn
+        self.performEmailSignUp = performEmailSignUp
     }
     
     public var body: some View {
@@ -409,7 +418,7 @@ public struct AuthSignInView: View {
                 .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 3)
             
             // Dynamic Title
-            Text(mode == .invalid ? "Check your details" : "Sign in")
+            Text(mode == .invalid ? "Check your details" : (isRegistering ? "Create account" : "Sign in"))
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(Color(hex: "#1A1628"))
                 .multilineTextAlignment(.center)
@@ -418,11 +427,11 @@ public struct AuthSignInView: View {
             Group {
                 switch mode {
                 case .invalid:
-                    Text("Fix the highlighted fields, then try signing in again.")
+                    Text(isRegistering ? "Fix the highlighted fields, then try creating your account again." : "Fix the highlighted fields, then try signing in again.")
                 case .failed:
                     Text("We couldn't reach Aesthelity. Nothing was lost.")
                 case .normal:
-                    Text("Welcome back. Enter your details to continue.")
+                    Text(isRegistering ? "Enter your email and password to secure your skincare routines." : "Welcome back. Enter your details to continue.")
                 }
             }
             .font(.system(size: 14, weight: .regular))
@@ -629,7 +638,7 @@ public struct AuthSignInView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.85)
                 }
-                Text(mode == .invalid ? "Try again" : "Sign in")
+                Text(mode == .invalid ? "Try again" : (isRegistering ? "Create account" : "Sign in"))
                     .font(.system(size: 16, weight: .semibold))
             }
             .foregroundStyle(mode == .invalid ? Color(hex: "#1A1628") : Color.white)
@@ -657,28 +666,52 @@ public struct AuthSignInView: View {
         authStatusMessage = nil
         let capturedEmail = email
         let capturedPassword = password
+        let registering = isRegistering
         let signIn = performEmailSignIn
+        let signUp = performEmailSignUp
         Task { @MainActor in
             defer { isAuthenticating = false }
-            let outcome = await AuthEmailSignIn.attempt(
-                email: capturedEmail,
-                password: capturedPassword,
-                signIn: signIn
-            )
-            switch outcome {
-            case .succeeded:
-                onSuccess()
-            case .continuedWithoutAccount:
-                onContinueWithoutAccount()
-            case .invalidForm(let message):
-                authStatusMessage = message
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    mode = .invalid
+            if registering {
+                let outcome = await AuthEmailRegistration.attempt(
+                    email: capturedEmail,
+                    password: capturedPassword,
+                    signUp: signUp
+                )
+                switch outcome {
+                case .succeeded:
+                    onSuccess()
+                case .invalidForm(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .invalid
+                    }
+                case .failed(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .failed
+                    }
                 }
-            case .failed(let message):
-                authStatusMessage = message
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    mode = .failed
+            } else {
+                let outcome = await AuthEmailSignIn.attempt(
+                    email: capturedEmail,
+                    password: capturedPassword,
+                    signIn: signIn
+                )
+                switch outcome {
+                case .succeeded:
+                    onSuccess()
+                case .continuedWithoutAccount:
+                    onContinueWithoutAccount()
+                case .invalidForm(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .invalid
+                    }
+                case .failed(let message):
+                    authStatusMessage = message
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        mode = .failed
+                    }
                 }
             }
         }
@@ -779,16 +812,39 @@ public struct AuthSignInView: View {
     
     private var footerLinksSection: some View {
         VStack(spacing: 12) {
-            Button(action: { showForgotPasswordAlert = true }) {
-                Text("Forgot password?")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(hex: "#625478"))
+            if !isRegistering {
+                Button(action: { showForgotPasswordAlert = true }) {
+                    Text("Forgot password?")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hex: "#625478"))
+                }
+                .buttonStyle(.plain)
+            }
+            
+            Button(action: {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    isRegistering.toggle()
+                    authStatusMessage = nil
+                    if mode == .invalid || mode == .failed {
+                        mode = .normal
+                    }
+                }
+            }) {
+                HStack(spacing: 4) {
+                    Text(isRegistering ? "Already have an account?" : "New to Aesthelity?")
+                        .foregroundStyle(Color(hex: "#625478"))
+                    Text(isRegistering ? "Sign in" : "Create account")
+                        .foregroundStyle(Color(hex: "#1A1628"))
+                        .fontWeight(.semibold)
+                }
+                .font(.system(size: 14))
             }
             .buttonStyle(.plain)
-            
+            .accessibilityIdentifier("auth.toggleRegister")
+
             Button(action: onSwitchToSetup) {
                 HStack(spacing: 4) {
-                    Text("New here?")
+                    Text("Want to set up first?")
                         .foregroundStyle(Color(hex: "#625478"))
                     Text("Continue setup")
                         .foregroundStyle(Color(hex: "#1A1628"))

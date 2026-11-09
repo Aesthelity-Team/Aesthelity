@@ -52,6 +52,7 @@ public struct SettingsView: View {
     public var onBack: (() -> Void)?
     public var onSelectTab: ((Int) -> Void)?
     public var onDeleteScanHistory: (() -> Void)?
+    public var onSignOut: (() -> Void)?
     
     // MARK: - Local State
     @ObservedObject private var authService = FirebaseAuthService.shared
@@ -77,7 +78,8 @@ public struct SettingsView: View {
         selectedTab: Int = 4,
         onBack: (() -> Void)? = nil,
         onSelectTab: ((Int) -> Void)? = nil,
-        onDeleteScanHistory: (() -> Void)? = nil
+        onDeleteScanHistory: (() -> Void)? = nil,
+        onSignOut: (() -> Void)? = nil
     ) {
         self.skinType = skinType
         self.concerns = concerns
@@ -90,6 +92,7 @@ public struct SettingsView: View {
         self.onBack = onBack
         self.onSelectTab = onSelectTab
         self.onDeleteScanHistory = onDeleteScanHistory
+        self.onSignOut = onSignOut
     }
     
     public var body: some View {
@@ -367,10 +370,12 @@ public struct SettingsView: View {
                     Button("Sign Out") {
                         syncService.stopRoutineListener()
                         try? authService.signOut()
+                        onSignOut?()
                     }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color(hex: "#842029"))
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings.signOut")
                 }
             }
             .padding(.horizontal, 18)
