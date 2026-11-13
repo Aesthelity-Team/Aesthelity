@@ -1,4 +1,5 @@
 import Foundation
+import FirebaseAuth
 
 struct ProductListResponse: Decodable {
     let contractVersion: Int
@@ -106,6 +107,8 @@ enum BackendAnalysisAPIError: LocalizedError {
     case server(status: Int, message: String)
     case missingProduct(String)
     case catalogVersionMismatch(expected: Int, received: Int)
+    case authenticationRequired
+    case authenticationTokenUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -119,6 +122,10 @@ enum BackendAnalysisAPIError: LocalizedError {
             return "Product \(productID) was not returned by the Firestore catalog API."
         case .catalogVersionMismatch(let expected, let received):
             return "The app alias catalog is version \(expected), but the API returned version \(received). Update both from the same alias file."
+        case .authenticationRequired:
+            return "Please sign in to analyze this routine."
+        case .authenticationTokenUnavailable:
+            return "Could not get your sign-in token. Please try again."
         }
     }
 }
@@ -165,6 +172,23 @@ struct BackendAnalysisAPI {
         var analysisRequest = URLRequest(url: analysisURL)
         analysisRequest.httpMethod = "POST"
         analysisRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        guard let user = Auth.auth().currentUser else {
+            throw BackendAnalysisAPIError.authenticationRequired
+        }
+
+        let idToken: String
+        do {
+            idToken = try await user.getIDToken()
+        } catch {
+            throw BackendAnalysisAPIError.authenticationTokenUnavailable
+        }
+
+        analysisRequest.setValue(
+            "Bearer \(idToken)",
+            forHTTPHeaderField: "Authorization"
+        )
+
         analysisRequest.httpBody = try encoder.encode(payload)
         let (analysisData, analysisResponse) = try await session.data(for: analysisRequest)
         try requireSuccess(analysisResponse, data: analysisData)
