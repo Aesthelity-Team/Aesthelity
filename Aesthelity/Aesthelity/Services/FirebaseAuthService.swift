@@ -11,22 +11,12 @@ import Combine
 import FirebaseAuth
 import FirebaseCore
 import Foundation
+import GoogleSignIn
+import UIKit
 
 @MainActor
 public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
     public static let shared = FirebaseAuthService()
-
-    public struct LocalUserRecord: Codable, Sendable {
-        public let account: UserAccount
-        public let passwordHash: String
-        public let salt: String
-
-        public init(account: UserAccount, passwordHash: String, salt: String) {
-            self.account = account
-            self.passwordHash = passwordHash
-            self.salt = salt
-        }
-    }
 
     @Published public private(set) var currentUser: UserAccount?
     @Published public private(set) var userId: String?
@@ -35,13 +25,10 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
     @Published public private(set) var isAnonymous: Bool = false
     @Published public private(set) var authError: String?
     @Published public private(set) var isLoading: Bool = false
-    @Published public private(set) var isFallbackActive: Bool = false
 
     private var authListenerHandle: AuthStateDidChangeListenerHandle?
     private let keychain: KeychainManagerProtocol
     private let sessionUserKey = "active_session_user_id"
-    private let localSessionUserKey = "local_active_session_user"
-    private let localUsersStoreKey = "local_registered_users_store"
 
     public init(keychain: KeychainManagerProtocol = KeychainManager.shared) {
         if FirebaseApp.app() == nil {
@@ -60,14 +47,6 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
             self.isAuthenticated = true
             self.isAnonymous = current.isAnonymous
             try? keychain.save(string: current.uid, forKey: sessionUserKey)
-        } else if let savedSessionData = try? keychain.readData(forKey: localSessionUserKey),
-                  let savedAccount = try? JSONDecoder().decode(UserAccount.self, from: savedSessionData) {
-            self.currentUser = savedAccount
-            self.userId = savedAccount.id
-            self.userEmail = savedAccount.email
-            self.isAuthenticated = true
-            self.isAnonymous = savedAccount.isAnonymous
-            self.isFallbackActive = true
         }
         setupAuthStateListener()
     }
@@ -82,8 +61,6 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
         authListenerHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
-                // Only let Firebase listener override if not running in local fallback session
-                guard !self.isFallbackActive else { return }
                 if let user = user {
                     let account = UserAccount(
                         id: user.uid,
@@ -112,13 +89,11 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
     /// providing an immediate unique UID for synchronization.
     public func ensureAuthenticated() async {
         guard Auth.auth().currentUser == nil && currentUser == nil else { return }
-        if isFallbackActive {
-            performLocalAnonymousSignIn()
-            return
-        }
+
         do {
             isLoading = true
             defer { isLoading = false }
+
             let result = try await Auth.auth().signInAnonymously()
             let account = UserAccount(
                 id: result.user.uid,
@@ -133,13 +108,8 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
             self.authError = nil
             try? self.keychain.save(string: result.user.uid, forKey: self.sessionUserKey)
         } catch {
-            if isConfigurationNotFoundError(error) {
-                isFallbackActive = true
-                performLocalAnonymousSignIn()
-            } else {
-                let mapped = mapError(error)
-                self.authError = mapped.localizedDescription
-            }
+            let mapped = mapError(error)
+            self.authError = mapped.localizedDescription
         }
     }
 
@@ -161,10 +131,6 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
         isLoading = true
         defer { isLoading = false }
 
-        if isFallbackActive {
-            return try performLocalSignIn(email: validEmail, password: password)
-        }
-
         do {
             let result = try await Auth.auth().signIn(withEmail: validEmail, password: password)
             let account = UserAccount(
@@ -181,12 +147,120 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
             try? self.keychain.save(string: result.user.uid, forKey: self.sessionUserKey)
             return account
         } catch {
-            if isConfigurationNotFoundError(error) {
-                isFallbackActive = true
-                return try performLocalSignIn(email: validEmail, password: password)
-            }
             let mapped = mapError(error)
             self.authError = mapped.localizedDescription
+            throw mapped
+        }
+    }
+
+    public func sendPasswordReset(email: String) async throws {
+        let trimmedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+
+        guard case .success(let validEmail) = AuthValidator.validateEmail(trimmedEmail) else {
+            throw AuthError.invalidEmail
+        }
+
+        try await Auth.auth().sendPasswordReset(withEmail: validEmail)
+    }
+
+    @discardableResult
+    public func signInWithGoogle(presenting viewController: UIViewController) async throws -> UserAccount {
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            guard let clientID = FirebaseApp.app()?.options.clientID else {
+                throw AuthError.unknown(message: "Google sign-in is not configured.")
+            }
+
+            GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+
+            let googleResult: GIDSignInResult = try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<GIDSignInResult, Error>) in
+                GIDSignIn.sharedInstance.signIn(withPresenting: viewController) { result, error in
+                    if let error {
+                        continuation.resume(throwing: error)
+                    } else if let result {
+                        continuation.resume(returning: result)
+                    } else {
+                        continuation.resume(
+                            throwing: AuthError.unknown(message: "Google sign-in did not return an account.")
+                        )
+                    }
+                }
+            }
+
+            guard let idToken = googleResult.user.idToken?.tokenString else {
+                throw AuthError.unknown(message: "Google did not return an ID token.")
+            }
+
+            let credential = GoogleAuthProvider.credential(
+                withIDToken: idToken,
+                accessToken: googleResult.user.accessToken.tokenString
+            )
+            let result = try await Auth.auth().signIn(with: credential)
+
+            let account = UserAccount(
+                id: result.user.uid,
+                email: result.user.email ?? "",
+                isAnonymous: result.user.isAnonymous
+            )
+            self.currentUser = account
+            self.userId = result.user.uid
+            self.userEmail = result.user.email
+            self.isAuthenticated = true
+            self.isAnonymous = result.user.isAnonymous
+            self.authError = nil
+            try? self.keychain.save(string: result.user.uid, forKey: self.sessionUserKey)
+            return account
+        } catch {
+            let mapped = mapError(error)
+            self.authError = mapped.localizedDescription
+            throw mapped
+        }
+    }
+
+
+    @discardableResult
+    public func linkEmailPassword(password: String) async throws -> UserAccount {
+        guard let user = Auth.auth().currentUser else {
+            throw AuthError.sessionExpired
+        }
+        guard let email = user.email else {
+            throw AuthError.unknown(message: "This account does not have an email address.")
+        }
+        guard !user.isAnonymous else {
+            throw AuthError.sessionExpired
+        }
+        guard !user.providerData.contains(where: { $0.providerID == "password" }) else {
+            throw AuthError.unknown(message: "This account already has password sign-in set up.")
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let credential = EmailAuthProvider.credential(withEmail: email, password: password)
+
+        do {
+            let result = try await user.link(with: credential)
+            let linkedUser = result.user
+
+            let account = UserAccount(
+                id: linkedUser.uid,
+                email: linkedUser.email ?? email,
+                isAnonymous: linkedUser.isAnonymous
+            )
+            currentUser = account
+            userId = linkedUser.uid
+            userEmail = linkedUser.email
+            isAuthenticated = true
+            isAnonymous = linkedUser.isAnonymous
+            authError = nil
+
+            return account
+        } catch {
+            let mapped = mapError(error)
+            authError = mapped.localizedDescription
             throw mapped
         }
     }
@@ -205,10 +279,6 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
 
         isLoading = true
         defer { isLoading = false }
-
-        if isFallbackActive {
-            return try performLocalSignUp(validated: validated)
-        }
 
         do {
             let result = try await Auth.auth().createUser(withEmail: trimmedEmail, password: validated.password)
@@ -232,10 +302,6 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
             try? self.keychain.save(string: result.user.uid, forKey: self.sessionUserKey)
             return account
         } catch {
-            if isConfigurationNotFoundError(error) {
-                isFallbackActive = true
-                return try performLocalSignUp(validated: validated)
-            }
             let mapped = mapError(error)
             self.authError = mapped.localizedDescription
             throw mapped
@@ -245,107 +311,15 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
     /// Sign out of the current session and clear secure keychain tokens.
     public func signOut() throws {
         if Auth.auth().currentUser != nil {
-            try? Auth.auth().signOut()
+            try Auth.auth().signOut()
         }
         try? keychain.delete(forKey: sessionUserKey)
-        try? keychain.delete(forKey: localSessionUserKey)
         self.currentUser = nil
         self.userId = nil
         self.userEmail = nil
         self.isAuthenticated = false
         self.isAnonymous = false
         self.authError = nil
-    }
-
-    // MARK: - Local Fallback Implementation
-
-    private func performLocalSignUp(validated: AuthCredentials) throws -> UserAccount {
-        var users = loadLocalUsers()
-        let trimmedEmail = validated.email.lowercased()
-        if users[trimmedEmail] != nil {
-            let err = AuthError.emailAlreadyInUse
-            self.authError = err.localizedDescription
-            throw err
-        }
-        let salt = PasswordHasher.generateSalt()
-        let hash = PasswordHasher.hash(password: validated.password, salt: salt)
-        let account = UserAccount(
-            id: "local_" + UUID().uuidString.prefix(8).lowercased(),
-            email: trimmedEmail,
-            username: validated.username,
-            isAnonymous: false
-        )
-        users[trimmedEmail] = LocalUserRecord(account: account, passwordHash: hash, salt: salt)
-        saveLocalUsers(users)
-
-        self.currentUser = account
-        self.userId = account.id
-        self.userEmail = account.email
-        self.isAuthenticated = true
-        self.isAnonymous = false
-        self.authError = nil
-        if let sessionData = try? JSONEncoder().encode(account) {
-            try? keychain.save(data: sessionData, forKey: localSessionUserKey)
-        }
-        try? keychain.save(string: account.id, forKey: sessionUserKey)
-        return account
-    }
-
-    private func performLocalSignIn(email: String, password: String) throws -> UserAccount {
-        let users = loadLocalUsers()
-        guard let record = users[email.lowercased()],
-              PasswordHasher.verify(password: password, hash: record.passwordHash, salt: record.salt) else {
-            let err = AuthError.invalidCredentials
-            self.authError = err.localizedDescription
-            throw err
-        }
-        self.currentUser = record.account
-        self.userId = record.account.id
-        self.userEmail = record.account.email
-        self.isAuthenticated = true
-        self.isAnonymous = false
-        self.authError = nil
-        if let sessionData = try? JSONEncoder().encode(record.account) {
-            try? keychain.save(data: sessionData, forKey: localSessionUserKey)
-        }
-        try? keychain.save(string: record.account.id, forKey: sessionUserKey)
-        return record.account
-    }
-
-    private func performLocalAnonymousSignIn() {
-        let account = UserAccount(
-            id: "local_anon_" + UUID().uuidString.prefix(8).lowercased(),
-            email: "",
-            isAnonymous: true
-        )
-        self.currentUser = account
-        self.userId = account.id
-        self.userEmail = nil
-        self.isAuthenticated = true
-        self.isAnonymous = true
-        self.authError = nil
-    }
-
-    private func loadLocalUsers() -> [String: LocalUserRecord] {
-        guard let data = try? keychain.readData(forKey: localUsersStoreKey),
-              let dict = try? JSONDecoder().decode([String: LocalUserRecord].self, from: data) else {
-            return [:]
-        }
-        return dict
-    }
-
-    private func saveLocalUsers(_ users: [String: LocalUserRecord]) {
-        if let data = try? JSONEncoder().encode(users) {
-            try? keychain.save(data: data, forKey: localUsersStoreKey)
-        }
-    }
-
-    private func isConfigurationNotFoundError(_ error: Error) -> Bool {
-        let nsError = error as NSError
-        let errorDetails = "\(nsError.userInfo)"
-        return errorDetails.contains("CONFIGURATION_NOT_FOUND") ||
-               errorDetails.contains("OPERATION_NOT_ALLOWED") ||
-               (nsError.code == 17999 && errorDetails.contains("CONFIGURATION_NOT_FOUND"))
     }
 
     // MARK: - Error Mapping
@@ -360,7 +334,7 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
         switch code {
         case .invalidEmail:
             return .invalidEmail
-        case .wrongPassword, .userNotFound:
+        case .wrongPassword, .userNotFound, .invalidCredential:
             return .invalidCredentials
         case .emailAlreadyInUse:
             return .emailAlreadyInUse

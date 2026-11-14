@@ -8,6 +8,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // MARK: - Startup Navigation State
 
@@ -320,6 +321,7 @@ public struct AuthSignInView: View {
     public var performEmailSignIn: (String, String) async throws -> Void
     /// Injectable email sign-up for tests. Defaults to Firebase email/password registration.
     public var performEmailSignUp: (String, String, String?) async throws -> UserAccount
+    public var performGoogleSignIn: (UIViewController) async throws -> UserAccount
     
     public init(
         initialMode: AuthMode = .normal,
@@ -334,6 +336,9 @@ public struct AuthSignInView: View {
         },
         performEmailSignUp: @escaping (String, String, String?) async throws -> UserAccount = { email, password, username in
             try await FirebaseAuthService.shared.signUp(email: email, password: password, username: username)
+        },
+        performGoogleSignIn: @escaping (UIViewController) async throws -> UserAccount = { presenter in
+            try await FirebaseAuthService.shared.signInWithGoogle(presenting: presenter)
         }
     ) {
         self._mode = State(initialValue: initialMode)
@@ -354,6 +359,7 @@ public struct AuthSignInView: View {
         self.onSwitchToSetup = onSwitchToSetup
         self.performEmailSignIn = performEmailSignIn
         self.performEmailSignUp = performEmailSignUp
+        self.performGoogleSignIn = performGoogleSignIn
     }
 
     public init(
@@ -482,7 +488,23 @@ public struct AuthSignInView: View {
             .padding(.horizontal, 24)
         }
         .alert("Reset Password", isPresented: $showForgotPasswordAlert) {
-            Button("Send Reset Link", role: .none) {}
+            Button("Send Reset Link") {
+                let resetEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                guard !resetEmail.isEmpty else {
+                    authStatusMessage = "Enter your account email first."
+                    return
+                }
+
+                Task { @MainActor in
+                    do {
+                        try await FirebaseAuthService.shared.sendPasswordReset(email: resetEmail)
+                        authStatusMessage = "Reset email requested. Check your inbox and spam folder."
+                    } catch {
+                        authStatusMessage = error.localizedDescription
+                    }
+                }
+            }
             Button("Cancel", role: .cancel) {}
         } message: {
             Text("We will send a password reset link to \(email.isEmpty ? "your email" : email).")
@@ -840,7 +862,7 @@ public struct AuthSignInView: View {
                 case .failed(let message):
                     authStatusMessage = message
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        mode = .failed
+                        mode = .normal
                     }
                 }
             } else {
@@ -862,13 +884,44 @@ public struct AuthSignInView: View {
                 case .failed(let message):
                     authStatusMessage = message
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        mode = .failed
+                        mode = .normal
                     }
                 }
             }
         }
     }
     
+    @MainActor
+    private func handleGoogleSignIn() {
+        let presenter = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap { $0.windows }
+            .first(where: { $0.isKeyWindow })?
+            .rootViewController
+
+        guard let presenter else {
+            authStatusMessage = "Google sign-in couldn't start. Please try again."
+            return
+        }
+
+        isAuthenticating = true
+        authStatusMessage = nil
+
+        Task { @MainActor in
+            defer { isAuthenticating = false }
+
+            do {
+                _ = try await performGoogleSignIn(presenter)
+                onSuccess()
+            } catch {
+                authStatusMessage = error.localizedDescription
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    mode = .normal
+                }
+            }
+        }
+    }
+
     // MARK: - Or Divider
     
     private var orDivider: some View {
@@ -891,24 +944,24 @@ public struct AuthSignInView: View {
     
     private var socialButtonsSection: some View {
         VStack(spacing: 12) {
-            Text("Google and Apple sign-in are not available yet.")
+            Text("Continue with Google, Apple sign-in are not available yet.")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color(hex: "#625478"))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             // Google Button — intentionally disabled until social auth is implemented
-            Button(action: {}) {
+            Button(action: handleGoogleSignIn) {
                 HStack(spacing: 12) {
                     googleLogo
                         .frame(width: 20, height: 20)
                     
-                    Text("Continue with Google (coming soon)")
+                    Text("Continue with Google")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundStyle(Color(hex: "#1A1628"))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 52)
-                .background(Color.white.opacity(0.7))
+                .background(Color.white)
                 .clipShape(Capsule())
                 .overlay(
                     Capsule()
@@ -916,8 +969,8 @@ public struct AuthSignInView: View {
                 )
             }
             .buttonStyle(.plain)
-            .disabled(true)
-            .accessibilityIdentifier("auth.googleComingSoon")
+            .disabled(isAuthenticating)
+            .accessibilityIdentifier("auth.googleSignIn")
             
             // Apple Button — intentionally disabled until social auth is implemented
             Button(action: {}) {

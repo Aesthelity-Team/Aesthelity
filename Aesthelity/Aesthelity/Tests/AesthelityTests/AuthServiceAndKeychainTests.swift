@@ -422,34 +422,4 @@ final class AuthServiceAndKeychainTests: XCTestCase {
         }
     }
 
-    @MainActor
-    func testFirebaseAuthServiceFallbackSignUpAndSignIn() async throws {
-        let authService = FirebaseAuthService.shared
-        try? authService.signOut()
-
-        let testEmail = "local_test_\(UUID().uuidString.prefix(6).lowercased())@example.com"
-        let testPass = "SecurePass123!"
-        let testUser = "local_tester"
-
-        // Sign up should succeed (via local fallback if Firebase backend is unconfigured)
-        let account = try await authService.signUp(email: testEmail, password: testPass, username: testUser)
-        XCTAssertEqual(account.email, testEmail)
-        XCTAssertEqual(account.username, testUser)
-        XCTAssertTrue(authService.isAuthenticated)
-        XCTAssertEqual(authService.currentUser?.email, testEmail)
-
-        // Sign out
-        try authService.signOut()
-        XCTAssertFalse(authService.isAuthenticated)
-        XCTAssertNil(authService.currentUser)
-
-        // Sign back in with same credentials
-        let signedInAccount = try await authService.signIn(email: testEmail, password: testPass)
-        XCTAssertEqual(signedInAccount.email, testEmail)
-        XCTAssertTrue(authService.isAuthenticated)
-
-        // Sign out to clean up
-        try authService.signOut()
-    }
-
 }
