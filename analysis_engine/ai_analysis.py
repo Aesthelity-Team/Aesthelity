@@ -320,10 +320,17 @@ def _context_for(
             {
                 "productID": product["productID"],
                 "listStatus": product["listStatus"],
-                "ingredients": [
-                    {key: row[key] for key in ("index", "ingredientID", "canonicalName", "classes")}
-                    for row in product["ingredients"]
-                ],
+        "ingredients": [
+            {
+                "ingredientID": row["ingredientID"],
+                "canonicalName": row["canonicalName"],
+                "classes": row["classes"],
+            }
+            for row in sorted(
+                product["ingredients"],
+                key=lambda item: item["ingredientID"],
+            )
+        ],
             }
             for product in products
         ],

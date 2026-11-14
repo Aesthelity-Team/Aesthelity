@@ -222,6 +222,36 @@ class AIAnalysisTests(unittest.TestCase):
         )
         self.assertEqual(result["analysisProviderStatus"], "unsupported_claim")
         self.assertTrue(any(item["outcome"] == "unknown" for item in result["findings"]))
+    def test_ingredient_order_does_not_change_ai_analysis_context(self):
+        original_order_provider = FakeProvider()
+        reversed_order_provider = FakeProvider()
+
+        analyze_normalized_routine(
+            normalization(
+                row(0, "Retinol", "Retinol"),
+                row(1, "Glycolic Acid", "Glycolic Acid"),
+            ),
+            context(),
+            CANONICAL,
+            REFERENCES,
+            original_order_provider,
+        )
+
+        analyze_normalized_routine(
+            normalization(
+                row(0, "Glycolic Acid", "Glycolic Acid"),
+                row(1, "Retinol", "Retinol"),
+            ),
+            context(),
+            CANONICAL,
+            REFERENCES,
+            reversed_order_provider,
+        )
+
+        self.assertEqual(
+            original_order_provider.contexts[0],
+            reversed_order_provider.contexts[0],
+        )
 
 
 if __name__ == "__main__":
