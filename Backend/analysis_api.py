@@ -19,13 +19,25 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from analysis_engine import AnalysisInputError, evaluate_routine  # noqa: E402
-from analysis_engine.product_input import ProductInputError, load_alias_catalog  # noqa: E402
+from analysis_engine.product_input import load_alias_catalog  # noqa: E402
 
+from analysis_engine.ai_analysis import (
+    AIAnalysisInputError,
+    OpenAIAnalysisProvider,
+    analyze_normalized_routine,
+)
+from Backend.analysis_engine.normalization import (
+    NormalizationInputError,
+    OpenAINormalizationProvider,
+    normalize_products,
+)
+from Backend.analysis_reference_store import (
+    AnalysisReferenceStoreError,
+    load_approved_analysis_records,
+)
 
 CATALOG_PATH = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" / "ingredient-aliases.json"
 MAX_BODY_BYTES = 1_000_000
-RULE_VERSION = "AN-02-v1"
 
 PRODUCT_FIELDS = (
     "brand",
@@ -125,19 +137,107 @@ class APIHandler(BaseHTTPRequestHandler):
         except (json.JSONDecodeError, UnicodeDecodeError):
             self._send(400, _error_body("INVALID_REQUEST", "Request body must be valid UTF-8 JSON."))
             return
-        if not isinstance(payload, dict) or payload.get("contractVersion") != 1:
+        if (
+            not isinstance(payload, dict)
+            or type(payload.get("contractVersion")) is not int
+            or payload["contractVersion"] != 1
+        ):
             self._send(400, _error_body("INVALID_REQUEST", "contractVersion must be 1."))
             return
         try:
-            result = evaluate_routine(payload, self.server.catalog)
-        except (AnalysisInputError, ProductInputError, TypeError, ValueError) as error:
-            code = error.code if isinstance(error, AnalysisInputError) else "INVALID_REQUEST"
-            self._send(400, _error_body(code, str(error)))
+            contract, reference_records = load_approved_analysis_records(
+                self.server.db, payload["contractVersion"]
+            )
+            rule_version = contract.get("ruleSetVersion")
+            if not isinstance(rule_version, str) or not rule_version.strip():
+                raise AnalysisReferenceStoreError(
+                    "approved_analysis_contract_unavailable"
+                )
+
+            raw_products = []
+            for product in payload.get("products", []):
+                if not isinstance(product, dict):
+                    raise NormalizationInputError(
+                        "Each product must be an object."
+                    )
+
+                rows = product.get("ingredients")
+                if not isinstance(rows, list):
+                    raise NormalizationInputError(
+                        "Each product needs an ingredients array."
+                    )
+
+                ingredient_texts = []
+                for row in rows:
+                    if not isinstance(row, dict):
+                        raise NormalizationInputError(
+                            "Each ingredient needs its originalText."
+                        )
+                    original_text = row.get("originalText")
+                    if not isinstance(original_text, str):
+                        raise NormalizationInputError(
+                            "Each ingredient needs its originalText."
+                        )
+                    ingredient_texts.append(original_text)
+
+                raw_products.append({
+                    "productID": product.get("productID"),
+                    "listStatus": product.get("listStatus"),
+                    "ingredients": ingredient_texts,
+                })
+
+            normalization = normalize_products(
+                raw_products,
+                OpenAINormalizationProvider.from_environment(),
+            )
+            normalization["canonicalDataVersion"] = self.server.catalog["version"]
+
+            canonical_records = [
+                {
+                    "id": ingredient["id"],
+                    "canonicalName": ingredient["name"],
+                    "classes": ingredient.get("classes", []),
+                }
+                for ingredient in self.server.catalog["ingredients"]
+            ]
+
+            allergies = payload.get("recordedAllergies")
+            if isinstance(allergies, dict) and allergies.get("status") == "unknown":
+                allergies = {"status": "unknown"}
+
+            result = analyze_normalized_routine(
+                normalization=normalization,
+                routine_context={
+                    "period": payload.get("period"),
+                    "recordedAllergies": allergies,
+                },
+                canonical_records=canonical_records,
+                reference_records=reference_records,
+                provider=OpenAIAnalysisProvider.from_environment(),
+            )
+        except AnalysisReferenceStoreError:
+            self._send(
+                503,
+                _error_body(
+                    "ANALYSIS_DATA_UNAVAILABLE",
+                    "Approved analysis data could not be loaded.",
+                ),
+            )
             return
+        except (
+            AIAnalysisInputError,
+            NormalizationInputError,
+            TypeError,
+            ValueError,
+        ) as error:
+            self._send(400, _error_body("INVALID_REQUEST", str(error)))
+            return
+
         self._send(200, {
-            "contractVersion": 1,
-            "ruleVersion": RULE_VERSION,
             **result,
+            "contractVersion": payload["contractVersion"],
+            "ruleVersion": rule_version,
+            "activeCatalogVersion": self.server.catalog["version"],
         })
 
     def _authorized(self) -> bool:
@@ -230,7 +330,10 @@ def main() -> None:
     )
     print(f"API listening at http://{host}:{port}")
     print(f"Firestore: project={project_id}, database={database_id}, collection=products")
-    print(f"Alias catalog version: {catalog['version']}; analysis rules: {RULE_VERSION}")
+    print(
+        f"Alias catalog version: {catalog['version']}; "
+        "analysis rules are loaded from Firestore per request"
+    )
     print("Auth: local demo bypass" if demo_mode else "Auth: Firebase ID token required for analysis")
     try:
         server.serve_forever()

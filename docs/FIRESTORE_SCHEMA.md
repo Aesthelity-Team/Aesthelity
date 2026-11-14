@@ -165,3 +165,61 @@ own authorization checks when exposed through backend endpoints.
 - Confirm analysis findings and input snapshots with AN-02.
 - Confirm normalized ingredient representation with DATA-02.
 - Record agreed changes before implementing private persistence.
+
+## Approved analysis contracts: analysisContracts/{contractID}
+
+Use a stable document ID such as `v1`. The backend reads the approved
+contract for the request's `contractVersion`.
+
+| Field | Type | Requirement |
+|---|---|---|
+| contractVersion | integer | Required; matches the document ID and API request |
+| reviewStatus | string | Required; `draft`, `approved`, or `retired` |
+| ruleSetVersion | string | Required; identifies the approved reference set |
+| resultOutcomes | array of strings | Required; `findings`, `noFindings` |
+| findingOutcomes | array of strings | Required; `caution`, `conflict`, `allergen`, `unknown` |
+| severityValues | array of strings | Required; `low`, `moderate`, `high` |
+| policy | map | Required; records missing-data and matching behavior |
+| updatedAt | Firestore timestamp | Required |
+| updatedBy | string | Required; authorized editor's team identity |
+| approvedReferenceOutcomes | array of strings | Required; caution, conflict, allergen |
+
+For v1, `policy` must specify that ingredient order is not a match condition,
+no layering sequence is returned, and missing or unmatched data is reported
+as unknown or incomplete rather than safe.
+
+## Approved analysis evidence: analysisReferences/{referenceID}
+
+The document ID must equal `referenceID`. The backend loads only records with
+`reviewStatus` set to `approved`.
+
+| Field | Type | Requirement |
+|---|---|---|
+| referenceID | string | Required; matches the document ID |
+| referenceVersion | integer | Required; starts at 1 and increases when revised |
+| reviewStatus | string | Required; `draft`, `approved`, or `retired` |
+| source | map | Required; `title`, `publisher`, HTTPS `url`, and `accessedOn` |
+| claim | string | Required; concise claim supported by the source |
+| canonicalIngredientIDs | array of strings | Required; canonical IDs in scope |
+| canonicalIngredientClasses | array of strings | Required; classes in scope; may be empty |
+| matchCriteria | map | Required; exact conditions for applying the reference |
+| conditions | array of strings | Required; context needed for interpretation |
+| allowedOutcome | string | Required; caution, conflict, or allergen |
+| severity | string | Required for every approved reference and must be low, moderate, or high |
+| categoryID | string | Required; finding category |
+| limitations | array of strings | Required; scope and evidence limitations |
+| incompleteWhenContextMissing | boolean | Required; whether missing context requires an unknown result |
+| updatedAt | Firestore timestamp | Required |
+| updatedBy | string | Required; authorized editor's team identity |
+
+Canonical ingredient records remain owned by the shared ingredient catalog
+and normalization work. The analysis backend passes those records to the AI
+module; it should not create a second, competing canonical catalog here.
+
+## Analysis record access
+
+The API reads the approved contract and approved analysis references from
+Firestore for each analysis request, so an authorized update is available on
+the next request. The app client must not write these shared records. Team
+edits use authorized administrative access; do not expose a public endpoint
+for changing approved contracts or references.
