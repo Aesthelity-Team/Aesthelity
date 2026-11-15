@@ -1331,6 +1331,13 @@ struct ContentView: View {
             },
             onEditSkinProfile: {
                 showSkinProfileSetupSheet = true
+            },
+            onSignOut: {
+                if let onReset = onResetStartup {
+                    onReset()
+                } else {
+                    showStartupFlowSheet = true
+                }
             }
         )
     }

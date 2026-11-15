@@ -429,6 +429,20 @@ struct AesthelityTests {
         profile.onEditSkinProfile?()
         #expect(opened)
     }
+    
+    @Test func profileViewSignOutCallback() throws {
+        var signedOut = false
+        let profile = ProfileView(onSignOut: { signedOut = true })
+        profile.onSignOut?()
+        #expect(signedOut == true)
+    }
+
+    @Test func settingsViewSignOutCallback() throws {
+        var signedOut = false
+        let settings = SettingsView(onSignOut: { signedOut = true })
+        settings.onSignOut?()
+        #expect(signedOut == true)
+    }
 
     // MARK: - Article Detail Tests
     
@@ -971,9 +985,10 @@ struct AesthelityTests {
     // MARK: - Startup & Authentication Screens Tests
     
     @Test func startupScreenCases() throws {
-        #expect(StartupScreen.allCases.count == 5)
+        #expect(StartupScreen.allCases.count == 6)
         #expect(StartupScreen.welcome.rawValue == "Welcome")
         #expect(StartupScreen.concerns.rawValue == "Concerns")
+        #expect(StartupScreen.register.rawValue == "Create Account")
         #expect(StartupScreen.signInNormal.rawValue == "Sign In")
         #expect(StartupScreen.signInInvalid.rawValue == "Invalid Form")
         #expect(StartupScreen.signInFailed.rawValue == "Network Error")
@@ -1002,7 +1017,7 @@ struct AesthelityTests {
             onSwitchToSetup: { switchToSetupCalled = true }
         )
         #expect(normalAuth.mode == .normal)
-        #expect(normalAuth.email == "maya@aesthelity.app")
+        #expect(normalAuth.email == "")
         #expect(normalAuth.password == "")
         normalAuth.onSuccess()
         #expect(successCalled == true)
