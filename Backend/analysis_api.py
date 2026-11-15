@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from analysis_engine import AnalysisInputError, evaluate_routine  # noqa: E402
 from analysis_engine.product_input import ProductInputError, load_alias_catalog  # noqa: E402
+from Backend.private_data import PrivateDataStore, PrivateDataError
 from Backend.authentication import verified_firebase_uid  # noqa: E402
 
 
@@ -93,6 +94,8 @@ class APIHandler(BaseHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     def do_GET(self) -> None:
+        if self._private_route():
+            return
         route = urlparse(self.path)
         if route.path == "/health":
             self._send(200, {
@@ -109,6 +112,8 @@ class APIHandler(BaseHTTPRequestHandler):
             self._send(404, _error_body("NOT_FOUND", "Route not found."))
 
     def do_POST(self) -> None:
+        if self._private_route():
+            return
         if urlparse(self.path).path != "/api/v1/analyses":
             self._send(404, _error_body("NOT_FOUND", "Route not found."))
             return
@@ -144,6 +149,56 @@ class APIHandler(BaseHTTPRequestHandler):
             "ruleVersion": RULE_VERSION,
             **result,
         })
+
+    def do_PUT(self) -> None:
+        if not self._private_route():
+            self._send(404, _error_body("NOT_FOUND", "Route not found."))
+
+    def do_DELETE(self) -> None:
+        if not self._private_route():
+            self._send(404, _error_body("NOT_FOUND", "Route not found."))
+
+    def _private_route(self) -> bool:
+        path = urlparse(self.path).path
+        if not (path == "/api/v1/users" or path.startswith("/api/v1/users/")):
+            return False
+        # Private storage NEVER inherits the fictional demo authentication bypass.
+        self.authenticated_uid = None
+        try:
+            verifier = getattr(self.server, "token_verifier", None)
+            if verifier is None:
+                from firebase_admin import auth
+                verifier = lambda token: auth.verify_id_token(
+                    token, app=self.server.firebase_app, check_revoked=True)
+            uid = verified_firebase_uid(self.headers.get("Authorization"), verifier)
+            if not uid:
+                raise PrivateDataError(401, "UNAUTHENTICATED", "Sign in is required.")
+            parts = path.split("/")
+            if len(parts) not in {6, 7} or any(not part for part in parts[1:]):
+                raise PrivateDataError(404, "NOT_FOUND", "Route not found.")
+            owner, kind = unquote(parts[4]), unquote(parts[5])
+            record_id = unquote(parts[6]) if len(parts) == 7 else None
+            store = PrivateDataStore(self.server.db)
+            # Authorize before parsing a body or performing any database access.
+            store.collection(uid, owner, kind)
+            payload = None
+            if self.command == "PUT":
+                if self.headers.get("Transfer-Encoding") or self.headers.get("Content-Type", "").split(";", 1)[0].strip().lower() != "application/json":
+                    raise PrivateDataError(400, "INVALID_REQUEST", "JSON body required.")
+                try:
+                    length = int(self.headers.get("Content-Length", "0"))
+                    if not 0 < length <= MAX_BODY_BYTES:
+                        raise ValueError()
+                    payload = json.loads(self.rfile.read(length))
+                except (ValueError, UnicodeError, RecursionError):
+                    raise PrivateDataError(400, "INVALID_REQUEST", "Invalid JSON body.") from None
+            result = store.execute(uid, owner, kind, record_id, self.command, payload)
+            self._send(200, {"contractVersion": 1, **result})
+        except PrivateDataError as error:
+            self._send(error.status, _error_body(error.code, str(error)))
+        except Exception:
+            self._send(503, _error_body("SERVICE_UNAVAILABLE", "Private data is temporarily unavailable."))
+        return True
 
     def _authorized(self) -> bool:
         if self.server.demo_mode:
@@ -195,6 +250,7 @@ class APIHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(encoded)))
+        self.send_header("Cache-Control", "no-store")
         self.end_headers()
         self.wfile.write(encoded)
 
@@ -254,3 +310,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
