@@ -117,14 +117,21 @@ final class Sprint1DemoUITests: XCTestCase {
     }
 
     @MainActor
-    func testMockedAnalysisIsReachableFromHome() throws {
+    func testPersonalAnalysisAndExplicitDemoAreReachableFromHome() throws {
         let app = enterWithoutSetup()
 
         let viewAnalysis = app.buttons[">> View analysis"]
         scrollTo(viewAnalysis, in: app)
         viewAnalysis.tap()
 
+        XCTAssertTrue(text(app, "Personal routine analysis is not yet available").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["run-backend-analysis"].exists)
+        let openDemo = app.buttons["open-analysis-demo"]
+        scrollTo(openDemo, in: app)
+        openDemo.tap()
+
         let sampleFindings = text(app, "Sample Findings")
+        scrollTo(sampleFindings, in: app)
         XCTAssertTrue(sampleFindings.waitForExistence(timeout: 5), "The analysis screen should show the sample findings.")
 
         let caution = app.buttons["Caution"]
@@ -136,6 +143,8 @@ final class Sprint1DemoUITests: XCTestCase {
         )
         XCTAssertTrue(text(app, "Why this finding was generated").exists, "The caution sample should explain why it was generated.")
 
+        app.buttons["Back"].firstMatch.tap()
+        XCTAssertTrue(text(app, "Personal routine analysis is not yet available").waitForExistence(timeout: 5))
         app.buttons["Back"].firstMatch.tap()
         assertOnHome(app, "Back should return to Home.")
     }
