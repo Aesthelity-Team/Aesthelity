@@ -15,6 +15,10 @@ ID are verified (see FIRESTORE_SETUP.md).
 | Document path | Purpose | Status |
 |---|---|---|
 | products/{productId} | Shared curated product catalog | Implemented |
+| ingredientAliasCatalogs/active | Hand-approved alias catalog used by AN-02 analysis | Implemented |
+| ingredients/{ingredientId} | Full canonical ingredient catalog (EU CosIng inventory + approved entries) | Implemented; import is dry-run until `--apply` |
+| ingredientAmbiguousTerms/{termKey} | Names that map to two or more canonical IDs | Implemented with the import |
+| ingredientCatalogs/reference | Version, source, and counts of the last full import | Implemented with the import |
 | users/{uid} | Personal skin profile | Proposed |
 | users/{uid}/products/{productId} | User-added products | Proposed |
 | users/{uid}/routines/{routineId} | Ordered AM/PM routines | Proposed |
@@ -81,6 +85,58 @@ use the bundled approved catalog and report `catalogSource` as
 `bundled-fallback`. The seed command is dry-run by default. Use `--apply` for
 the initial write; replacing an existing active catalog also requires
 `--replace` and an authorized `INGREDIENT_ALIAS_EDITOR` identity.
+
+## Full ingredient catalog: ingredients/{ingredientId}
+
+The complete EU CosIng ingredient inventory, imported by
+`Backend/import_ingredient_catalog.py` from the committed snapshot
+`Backend/data/cosing_ingredients.json.gz` (source, retrieval date, and license
+are stored inside the snapshot). It sits underneath the approved alias catalog;
+it never edits `ingredientAliasCatalogs/active`.
+
+IDs are deterministic. An ingredient that is already in the approved catalog
+(same name, an approved alias, or exactly one approved name among its CosIng
+synonyms) keeps its approved ID, name, aliases, and classes. Every other INCI
+name gets a slug of the INCI name (`centella-asiatica-extract`). If two names
+produce the same slug, the lowest CosIng reference number keeps the plain slug
+and the others get an 8-character hash suffix; slugs longer than 100
+characters are shortened the same way. Rows with the same INCI name are merged
+into one ingredient with several sources.
+
+| Field | Type | Requirement |
+|---|---|---|
+| id | string | Required; matches document ID |
+| canonicalName | string | Required; approved name, otherwise the CosIng INCI name |
+| inciNames | array of strings | CosIng INCI names merged into this ingredient |
+| aliases | array of strings | Approved aliases first, then CosIng INCI-USA, INN, and Ph. Eur. names this ingredient owns |
+| aliasKeys | array of strings | Lowercase exact-match keys owned by this ingredient (queried with `array-contains`) |
+| classes | array of strings | Approved AN-02 classes; empty for reference-tier ingredients |
+| tier | string | `approved` or `reference` |
+| casNumbers, ecNumbers | array of strings | From CosIng; may be empty |
+| functions | array of strings | CosIng cosmetic functions |
+| description | string | CosIng chemical/botanical description |
+| restrictions | array of strings | CosIng annex references, such as `III/71` |
+| sources | array of maps | `source`, CosIng `refNo`, and detail `url` |
+| references | array of maps | Optional; reviewed references copied from the approved catalog |
+| catalogVersion | string | `cosing-YYYY-MM-DD` from the snapshot |
+| updatedAt, updatedBy | timestamp, string | Written by the import |
+
+Lookup priority, highest first: approved names and aliases, approved ambiguous
+terms, CosIng INCI names, then CosIng synonyms. A synonym shared by 2 to 10
+ingredients becomes an `ingredientAmbiguousTerms/{termKey}` document
+(`term`, `termKey`, `candidateIDs`, `note`, `source`); one shared by more is
+dropped. A bare CAS number resolves only when exactly one ingredient has it.
+
+Resolution never guesses. The backend's
+`POST /api/v1/ingredients/resolve` returns `confirmed` only for
+approved-catalog IDs. A reference-tier match is returned as `uncertain` with a
+`suggestedID`, so under PD-03 the product stays out of analysis until that
+ingredient is approved into `ingredientAliasCatalogs/active`. Unknown text is
+`unmatched`, and the original text is always kept.
+
+`ingredientCatalogs/reference` is written last and records `version`,
+`source`, `sourceUrl`, `retrievedOn`, `license`, `ingredientCount`,
+`ambiguousTermCount`, and the import `stats`.
 
 ## Proposed profile: users/{uid}
 

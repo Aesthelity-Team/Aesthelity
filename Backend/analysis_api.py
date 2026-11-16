@@ -24,6 +24,11 @@ from analysis_engine.product_input import ProductInputError, load_alias_catalog 
 from Backend.private_data import PrivateDataStore, PrivateDataError
 from Backend.authentication import verified_firebase_uid  # noqa: E402
 from Backend.ingredient_alias_store import load_approved_alias_catalog  # noqa: E402
+from Backend.ingredient_catalog import (  # noqa: E402
+    IngredientCatalogError,
+    load_reference_index,
+    resolve_ingredient_texts,
+)
 
 
 CATALOG_PATH = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" / "ingredient-aliases.json"
@@ -107,6 +112,7 @@ class APIHandler(BaseHTTPRequestHandler):
                 "contractVersion": 1,
                 "activeCatalogVersion": catalog["version"],
                 "catalogSource": catalog_source,
+                "referenceCatalogVersion": getattr(self._reference_index(), "version", None),
                 "firestoreDatabase": self.server.database_id,
             })
         elif route.path == "/api/v1/ingredient-aliases":
@@ -114,6 +120,8 @@ class APIHandler(BaseHTTPRequestHandler):
                 self.server.db, self.server.catalog
             )
             self._send(200, {**catalog, "catalogSource": catalog_source})
+        elif route.path.startswith("/api/v1/ingredients/"):
+            self._get_ingredient(unquote(route.path.rsplit("/", 1)[-1]))
         elif route.path == "/api/v1/products":
             self._list_products()
         elif route.path.startswith("/api/v1/products/"):
@@ -124,7 +132,8 @@ class APIHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if self._private_route():
             return
-        if urlparse(self.path).path != "/api/v1/analyses":
+        path = urlparse(self.path).path
+        if path not in {"/api/v1/analyses", "/api/v1/ingredients/resolve"}:
             self._send(404, _error_body("NOT_FOUND", "Route not found."))
             return
         if not self._authorized():
@@ -147,6 +156,9 @@ class APIHandler(BaseHTTPRequestHandler):
             return
         if not isinstance(payload, dict) or payload.get("contractVersion") != 1:
             self._send(400, _error_body("INVALID_REQUEST", "contractVersion must be 1."))
+            return
+        if path == "/api/v1/ingredients/resolve":
+            self._resolve_ingredients(payload)
             return
         try:
             catalog, catalog_source = load_approved_alias_catalog(
@@ -233,6 +245,49 @@ class APIHandler(BaseHTTPRequestHandler):
             return False
         return self.authenticated_uid is not None
 
+    def _reference_index(self) -> Any:
+        index = getattr(self.server, "reference_index", None)
+        if index is None:
+            index = load_reference_index(self.server.catalog)
+            self.server.reference_index = index
+        return index
+
+    def _resolve_ingredients(self, payload: dict[str, Any]) -> None:
+        """Resolve raw label strings against the approved + full CosIng catalog.
+
+        Approved-catalog matches are `confirmed`; reference-only matches are
+        `uncertain` with a suggestedID, so PD-03 keeps them out of analysis.
+        """
+        catalog, catalog_source = load_approved_alias_catalog(self.server.db, self.server.catalog)
+        reference = self._reference_index()
+        try:
+            rows = resolve_ingredient_texts(
+                payload.get("ingredients"), catalog, reference, db=self.server.db
+            )
+        except IngredientCatalogError as error:
+            self._send(400, _error_body("INVALID_REQUEST", str(error)))
+            return
+        self._send(200, {
+            "contractVersion": 1,
+            "activeCatalogVersion": catalog["version"],
+            "catalogSource": catalog_source,
+            "referenceCatalogVersion": getattr(reference, "version", None),
+            "ingredients": rows,
+            "uncertaintyPreserved": any(row["mapping"] != "confirmed" for row in rows),
+        })
+
+    def _get_ingredient(self, ingredient_id: str) -> None:
+        reference = self._reference_index()
+        record = reference.records.get(ingredient_id) if reference and ingredient_id else None
+        if record is None:
+            self._send(404, _error_body("INGREDIENT_NOT_FOUND", "The ingredient was not found."))
+            return
+        self._send(200, {
+            "contractVersion": 1,
+            "referenceCatalogVersion": reference.version,
+            "ingredient": {key: value for key, value in record.items() if key not in {"name", "aliasKeys"}},
+        })
+
     def _list_products(self) -> None:
         try:
             documents = sorted(self.server.db.collection("products").stream(), key=lambda doc: doc.id)
@@ -282,6 +337,7 @@ class AnalysisHTTPServer(ThreadingHTTPServer):
         self.catalog = catalog
         self.database_id = database_id
         self.demo_mode = demo_mode
+        self.reference_index = None
 
 
 def main() -> None:
@@ -300,6 +356,7 @@ def main() -> None:
         raise SystemExit("Install Backend/requirements.txt before starting the API.") from error
 
     catalog = load_alias_catalog(CATALOG_PATH)
+    reference_index = load_reference_index(catalog)
     app = firebase_admin.initialize_app(
         credentials.ApplicationDefault(),
         {"projectId": project_id},
@@ -309,6 +366,7 @@ def main() -> None:
         (host, port), db=db, app=app, catalog=catalog,
         database_id=database_id, demo_mode=demo_mode,
     )
+    server.reference_index = reference_index
     print(f"API listening at http://{host}:{port}")
     print(f"Firestore: project={project_id}, database={database_id}, collection=products")
     print(
@@ -316,6 +374,10 @@ def main() -> None:
         "active alias source: ingredientAliasCatalogs/active; "
         f"analysis rules: {RULE_VERSION}"
     )
+    if reference_index is None:
+        print("Full ingredient catalog: unavailable (Backend/data/cosing_ingredients.json.gz missing or invalid)")
+    else:
+        print(f"Full ingredient catalog: {reference_index.version}, {len(reference_index.records)} ingredients")
     print("Auth: local demo bypass" if demo_mode else "Auth: Firebase ID token required for analysis")
     try:
         server.serve_forever()

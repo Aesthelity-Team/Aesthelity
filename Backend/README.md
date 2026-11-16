@@ -29,6 +29,27 @@ with `python3 Backend/seed_ingredient_aliases.py` to preview. Writing requires
 `INGREDIENT_ALIAS_EDITOR` and `--apply`; replacing an existing catalog also
 requires `--replace`.
 
+## Full ingredient catalog (EU CosIng)
+
+`Backend/data/cosing_ingredients.json.gz` is a snapshot of the full EU CosIng
+ingredient inventory (33,642 rows, retrieved 2026-11-15). The API loads it at
+startup, so names outside the approved catalog resolve offline too. Approved
+catalog matches always win.
+
+```sh
+python3 Backend/import_ingredient_catalog.py            # dry run: counts only, no writes
+python3 Backend/import_ingredient_catalog.py --fetch    # refresh the snapshot from CosIng
+python3 Backend/import_ingredient_catalog.py --source export.csv   # classic CosIng CSV export
+INGREDIENT_ALIAS_EDITOR=<team identity> python3 Backend/import_ingredient_catalog.py --apply
+```
+
+`--apply` writes `ingredients/{id}`, `ingredientAmbiguousTerms/{termKey}` and,
+last, `ingredientCatalogs/reference` in batches of 400. The full import is about
+33,600 document writes, which is more than the Firestore free tier's daily write
+quota. If the project is on the free tier, split the import with `--limit N` and
+continue later with `--start-after <collection/docId>`. The approved
+`ingredientAliasCatalogs/active` document is never changed.
+
 ## Start the simulator demo
 
 ```sh
@@ -59,6 +80,8 @@ profile.
 
 - `GET /health`: API, rule, catalog, and Firestore database identifiers.
 - `GET /api/v1/ingredient-aliases`: current approved alias catalog for deterministic client normalization.
+- `POST /api/v1/ingredients/resolve`: `{"contractVersion": 1, "ingredients": [...]}` (max 200 strings). Each row keeps `originalText` and returns `confirmed` (approved catalog), `uncertain` with `suggestedID` (identified in CosIng but not approved for analysis), `ambiguous` with `candidateIDs`, or `unmatched`. Requires the same auth as analyses.
+- `GET /api/v1/ingredients/{ingredientID}`: one full-catalog ingredient (CAS, functions, CosIng sources).
 - `GET /api/v1/products`: shared catalog records in API camelCase.
 - `GET /api/v1/products/{productID}`: one shared product.
 - `POST /api/v1/analyses`: evaluate one normalized AM or PM routine.
