@@ -884,7 +884,7 @@ public struct AuthSignInView: View {
                 case .failed(let message):
                     authStatusMessage = message
                     withAnimation(.easeInOut(duration: 0.2)) {
-                        mode = .normal
+                        mode = .failed
                     }
                 }
             }
@@ -944,7 +944,7 @@ public struct AuthSignInView: View {
     
     private var socialButtonsSection: some View {
         VStack(spacing: 12) {
-            Text("Continue with Google, Apple sign-in are not available yet.")
+            Text("Apple sign-in isn't available yet.")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color(hex: "#625478"))
                 .frame(maxWidth: .infinity, alignment: .leading)

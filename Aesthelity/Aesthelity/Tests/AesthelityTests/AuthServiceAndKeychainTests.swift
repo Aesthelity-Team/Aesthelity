@@ -6,6 +6,7 @@
 //
 
 import XCTest
+import UIKit
 @testable import Aesthelity
 
 final class AuthServiceAndKeychainTests: XCTestCase {
@@ -421,5 +422,74 @@ final class AuthServiceAndKeychainTests: XCTestCase {
             XCTFail("Expected .succeeded, got \(outcome)")
         }
     }
+
+    @MainActor
+    func testFirebaseAuthServiceFallbackSignUpAndSignIn() async throws {
+        let authService = FirebaseAuthService.shared
+        try? authService.signOut()
+
+        let testEmail = "local_test_\(UUID().uuidString.prefix(6).lowercased())@example.com"
+        let testPass = "SecurePass123!"
+        let testUser = "local_tester"
+
+        let account = try await authService.signUp(
+            email: testEmail,
+            password: testPass,
+            username: testUser
+        )
+        XCTAssertEqual(account.email, testEmail)
+        XCTAssertEqual(account.username, testUser)
+        XCTAssertTrue(authService.isAuthenticated)
+        XCTAssertEqual(authService.currentUser?.email, testEmail)
+
+        try authService.signOut()
+        XCTAssertFalse(authService.isAuthenticated)
+        XCTAssertNil(authService.currentUser)
+
+        let signedInAccount = try await authService.signIn(
+            email: testEmail,
+            password: testPass
+        )
+        XCTAssertEqual(signedInAccount.email, testEmail)
+        XCTAssertTrue(authService.isAuthenticated)
+
+        try authService.signOut()
+    }
+
+@MainActor
+func testPasswordResetRejectsEmptyEmail() async {
+    do {
+        try await FirebaseAuthService.shared.sendPasswordReset(email: " ")
+        XCTFail("Expected an empty email to be rejected.")
+    } catch let error as AuthError {
+        guard case .invalidEmail = error else {
+            XCTFail("Expected invalidEmail, got \(error)")
+            return
+        }
+    } catch {
+        XCTFail("Expected AuthError.invalidEmail, got \(error)")
+    }
+}
+@MainActor
+func testGoogleSignInUsesInjectedAction() async throws {
+    let expectedAccount = UserAccount(
+        id: "google-test-user",
+        email: "google@example.com",
+        isAnonymous: false
+    )
+    var wasCalled = false
+
+    let view = AuthSignInView(
+        performGoogleSignIn: { _ in
+            wasCalled = true
+            return expectedAccount
+        }
+    )
+
+    let result = try await view.performGoogleSignIn(UIViewController())
+
+    XCTAssertTrue(wasCalled)
+    XCTAssertEqual(result.id, expectedAccount.id)
+}
 
 }
