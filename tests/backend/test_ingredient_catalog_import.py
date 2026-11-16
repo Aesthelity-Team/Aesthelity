@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from Backend.analysis_api import APIHandler
 from Backend.import_ingredient_catalog import BATCH_SIZE, firestore_documents, run, write_documents
@@ -222,25 +223,18 @@ class ResolveTests(unittest.TestCase):
         self.assertTrue(prepared.uncertainty_preserved)
 
     def test_firestore_lookup_used_only_for_misses(self):
+        # Inject at firestore_alias_lookup so the test does not depend on whether
+        # firebase_admin / FieldFilter is installed (positional vs filter= where).
         calls = []
 
-        class Query:
-            def __init__(self, key):
-                self.key = key
+        def fake_lookup(_db, key):
+            calls.append(key)
+            return ["db-only-ingredient"] if key == "db only name" else []
 
-            def limit(self, _n):
-                return self
-
-            def stream(self):
-                return [SimpleNamespace(id="db-only-ingredient")] if self.key == "db only name" else []
-
-        class Collection:
-            def where(self, field, op, key):
-                calls.append(key)
-                return Query(key)
-
-        db = SimpleNamespace(collection=lambda name: Collection())
-        aqua, db_only, unknown = self.resolve(["Aqua", "DB Only Name", "Nothing"], db=db)
+        db = SimpleNamespace(collection=lambda name: (_ for _ in ()).throw(AssertionError("lookup must be patched")))
+        with patch("Backend.ingredient_catalog.firestore_alias_lookup", side_effect=fake_lookup):
+            aqua, db_only, unknown = self.resolve(["Aqua", "DB Only Name", "Nothing"], db=db)
+        self.assertEqual(aqua["ingredientID"], "water")
         self.assertEqual(calls, ["db only name", "nothing"])
         self.assertEqual((db_only["suggestedID"], db_only["source"]), ("db-only-ingredient", "firestore"))
         self.assertEqual(unknown["mapping"], "unmatched")

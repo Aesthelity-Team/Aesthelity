@@ -194,19 +194,33 @@ def build_persistence_plan(
     return {"product": product_doc, "masters": masters}
 
 
-def _apply_array_union(existing: Any, union: ArrayUnion) -> list[str]:
+def _array_union_values(value: Any) -> list[str] | None:
+    """Extract values from our ArrayUnion or the Admin SDK ArrayUnion transform."""
+
+    if isinstance(value, ArrayUnion):
+        return list(value.values)
+    # google.cloud.firestore_v1.transforms.ArrayUnion (when firebase_admin is installed)
+    if type(value).__name__ == "ArrayUnion" and hasattr(value, "values"):
+        return [item for item in value.values if isinstance(item, str) and item]
+    return None
+
+
+def _apply_array_union(existing: Any, values: Sequence[str]) -> list[str]:
     current = list(existing) if isinstance(existing, list) else []
-    for value in union.values:
+    for value in values:
         if value not in current:
             current.append(value)
     return current
 
 
 def _merge_document(existing: Mapping[str, Any] | None, updates: Mapping[str, Any]) -> dict[str, Any]:
+    """Merge updates for FakeFirestore, applying ArrayUnion transforms in place."""
+
     merged = dict(existing or {})
     for key, value in updates.items():
-        if isinstance(value, ArrayUnion):
-            merged[key] = _apply_array_union(merged.get(key), value)
+        union_values = _array_union_values(value)
+        if union_values is not None:
+            merged[key] = _apply_array_union(merged.get(key), union_values)
         else:
             merged[key] = value
     return merged
@@ -252,6 +266,12 @@ class FakeDocumentRef:
             self.db.docs[key] = _merge_document(self.db.docs.get(key), data)
         else:
             self.db.docs[key] = _merge_document(None, data)
+
+    def update(self, data: Mapping[str, Any]) -> None:
+        key = (self.collection, self.id)
+        if key not in self.db.docs:
+            raise IngredientPersistenceError("firestore_unavailable")
+        self.db.docs[key] = _merge_document(self.db.docs.get(key), data)
 
 
 class FakeSnapshot:
