@@ -50,6 +50,59 @@ quota. If the project is on the free tier, split the import with `--limit N` and
 continue later with `--start-after <collection/docId>`. The approved
 `ingredientAliasCatalogs/active` document is never changed.
 
+## Using with the #99 analysis engine
+
+`Backend/analysis_engine_input.py` turns resolve results into the input of the
+#99 AI analysis engine (`analyze_normalized_routine`), so it needs no changes:
+
+| #98 `mapping` | #99 `status` | Row details |
+| --- | --- | --- |
+| `confirmed` | `matched` | `canonicalName` is the approved catalog name |
+| `uncertain` | `uncertain` | `proposedName` is the CosIng name; never analyzed (PD-03) |
+| `unmatched` | `unknown` | `reason` is `not_in_catalog` or `empty_input` |
+| `ambiguous` | `unknown` | `reason` lists the candidate IDs |
+
+Every row keeps its `index` and exact `originalText`. `listStatus` is whatever
+the caller sends; without one, an empty list is `unavailable` and anything else
+is `partial`, because a scan alone does not prove the whole label was read.
+Send `complete` only when the full list is known.
+
+```python
+from Backend.analysis_engine_input import analysis_product, analysis_normalization, canonical_records
+
+product = analysis_product("serum", resolve_rows, approved_catalog, list_status="complete")
+normalization = analysis_normalization([product], catalog_version=approved_catalog["version"])
+records = canonical_records(approved_catalog)   # pass as canonical_records
+```
+
+`canonical_records` defaults to the approved catalog, which covers every
+`matched` row and keeps names unique. `include_reference=True` adds the full
+CosIng list and drops any name that would clash.
+
+Over HTTP, add `"format": "analysis-input"` (plus optional `productID` and
+`listStatus`) to `POST /api/v1/ingredients/resolve`. The response gains an
+`analysisInput` field with the normalization envelope; the existing fields do
+not change.
+
+## AI fallback for unresolved names
+
+Catalog lookup always runs first. Sending `"ai": true` on
+`POST /api/v1/ingredients/resolve` also sends unmatched or ambiguous rows
+(and noisy OCR text) to an OpenRouter model. The model can only propose a
+name; that name is looked up in the catalog again. An approved hit becomes
+`confirmed` with reason `ai-suggested + approved match`. A CosIng-only hit
+stays `uncertain`. Anything else stays unmatched. The model never assigns
+an ingredient ID.
+
+Set `OPENROUTER_API_KEY` in the gitignored `Backend/.env`. Optional:
+`AESTHELITY_NORMALIZATION_MODEL` (default `nvidia/nemotron-3.5-super-vl:free`)
+and `AESTHELITY_NORMALIZATION_FALLBACK_MODEL` (default
+`google/gemma-4-31b-it:free`). The flag defaults to off, so existing clients
+are unchanged. Timeouts, rate limits, and invalid responses leave the
+lookup-only rows in place and set `providerStatus` to a sanitized failure
+code. The result still goes through `analysis_engine_input` into the #99
+engine.
+
 ## Start the simulator demo
 
 ```sh
@@ -80,7 +133,7 @@ profile.
 
 - `GET /health`: API, rule, catalog, and Firestore database identifiers.
 - `GET /api/v1/ingredient-aliases`: current approved alias catalog for deterministic client normalization.
-- `POST /api/v1/ingredients/resolve`: `{"contractVersion": 1, "ingredients": [...]}` (max 200 strings). Each row keeps `originalText` and returns `confirmed` (approved catalog), `uncertain` with `suggestedID` (identified in CosIng but not approved for analysis), `ambiguous` with `candidateIDs`, or `unmatched`. Requires the same auth as analyses.
+- `POST /api/v1/ingredients/resolve`: `{"contractVersion": 1, "ingredients": [...]}` (max 200 strings). Each row keeps `originalText` and returns `confirmed` (approved catalog), `uncertain` with `suggestedID` (identified in CosIng but not approved for analysis), `ambiguous` with `candidateIDs`, or `unmatched`. Optional `"format": "analysis-input"` adds the #99 envelope. Optional `"ai": true` runs the OpenRouter name fallback on unresolved rows only. Requires the same auth as analyses.
 - `GET /api/v1/ingredients/{ingredientID}`: one full-catalog ingredient (CAS, functions, CosIng sources).
 - `GET /api/v1/products`: shared catalog records in API camelCase.
 - `GET /api/v1/products/{productID}`: one shared product.

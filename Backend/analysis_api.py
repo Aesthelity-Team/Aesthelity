@@ -24,6 +24,16 @@ from analysis_engine.product_input import ProductInputError, load_alias_catalog 
 from Backend.private_data import PrivateDataStore, PrivateDataError
 from Backend.authentication import verified_firebase_uid  # noqa: E402
 from Backend.ingredient_alias_store import load_approved_alias_catalog  # noqa: E402
+from Backend.analysis_engine_input import (  # noqa: E402
+    AnalysisInputAdapterError,
+    analysis_normalization,
+    analysis_product,
+)
+from Backend.ai_normalization import (  # noqa: E402
+    PROMPT_VERSION as AI_PROMPT_VERSION,
+    OpenRouterNormalizationProvider,
+    apply_ai_normalization,
+)
 from Backend.ingredient_catalog import (  # noqa: E402
     IngredientCatalogError,
     load_reference_index,
@@ -260,6 +270,10 @@ class APIHandler(BaseHTTPRequestHandler):
         """
         catalog, catalog_source = load_approved_alias_catalog(self.server.db, self.server.catalog)
         reference = self._reference_index()
+        ai_flag = payload.get("ai")
+        if ai_flag is not None and ai_flag is not True and ai_flag is not False:
+            self._send(400, _error_body("INVALID_REQUEST", "ai must be true or false when provided."))
+            return
         try:
             rows = resolve_ingredient_texts(
                 payload.get("ingredients"), catalog, reference, db=self.server.db
@@ -267,14 +281,51 @@ class APIHandler(BaseHTTPRequestHandler):
         except IngredientCatalogError as error:
             self._send(400, _error_body("INVALID_REQUEST", str(error)))
             return
-        self._send(200, {
+        provider_status = None
+        model = None
+        prompt_version = None
+        if ai_flag is True:
+            provider = getattr(self.server, "ai_provider", None) or OpenRouterNormalizationProvider.from_environment()
+            rows, provider_status, model, _attempted = apply_ai_normalization(
+                rows, catalog, reference, provider=provider, db=self.server.db
+            )
+            prompt_version = AI_PROMPT_VERSION
+        body = {
             "contractVersion": 1,
             "activeCatalogVersion": catalog["version"],
             "catalogSource": catalog_source,
             "referenceCatalogVersion": getattr(reference, "version", None),
             "ingredients": rows,
             "uncertaintyPreserved": any(row["mapping"] != "confirmed" for row in rows),
-        })
+        }
+        if ai_flag is True:
+            body["providerStatus"] = provider_status
+            body["model"] = model
+            body["promptVersion"] = prompt_version
+        output_format = payload.get("format")
+        if output_format is not None:
+            # Optional: the same rows in the #99 AI analysis engine's input
+            # shape. Existing fields above are unchanged.
+            if output_format != "analysis-input":
+                self._send(400, _error_body("INVALID_REQUEST", "format must be analysis-input when provided."))
+                return
+            try:
+                product = analysis_product(
+                    payload.get("productID", "scanned-product"), rows, catalog,
+                    list_status=payload.get("listStatus"),
+                )
+            except AnalysisInputAdapterError as error:
+                self._send(400, _error_body("INVALID_REQUEST", str(error)))
+                return
+            body["analysisInput"] = analysis_normalization(
+                [product],
+                catalog_version=catalog["version"],
+                reference_catalog_version=body["referenceCatalogVersion"],
+                provider_status=provider_status or "ok",
+                model=model,
+                prompt_version=prompt_version,
+            )
+        self._send(200, body)
 
     def _get_ingredient(self, ingredient_id: str) -> None:
         reference = self._reference_index()
