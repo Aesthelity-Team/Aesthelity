@@ -32,12 +32,17 @@ from Backend.analysis_engine_input import (  # noqa: E402
 from Backend.ai_normalization import (  # noqa: E402
     PROMPT_VERSION as AI_PROMPT_VERSION,
     OpenRouterNormalizationProvider,
-    apply_ai_normalization,
+    coverage_for_rows,
+    match_ingredients,
 )
 from Backend.ingredient_catalog import (  # noqa: E402
     IngredientCatalogError,
     load_reference_index,
     resolve_ingredient_texts,
+)
+from Backend.ingredient_persistence import (  # noqa: E402
+    IngredientPersistenceError,
+    persist_matching_result,
 )
 
 
@@ -262,46 +267,156 @@ class APIHandler(BaseHTTPRequestHandler):
             self.server.reference_index = index
         return index
 
-    def _resolve_ingredients(self, payload: dict[str, Any]) -> None:
-        """Resolve raw label strings against the approved + full CosIng catalog.
+    def _catalog_status_rows(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Attach issue statuses when AI matching is explicitly opted out.
 
-        Approved-catalog matches are `confirmed`; reference-only matches are
-        `uncertain` with a suggestedID, so PD-03 keeps them out of analysis.
+        Catalog resolver rows reuse a ``status`` field for resolved/ambiguous/
+        unknown kinds; overwrite it with the issue statuses used for coverage.
+        """
+
+        enriched: list[dict[str, Any]] = []
+        for row in rows:
+            out = dict(row)
+            mapping = out.get("mapping")
+            if mapping == "confirmed":
+                out["status"] = "identified"
+                out["normalizedName"] = out.get("canonicalName")
+                out["bestGuess"] = None
+                out["explanation"] = out.get("reason") or "approved-catalog match"
+            elif mapping == "uncertain":
+                out["status"] = "tentative"
+                out["normalizedName"] = None
+                out["bestGuess"] = out.get("canonicalName") or out.get("suggestedID")
+                out["explanation"] = out.get("reason") or "reference-catalog-only"
+            elif mapping == "ambiguous":
+                candidates = ", ".join(out.get("candidateIDs") or []) or "none"
+                out["status"] = "tentative"
+                out["normalizedName"] = None
+                out["bestGuess"] = None
+                out["explanation"] = f"ambiguous: {candidates}"
+                out["reason"] = out.get("reason") or f"ambiguous: {candidates}"
+            else:
+                out["status"] = "unknown"
+                out["normalizedName"] = None
+                out["bestGuess"] = None
+                out["explanation"] = out.get("reason") or "not_in_catalog"
+            enriched.append(out)
+        return enriched
+
+    def _resolve_ingredients(self, payload: dict[str, Any]) -> None:
+        """AI-primary ingredient matching with catalog grounding.
+
+        Default is AI matching (Scenario 1). Pass ``"ai": false`` for
+        deterministic catalog-only lookup. Approved hits stay analysis-eligible;
+        CosIng-only hits stay out of analysis under PD-03.
         """
         catalog, catalog_source = load_approved_alias_catalog(self.server.db, self.server.catalog)
         reference = self._reference_index()
-        ai_flag = payload.get("ai")
-        if ai_flag is not None and ai_flag is not True and ai_flag is not False:
+        ai_flag = payload.get("ai", True)
+        if ai_flag is not True and ai_flag is not False:
             self._send(400, _error_body("INVALID_REQUEST", "ai must be true or false when provided."))
             return
-        try:
-            rows = resolve_ingredient_texts(
-                payload.get("ingredients"), catalog, reference, db=self.server.db
-            )
-        except IngredientCatalogError as error:
-            self._send(400, _error_body("INVALID_REQUEST", str(error)))
-            return
+        texts = payload.get("ingredients")
         provider_status = None
         model = None
         prompt_version = None
+        run_status = "ok"
+        failure_code = None
         if ai_flag is True:
+            if not isinstance(texts, list):
+                self._send(400, _error_body("INVALID_REQUEST", "ingredients must be an array of at most 200 strings."))
+                return
+            try:
+                # Reject oversized payloads with the same rules as catalog resolve.
+                resolve_ingredient_texts(texts, catalog, reference, db=None)
+            except IngredientCatalogError as error:
+                self._send(400, _error_body("INVALID_REQUEST", str(error)))
+                return
             provider = getattr(self.server, "ai_provider", None) or OpenRouterNormalizationProvider.from_environment()
-            rows, provider_status, model, _attempted = apply_ai_normalization(
-                rows, catalog, reference, provider=provider, db=self.server.db
+            rows, provider_status, model, run_status = match_ingredients(
+                texts, catalog, reference, provider=provider, db=self.server.db
             )
             prompt_version = AI_PROMPT_VERSION
+            if run_status == "failed":
+                failure_code = provider_status
+                provider_status = provider_status or "ai-unavailable"
+        else:
+            try:
+                rows = self._catalog_status_rows(
+                    resolve_ingredient_texts(texts, catalog, reference, db=self.server.db)
+                )
+            except IngredientCatalogError as error:
+                self._send(400, _error_body("INVALID_REQUEST", str(error)))
+                return
+            if not isinstance(texts, list):
+                texts = [row["originalText"] for row in rows]
+        coverage = coverage_for_rows(rows)
         body = {
             "contractVersion": 1,
+            "status": run_status,
+            "coverage": coverage,
             "activeCatalogVersion": catalog["version"],
             "catalogSource": catalog_source,
             "referenceCatalogVersion": getattr(reference, "version", None),
             "ingredients": rows,
-            "uncertaintyPreserved": any(row["mapping"] != "confirmed" for row in rows),
+            "uncertaintyPreserved": any(row.get("mapping") != "confirmed" for row in rows),
         }
+        if failure_code is not None:
+            body["failureCode"] = failure_code
         if ai_flag is True:
             body["providerStatus"] = provider_status
             body["model"] = model
             body["promptVersion"] = prompt_version
+
+        persist_flag = payload.get("persist", False)
+        if persist_flag is not True and persist_flag is not False:
+            self._send(400, _error_body("INVALID_REQUEST", "persist must be true or false when provided."))
+            return
+        if persist_flag is True:
+            product_id = payload.get("productID")
+            source_type = payload.get("sourceType", "manual")
+            if source_type not in {"manual", "catalog"}:
+                self._send(400, _error_body("INVALID_REQUEST", "sourceType must be manual or catalog."))
+                return
+            if not isinstance(product_id, str) or not product_id.strip():
+                self._send(400, _error_body("INVALID_REQUEST", "productID is required when persist is true."))
+                return
+            owner_uid = self.authenticated_uid
+            if source_type == "manual" and not owner_uid:
+                if self.server.demo_mode:
+                    owner_uid = "demo-user"
+                else:
+                    self._send(401, _error_body("UNAUTHENTICATED", "A valid Firebase ID token is required to persist manual products."))
+                    return
+            try:
+                persisted = persist_matching_result(
+                    self.server.db,
+                    product_id=product_id,
+                    rows=rows,
+                    coverage=coverage,
+                    source_type=source_type,
+                    owner_uid=owner_uid,
+                    submitted_ingredients=texts if isinstance(texts, list) else [row["originalText"] for row in rows],
+                    prompt_version=prompt_version,
+                    model=model,
+                    provider_status=provider_status,
+                    run_status=run_status,
+                    failure_code=failure_code,
+                )
+            except IngredientPersistenceError as error:
+                # Scenario 10: never report success; keep submitted rows in the body.
+                self._send(503, {
+                    "contractVersion": 1,
+                    "status": "failed",
+                    "failureCode": str(error),
+                    "coverage": coverage,
+                    "ingredients": rows,
+                    "submittedIngredients": texts if isinstance(texts, list) else [row["originalText"] for row in rows],
+                    "error": _error_body("SERVICE_UNAVAILABLE", "Ingredient data could not be saved.")["error"],
+                })
+                return
+            body["persisted"] = persisted
+
         output_format = payload.get("format")
         if output_format is not None:
             # Optional: the same rows in the #99 AI analysis engine's input

@@ -50,58 +50,245 @@ quota. If the project is on the free tier, split the import with `--limit N` and
 continue later with `--start-after <collection/docId>`. The approved
 `ingredientAliasCatalogs/active` document is never changed.
 
-## Using with the #99 analysis engine
+## Ingredient resolution (#98)
 
-`Backend/analysis_engine_input.py` turns resolve results into the input of the
-#99 AI analysis engine (`analyze_normalized_routine`), so it needs no changes:
+AI-primary matching for catalog and manually entered products. The approved
+alias catalog and EU CosIng snapshot are **validators / grounding sources**,
+not a hand-maintained alias-rule list for the model. Prompt and schema live in
+`Backend/prompts/ingredient_matching_v2.py` (`PROMPT_VERSION =
+ingredient-matching-v2`).
 
-| #98 `mapping` | #99 `status` | Row details |
+### Flow
+
+```mermaid
+flowchart LR
+  A[Label text] --> B[Parse / split]
+  B --> C[AI match v2 prompt]
+  C --> D[Catalog / CosIng grounding]
+  D --> E{Result}
+  E -->|approved hit| F[identified + confirmed]
+  E -->|CosIng-only| G[tentative + uncertain]
+  E -->|AI uncertain| H[tentative + bestGuess]
+  E -->|no identity| I[unknown]
+  F --> J[coverage]
+  G --> J
+  H --> J
+  I --> J
+  J --> K{persist?}
+  K -->|yes| L[productIngredients + masters]
+  K -->|no| M[HTTP response only]
+```
+
+### `POST /api/v1/ingredients/resolve`
+
+Same auth as analyses (Firebase ID token). Local demo mode
+(`AESTHELITY_DEMO_MODE=1` on loopback) skips token checks.
+
+| Field | Required | Default | Meaning |
+| --- | --- | --- | --- |
+| `contractVersion` | yes | — | Must be `1` |
+| `ingredients` | yes | — | Array of strings (max 200, max 500 chars each) |
+| `ai` | no | `true` | AI-primary matching. `false` = deterministic catalog-only |
+| `persist` | no | `false` | Write `productIngredients` + master merges |
+| `productID` | when `persist` | — | Manual: client `ManualProduct` UUID. Catalog: stable catalog id |
+| `sourceType` | when `persist` | `manual` | `manual` (requires `ownerUID` from auth) or `catalog` |
+| `format` | no | — | `analysis-input` adds the #99 envelope |
+| `listStatus` | with format | derived | `complete` \| `partial` \| `unavailable` |
+
+**Example request**
+
+```json
+{
+  "contractVersion": 1,
+  "ingredients": ["Aqua", "niacinimide", "isobutyl mystery", "blurred txt"],
+  "ai": true,
+  "persist": true,
+  "productID": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+  "sourceType": "manual"
+}
+```
+
+**Example success response** (shape abbreviated)
+
+```json
+{
+  "contractVersion": 1,
+  "status": "ok",
+  "coverage": "partial",
+  "providerStatus": "ok",
+  "promptVersion": "ingredient-matching-v2",
+  "model": "nvidia/nemotron-3.5-super-vl:free",
+  "ingredients": [
+    {
+      "index": 0,
+      "originalText": "Aqua",
+      "status": "identified",
+      "mapping": "confirmed",
+      "ingredientID": "water",
+      "normalizedName": "Water",
+      "bestGuess": null
+    },
+    {
+      "index": 1,
+      "originalText": "niacinimide",
+      "status": "identified",
+      "mapping": "confirmed",
+      "ingredientID": "niacinamide",
+      "normalizedName": "Niacinamide"
+    },
+    {
+      "index": 2,
+      "originalText": "isobutyl mystery",
+      "status": "tentative",
+      "mapping": "uncertain",
+      "suggestedID": "4-isobutylresorcinol",
+      "bestGuess": "4-ISOBUTYLRESORCINOL"
+    },
+    {
+      "index": 3,
+      "originalText": "blurred txt",
+      "status": "unknown",
+      "mapping": "unmatched",
+      "reason": "gibberish"
+    }
+  ],
+  "persisted": {
+    "productPath": "productIngredients/A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
+    "masterIDs": ["4-isobutylresorcinol", "niacinamide", "unresolved-…", "water"],
+    "writeCount": 5
+  }
+}
+```
+
+**AI failure** — HTTP **200**, list preserved, not presented as successful matching:
+
+```json
+{
+  "contractVersion": 1,
+  "status": "failed",
+  "failureCode": "provider_unavailable",
+  "coverage": "unknown",
+  "providerStatus": "provider_unavailable",
+  "ingredients": [
+    {
+      "index": 0,
+      "originalText": "Aqua",
+      "status": "unknown",
+      "mapping": "unmatched",
+      "reason": "ai-unavailable",
+      "explanation": "ai-unavailable"
+    }
+  ]
+}
+```
+
+**Firestore write failure** when `persist: true` — HTTP **503**, rows still in the body:
+
+```json
+{
+  "contractVersion": 1,
+  "status": "failed",
+  "failureCode": "firestore_unavailable",
+  "coverage": "partial",
+  "ingredients": [ "…" ],
+  "submittedIngredients": ["Aqua", "niacinimide"],
+  "error": { "code": "SERVICE_UNAVAILABLE", "message": "Ingredient data could not be saved." }
+}
+```
+
+### Status and coverage rules
+
+| Issue `status` | `#98` `mapping` | Meaning |
 | --- | --- | --- |
-| `confirmed` | `matched` | `canonicalName` is the approved catalog name |
-| `uncertain` | `uncertain` | `proposedName` is the CosIng name; never analyzed (PD-03) |
-| `unmatched` | `unknown` | `reason` is `not_in_catalog` or `empty_input` |
-| `ambiguous` | `unknown` | `reason` lists the candidate IDs |
+| `identified` | `confirmed` | Grounded in the **approved** catalog (analysis-eligible) |
+| `tentative` | `uncertain` | CosIng-only, AI best guess, or ambiguous grounding |
+| `unknown` | `unmatched` | No usable identity |
 
-Every row keeps its `index` and exact `originalText`. `listStatus` is whatever
-the caller sends; without one, an empty list is `unavailable` and anything else
-is `partial`, because a scan alone does not prove the whole label was read.
-Send `complete` only when the full list is known.
+**Coverage** (aligned with #99: only approved hits count):
+
+| `coverage` | Rule |
+| --- | --- |
+| `complete` | Every row has `mapping == "confirmed"` |
+| `partial` | At least one `confirmed` and at least one non-confirmed (e.g. confirmed + CosIng-only) |
+| `unknown` | Empty list, or **zero** confirmed rows (CosIng-only alone → `unknown`) |
+
+A row becomes `confirmed` only when the model returns `identified` **and** the
+name grounds to an approved catalog ID. AI-stated `tentative` never becomes
+`confirmed`, even if `bestGuess` exists in the catalog.
+
+### Firestore layout
+
+Reuse `ingredients/{masterId}` alongside the CosIng import (merge writes; do not
+wipe CosIng fields):
+
+| Master ID | When | Notes |
+| --- | --- | --- |
+| Catalog slug (e.g. `niacinamide`) | Confirmed or CosIng-only | `resolutionStatus: identified`, `encounteredInProducts: true`, `observedTexts` via ArrayUnion |
+| `unresolved-<sha256(name_key)[:16]>` | Tentative / unknown without a catalog ID | Same `name_key` → same ID; never merged into a confirmed record |
+
+Product lists (separate from curated `products/`):
+
+| Path | Purpose |
+| --- | --- |
+| `productIngredients/{productId}` | Ordered `submittedIngredients` + match rows with `masterIngredientID` / `masterRef` |
+| Manual docs | `sourceType: manual`, `ownerUID` = authenticated Firebase UID (#108 isolation) |
+| Catalog docs | `sourceType: catalog`, `ownerUID: null` |
+
+Spark plan: about `1 + U` writes per product (`U` = distinct master IDs), one
+atomic batch. Details also in `docs/FIRESTORE_SCHEMA.md`.
+
+### Feeding the #99 analysis engine
+
+`Backend/analysis_engine_input.py` adapts resolve rows. Mia's engine is not
+modified.
+
+| #98 `mapping` | #99 `status` | Names |
+| --- | --- | --- |
+| `confirmed` | `matched` | `canonicalName` = exact approved name |
+| `uncertain` | `uncertain` | `proposedName` = `bestGuess`, else CosIng `canonicalName` / `suggestedID` |
+| `unmatched` / `ambiguous` | `unknown` | `reason` only |
 
 ```python
 from Backend.analysis_engine_input import analysis_product, analysis_normalization, canonical_records
 
 product = analysis_product("serum", resolve_rows, approved_catalog, list_status="complete")
 normalization = analysis_normalization([product], catalog_version=approved_catalog["version"])
-records = canonical_records(approved_catalog)   # pass as canonical_records
+records = canonical_records(approved_catalog)
 ```
 
-`canonical_records` defaults to the approved catalog, which covers every
-`matched` row and keeps names unique. `include_reference=True` adds the full
-CosIng list and drops any name that would clash.
+Over HTTP, add `"format": "analysis-input"` (optional `productID`, `listStatus`).
+Default without one: empty → `unavailable`, else `partial`.
 
-Over HTTP, add `"format": "analysis-input"` (plus optional `productID` and
-`listStatus`) to `POST /api/v1/ingredients/resolve`. The response gains an
-`analysisInput` field with the normalization envelope; the existing fields do
-not change.
+### Run locally
 
-## AI fallback for unresolved names
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r Backend/requirements.txt
+# Application Default Credentials: see docs/FIRESTORE_SETUP.md
+# Put OPENROUTER_API_KEY in gitignored Backend/.env (never commit or print the value)
+AESTHELITY_DEMO_MODE=1 python Backend/analysis_api.py
+```
 
-Catalog lookup always runs first. Sending `"ai": true` on
-`POST /api/v1/ingredients/resolve` also sends unmatched or ambiguous rows
-(and noisy OCR text) to an OpenRouter model. The model can only propose a
-name; that name is looked up in the catalog again. An approved hit becomes
-`confirmed` with reason `ai-suggested + approved match`. A CosIng-only hit
-stays `uncertain`. Anything else stays unmatched. The model never assigns
-an ingredient ID.
+Env var **names** (values stay local): `OPENROUTER_API_KEY`,
+`AESTHELITY_NORMALIZATION_MODEL`, `AESTHELITY_NORMALIZATION_FALLBACK_MODEL`,
+`OPENROUTER_BASE_URL`, `FIREBASE_PROJECT_ID`, `FIRESTORE_DATABASE_ID`,
+`AESTHELITY_DEMO_MODE`, `AESTHELITY_API_HOST`, `AESTHELITY_API_PORT`,
+`AESTHELITY_LIVE_AI_TEST`.
 
-Set `OPENROUTER_API_KEY` in the gitignored `Backend/.env`. Optional:
-`AESTHELITY_NORMALIZATION_MODEL` (default `nvidia/nemotron-3.5-super-vl:free`)
-and `AESTHELITY_NORMALIZATION_FALLBACK_MODEL` (default
-`google/gemma-4-31b-it:free`). The flag defaults to off, so existing clients
-are unchanged. Timeouts, rate limits, and invalid responses leave the
-lookup-only rows in place and set `providerStatus` to a sanitized failure
-code. The result still goes through `analysis_engine_input` into the #99
-engine.
+```sh
+.venv/bin/python -m unittest discover -s tests/backend -p 'test_*.py'
+.venv/bin/python -m unittest discover -s tests
+```
+
+Live OpenRouter smoke test: `AESTHELITY_LIVE_AI_TEST=1` (skipped otherwise).
+Unit tests use a fake AI provider and FakeFirestore — no network and no real
+writes.
+
+iOS: `ManualProductEntryView` calls resolve on Review (`ai: true`) and, when
+signed in, Save with `persist: true` and `productID` = the `ManualProduct`
+UUID. If the API is down, Review falls back to the on-device catalog
+normalizer.
 
 ## Start the simulator demo
 
@@ -133,7 +320,7 @@ profile.
 
 - `GET /health`: API, rule, catalog, and Firestore database identifiers.
 - `GET /api/v1/ingredient-aliases`: current approved alias catalog for deterministic client normalization.
-- `POST /api/v1/ingredients/resolve`: `{"contractVersion": 1, "ingredients": [...]}` (max 200 strings). Each row keeps `originalText` and returns `confirmed` (approved catalog), `uncertain` with `suggestedID` (identified in CosIng but not approved for analysis), `ambiguous` with `candidateIDs`, or `unmatched`. Optional `"format": "analysis-input"` adds the #99 envelope. Optional `"ai": true` runs the OpenRouter name fallback on unresolved rows only. Requires the same auth as analyses.
+- `POST /api/v1/ingredients/resolve`: AI-primary ingredient matching (#98). See **Ingredient resolution (#98)** above for request/response, coverage, persist, and failure shapes. Requires the same auth as analyses.
 - `GET /api/v1/ingredients/{ingredientID}`: one full-catalog ingredient (CAS, functions, CosIng sources).
 - `GET /api/v1/products`: shared catalog records in API camelCase.
 - `GET /api/v1/products/{productID}`: one shared product.

@@ -345,17 +345,26 @@ class ApiTests(unittest.TestCase):
         return handler, captured
 
     def test_resolve_endpoint_offline(self):
-        handler, captured = self.handler("POST", "/api/v1/ingredients/resolve",
-                                         {"contractVersion": 1, "ingredients": ["Aqua", "Niacinamide", "???"]})
+        handler, captured = self.handler(
+            "POST",
+            "/api/v1/ingredients/resolve",
+            {"contractVersion": 1, "ai": False, "ingredients": ["Aqua", "Niacinamide", "???"]},
+        )
         handler.do_POST()
         self.assertEqual(captured["status"], 200)
         body = captured["body"]
         self.assertEqual(body["catalogSource"], "bundled-fallback")
         self.assertEqual([row["mapping"] for row in body["ingredients"]], ["confirmed", "uncertain", "unmatched"])
+        self.assertEqual([row["status"] for row in body["ingredients"]], ["identified", "tentative", "unknown"])
+        self.assertEqual(body["coverage"], "partial")
         self.assertTrue(body["uncertaintyPreserved"])
 
     def test_resolve_endpoint_rejects_bad_input(self):
-        handler, captured = self.handler("POST", "/api/v1/ingredients/resolve", {"contractVersion": 1, "ingredients": "Aqua"})
+        handler, captured = self.handler(
+            "POST",
+            "/api/v1/ingredients/resolve",
+            {"contractVersion": 1, "ai": False, "ingredients": "Aqua"},
+        )
         handler.do_POST()
         self.assertEqual(captured["status"], 400)
 

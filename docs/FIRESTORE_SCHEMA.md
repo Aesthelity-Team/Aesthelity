@@ -16,9 +16,10 @@ ID are verified (see FIRESTORE_SETUP.md).
 |---|---|---|
 | products/{productId} | Shared curated product catalog | Implemented |
 | ingredientAliasCatalogs/active | Hand-approved alias catalog used by AN-02 analysis | Implemented |
-| ingredients/{ingredientId} | Full canonical ingredient catalog (EU CosIng inventory + approved entries) | Implemented; import is dry-run until `--apply` |
+| ingredients/{ingredientId} | Full canonical ingredient catalog (EU CosIng inventory + approved entries + unresolved masters from #98) | Implemented; CosIng import + #98 encounter merges |
 | ingredientAmbiguousTerms/{termKey} | Names that map to two or more canonical IDs | Implemented with the import |
 | ingredientCatalogs/reference | Version, source, and counts of the last full import | Implemented with the import |
+| productIngredients/{productId} | Ordered product ingredient lists from #98 resolve (`persist: true`) | Implemented; manual docs scoped by `ownerUID` (#108) |
 | users/{uid} | Personal skin profile | Proposed |
 | users/{uid}/products/{productId} | User-added products | Proposed |
 | users/{uid}/routines/{routineId} | Ordered AM/PM routines | Proposed |
@@ -137,6 +138,44 @@ ingredient is approved into `ingredientAliasCatalogs/active`. Unknown text is
 `ingredientCatalogs/reference` is written last and records `version`,
 `source`, `sourceUrl`, `retrievedOn`, `license`, `ingredientCount`,
 `ambiguousTermCount`, and the import `stats`.
+
+### #98 encounter fields on ingredients/{ingredientId}
+
+When `POST /api/v1/ingredients/resolve` runs with `persist: true`, master
+records are merged (never wiping CosIng fields):
+
+| Field | Type | Requirement |
+|---|---|---|
+| resolutionStatus | string | `identified` or `unresolved` |
+| encounteredInProducts | boolean | `true` when seen via product matching |
+| observedTexts | array of strings | Original label spellings (ArrayUnion) |
+| bestGuess, explanation | string or null | Unresolved / tentative only |
+| status | string | On unresolved docs: `tentative` or `unknown` |
+| tier | string | `approved`, `reference`, or `unresolved` |
+
+Unresolved document IDs are `unresolved-<sha256(name_key(originalText))[:16]>`.
+Identical normalized original text shares one unresolved ID. Tentative best
+guesses never merge into an identified master record.
+
+## Product ingredient lists: productIngredients/{productId}
+
+Written by #98 when `persist` is true. Separate from curated `products/` so
+manual entries are not forced through catalog provenance fields.
+
+| Field | Type | Requirement |
+|---|---|---|
+| productID | string | Matches document ID |
+| sourceType | string | `manual` or `catalog` |
+| ownerUID | string or null | Required for `manual` (= authenticated Firebase UID); null for catalog |
+| coverage | string | `complete`, `partial`, or `unknown` |
+| status | string | Matching run `ok` or `failed` |
+| submittedIngredients | array of strings | Exact submitted list, original order |
+| ingredients | array of maps | Ordered rows: `index`, `originalText`, match fields, `masterIngredientID`, `masterRef` |
+| promptVersion, model, providerStatus | string or null | AI metadata when AI ran |
+| updatedAt, updatedBy | timestamp, string | Server-controlled |
+
+Manual reads must enforce `ownerUID ==` authenticated UID (same isolation as
+#108 private data). See `Backend/README.md` → Ingredient resolution (#98).
 
 ## Proposed profile: users/{uid}
 

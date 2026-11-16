@@ -65,6 +65,28 @@ class RowMappingTests(unittest.TestCase):
         self.assertEqual(row["proposedName"], "4-ISOBUTYLRESORCINOL")
         self.assertIn("4-isobutylresorcinol", row["reason"])
 
+    def test_tentative_best_guess_maps_to_proposed_name(self):
+        """#99 uncertain rows need proposedName from #98 bestGuess (AI tentative)."""
+
+        row = analysis_row(
+            {
+                "originalText": "maybe niacinamide?",
+                "mapping": "uncertain",
+                "status": "tentative",
+                "bestGuess": "Niacinamide",
+                "explanation": "uncertain OCR",
+                "reason": "ai-tentative: uncertain OCR",
+                "suggestedID": None,
+                "canonicalName": None,
+            },
+            0,
+            {item["id"]: item["name"] for item in APPROVED["ingredients"]},
+        )
+        self.assertEqual(row["status"], "uncertain")
+        self.assertEqual(row["proposedName"], "Niacinamide")
+        self.assertIsNone(row["canonicalName"])
+        self.assertIn("ai-tentative", row["reason"])
+
     def test_unknown_reasons(self):
         _, _, mystery, vitamin_e, empty = self.product["ingredients"]
         self.assertEqual(mystery["reason"], "not_in_catalog")
@@ -149,13 +171,16 @@ class EndpointTests(unittest.TestCase):
         return captured
 
     def test_default_response_unchanged(self):
-        captured = self.post({"contractVersion": 1, "ingredients": ["Aqua"]})
+        # Catalog-only opt-out: AI is primary by default for #98.
+        captured = self.post({"contractVersion": 1, "ingredients": ["Aqua"], "ai": False})
         self.assertEqual(captured["status"], 200)
         self.assertNotIn("analysisInput", captured["body"])
+        self.assertEqual(captured["body"]["coverage"], "complete")
+        self.assertEqual(captured["body"]["ingredients"][0]["status"], "identified")
 
     def test_analysis_input_format(self):
-        captured = self.post({"contractVersion": 1, "ingredients": ["Aqua", "Vitamin E"], "format": "analysis-input",
-                              "productID": "serum", "listStatus": "complete"})
+        captured = self.post({"contractVersion": 1, "ingredients": ["Aqua", "Vitamin E"], "ai": False,
+                              "format": "analysis-input", "productID": "serum", "listStatus": "complete"})
         self.assertEqual(captured["status"], 200)
         body = captured["body"]
         self.assertEqual([row["mapping"] for row in body["ingredients"]], ["confirmed", "ambiguous"])
@@ -164,9 +189,10 @@ class EndpointTests(unittest.TestCase):
         self.assertEqual([row["status"] for row in product["ingredients"]], ["matched", "unknown"])
 
     def test_bad_format_or_list_status(self):
-        self.assertEqual(self.post({"contractVersion": 1, "ingredients": ["Aqua"], "format": "other"})["status"], 400)
-        self.assertEqual(self.post({"contractVersion": 1, "ingredients": ["Aqua"], "format": "analysis-input",
-                                    "listStatus": "full"})["status"], 400)
+        self.assertEqual(self.post({"contractVersion": 1, "ingredients": ["Aqua"], "ai": False,
+                                    "format": "other"})["status"], 400)
+        self.assertEqual(self.post({"contractVersion": 1, "ingredients": ["Aqua"], "ai": False,
+                                    "format": "analysis-input", "listStatus": "full"})["status"], 400)
 
 
 def _load_analysis_engine():

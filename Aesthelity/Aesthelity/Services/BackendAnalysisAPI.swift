@@ -131,9 +131,9 @@ enum BackendAnalysisAPIError: LocalizedError {
 }
 
 struct BackendAnalysisAPI {
-    private let session: URLSession
-    private let decoder = JSONDecoder()
-    private let encoder = JSONEncoder()
+    let session: URLSession
+    let decoder = JSONDecoder()
+    let encoder = JSONEncoder()
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -205,7 +205,7 @@ struct BackendAnalysisAPI {
         return LiveAnalysisResult(response: result, productNames: names)
     }
 
-    private func baseURL() throws -> URL {
+    func baseURL() throws -> URL {
         let configured = Bundle.main.object(forInfoDictionaryKey: "AesthelityAPIBaseURL") as? String
             ?? "http://127.0.0.1:8765"
         guard let url = URL(string: configured), url.scheme != nil, url.host != nil else {
@@ -214,7 +214,7 @@ struct BackendAnalysisAPI {
         return url
     }
 
-    private func requireSuccess(_ response: URLResponse, data: Data) throws {
+    func requireSuccess(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse else {
             throw BackendAnalysisAPIError.invalidResponse
         }

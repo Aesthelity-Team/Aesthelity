@@ -1,4 +1,4 @@
-"""AI fallback for #98 unresolved rows (Backend/ai_normalization.py)."""
+"""AI-primary matching for #98 (Backend/ai_normalization.py)."""
 
 import copy
 import io
@@ -10,16 +10,17 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 from Backend.analysis_api import APIHandler
-from Backend.analysis_engine.normalization import ProviderError
 from Backend.analysis_engine_input import analysis_normalization, analysis_product, canonical_records
 from Backend.ai_normalization import (
     DEFAULT_FALLBACK_MODEL,
     DEFAULT_MODEL,
     OpenRouterNormalizationProvider,
+    ProviderError,
     apply_ai_normalization,
-    looks_noisy,
-    needs_ai,
-    suggested_name,
+    coverage_for_rows,
+    ground_ai_suggestions,
+    match_ingredients,
+    validate_matching_output,
 )
 from Backend.ingredient_catalog import ReferenceIndex, build_catalog, parse_cosing_csv, resolve_ingredient_texts
 
@@ -43,14 +44,14 @@ def reference_index():
     return ReferenceIndex(build_catalog(parse_cosing_csv(CSV), APPROVED, version="test"))
 
 
-def resolve(texts, reference=None):
-    return resolve_ingredient_texts(texts, APPROVED, reference if reference is not None else reference_index())
-
-
-def ai_row(index, status, canonical=None, proposed=None, reason="ok", **extra):
-    row = {"index": index, "status": status, "canonicalName": canonical, "proposedName": proposed, "reason": reason}
-    row.update(extra)
-    return row
+def ai_row(index, status, normalized=None, best_guess=None, explanation="ok"):
+    return {
+        "index": index,
+        "status": status,
+        "normalizedName": normalized,
+        "bestGuess": best_guess,
+        "explanation": explanation,
+    }
 
 
 class FakeProvider:
@@ -69,140 +70,221 @@ class FakeProvider:
         return copy.deepcopy(self.output)
 
 
-class HelperTests(unittest.TestCase):
-    def test_looks_noisy_and_needs_ai(self):
-        self.assertTrue(looks_noisy("blurred txt"))
-        self.assertFalse(looks_noisy("Aqua"))
-        self.assertFalse(looks_noisy("   "))
-        rows = resolve(["Aqua", "4-Isobutylresorcinol", "Mystery Complex 9", "Vitamin E", "   ", "blurred txt"])
-        flags = [needs_ai(row) for row in rows]
-        self.assertEqual(flags, [False, False, True, True, False, True])
+class CoverageTests(unittest.TestCase):
+    def test_complete_partial_unknown_and_empty(self):
+        self.assertEqual(coverage_for_rows([]), "unknown")
+        self.assertEqual(
+            coverage_for_rows([{"mapping": "confirmed"}, {"mapping": "confirmed"}]),
+            "complete",
+        )
+        self.assertEqual(
+            coverage_for_rows([{"mapping": "confirmed"}, {"mapping": "uncertain"}]),
+            "partial",
+        )
+        self.assertEqual(
+            coverage_for_rows([{"mapping": "confirmed"}, {"mapping": "unmatched"}]),
+            "partial",
+        )
+        self.assertEqual(
+            coverage_for_rows([{"mapping": "uncertain"}, {"mapping": "unmatched"}]),
+            "unknown",
+        )
+        self.assertEqual(coverage_for_rows([{"mapping": "unmatched"}]), "unknown")
+        # CosIng-only alone is not complete and not partial: #99 would see zero matched rows.
+        self.assertEqual(coverage_for_rows([{"mapping": "uncertain", "status": "tentative"}]), "unknown")
 
-    def test_suggested_name_ignores_ids(self):
-        self.assertEqual(suggested_name(ai_row(0, "matched", "Ascorbic Acid", ingredientID="water")), "Ascorbic Acid")
-        self.assertIsNone(suggested_name(ai_row(0, "matched", None, ingredientID="water", suggestedID="retinol")))
+
+class ValidationTests(unittest.TestCase):
+    def test_accepts_valid_rows(self):
+        rows = validate_matching_output(
+            {"ingredients": [
+                ai_row(0, "identified", "Niacinamide"),
+                ai_row(1, "tentative", best_guess="Ascorbic Acid", explanation="shorthand"),
+                ai_row(2, "unknown", explanation="gibberish"),
+            ]},
+            3,
+        )
+        self.assertEqual([row["status"] for row in rows], ["identified", "tentative", "unknown"])
+
+    def test_rejects_missing_extra_duplicate_indices_and_bad_json_shapes(self):
+        with self.assertRaises(ProviderError):
+            validate_matching_output({"ingredients": [ai_row(0, "identified", "Water")]}, 2)
+        with self.assertRaises(ProviderError):
+            validate_matching_output(
+                {"ingredients": [ai_row(0, "identified", "Water"), ai_row(0, "identified", "Water")]},
+                2,
+            )
+        with self.assertRaises(ProviderError):
+            validate_matching_output(
+                {"ingredients": [ai_row(1, "identified", "Water"), ai_row(0, "identified", "Glycerin")]},
+                2,
+            )
+        with self.assertRaises(ProviderError):
+            validate_matching_output({"ingredients": [ai_row(0, "identified", "Water")], "extra": 1}, 1)
+        with self.assertRaises(ProviderError):
+            validate_matching_output(
+                {"ingredients": [ai_row(0, "identified", "Water", best_guess="also")]},
+                1,
+            )
+        with self.assertRaises(ProviderError):
+            validate_matching_output(
+                {"ingredients": [{"index": 0, "status": "matched", "normalizedName": "Water",
+                                  "bestGuess": None, "explanation": "x"}]},
+                1,
+            )
 
 
-class ApplyAINormalizationTests(unittest.TestCase):
+class GroundingAndBugFixTests(unittest.TestCase):
     def setUp(self):
         self.reference = reference_index()
 
-    def test_reresolve_to_confirmed(self):
-        rows = resolve(["niacinimide", "Vit C", "Aqua"], self.reference)
-        self.assertEqual([row["mapping"] for row in rows], ["unmatched", "ambiguous", "confirmed"])
-        provider = FakeProvider({"ingredients": [
-            ai_row(0, "matched", "Niacinamide"),
-            ai_row(1, "matched", "Ascorbic Acid"),
-        ]})
-        updated, status, model, attempted = apply_ai_normalization(
-            rows, APPROVED, self.reference, provider=provider
+    def test_identified_and_approved_becomes_confirmed(self):
+        rows = ground_ai_suggestions(
+            ["niacinimide"],
+            [ai_row(0, "identified", "Niacinamide", explanation="spelling")],
+            APPROVED,
+            self.reference,
         )
-        self.assertEqual(status, "ok")
-        self.assertEqual(model, "fake-model")
-        self.assertEqual(attempted, 2)
-        self.assertEqual(provider.calls, [["niacinimide", "Vit C"]])
-        self.assertEqual(updated[0]["mapping"], "confirmed")
-        self.assertEqual(updated[0]["ingredientID"], "niacinamide")
-        self.assertEqual(updated[0]["canonicalName"], "Niacinamide")
-        self.assertEqual(updated[0]["originalText"], "niacinimide")
-        self.assertEqual(updated[0]["reason"], "ai-suggested + approved match")
-        self.assertEqual(updated[1]["mapping"], "confirmed")
-        self.assertEqual(updated[1]["ingredientID"], "ascorbic-acid")
-        self.assertEqual(updated[1]["originalText"], "Vit C")
-        self.assertEqual(updated[1]["reason"], "ai-suggested + approved match")
-        self.assertEqual(updated[2]["ingredientID"], "water")
-        self.assertNotEqual(updated[2].get("source"), "ai")
+        self.assertEqual(rows[0]["status"], "identified")
+        self.assertEqual(rows[0]["mapping"], "confirmed")
+        self.assertEqual(rows[0]["ingredientID"], "niacinamide")
+        self.assertEqual(rows[0]["originalText"], "niacinimide")
+        self.assertEqual(rows[0]["normalizedName"], "Niacinamide")
 
-    def test_reresolve_to_uncertain(self):
-        rows = resolve(["isobutyl mystery"], self.reference)
+    def test_ai_tentative_stays_tentative_even_when_guess_validates(self):
+        """Regression: AI uncertainty must not become confirmed (Scenario 2 / 8)."""
+
+        rows = ground_ai_suggestions(
+            ["maybe niacinamide?"],
+            [ai_row(0, "tentative", best_guess="Niacinamide", explanation="uncertain OCR")],
+            APPROVED,
+            self.reference,
+        )
+        self.assertEqual(rows[0]["status"], "tentative")
+        self.assertEqual(rows[0]["mapping"], "uncertain")
+        self.assertEqual(rows[0]["bestGuess"], "Niacinamide")
+        self.assertIsNone(rows[0]["ingredientID"])
+        self.assertFalse(rows[0]["analysisEligible"])
+        self.assertIn("ai-tentative", rows[0]["reason"])
+
+    def test_identified_ambiguous_downgrades_to_tentative(self):
+        rows = ground_ai_suggestions(
+            ["Vit C"],
+            [ai_row(0, "identified", "Vitamin C", explanation="common shorthand")],
+            APPROVED,
+            self.reference,
+        )
+        self.assertEqual(rows[0]["status"], "tentative")
+        self.assertEqual(rows[0]["mapping"], "uncertain")
+        self.assertEqual(rows[0]["bestGuess"], "Vitamin C")
+        self.assertIsNone(rows[0]["ingredientID"])
+        self.assertIn("ambiguous", rows[0]["reason"])
+
+    def test_identified_not_in_catalog_stays_tentative(self):
+        rows = ground_ai_suggestions(
+            ["Mystery Complex 9"],
+            [ai_row(0, "identified", "totally-invented-ingredient")],
+            APPROVED,
+            self.reference,
+        )
+        self.assertEqual(rows[0]["status"], "tentative")
+        self.assertEqual(rows[0]["bestGuess"], "totally-invented-ingredient")
+        self.assertIsNone(rows[0]["ingredientID"])
+        self.assertEqual(rows[0]["reason"], "ai-suggestion-not-in-catalog")
+
+    def test_identified_reference_tier_is_tentative_for_coverage(self):
+        rows = ground_ai_suggestions(
+            ["isobutyl mystery"],
+            [ai_row(0, "identified", "4-ISOBUTYLRESORCINOL")],
+            APPROVED,
+            self.reference,
+        )
+        self.assertEqual(rows[0]["status"], "tentative")
+        self.assertEqual(rows[0]["mapping"], "uncertain")
+        self.assertEqual(rows[0]["suggestedID"], "4-isobutylresorcinol")
+        self.assertEqual(rows[0]["bestGuess"], "4-ISOBUTYLRESORCINOL")
+        self.assertIsNone(rows[0]["ingredientID"])
+        self.assertFalse(rows[0]["analysisEligible"])
+        self.assertEqual(coverage_for_rows(rows), "unknown")
+
+    def test_cosing_only_with_confirmed_gives_partial_coverage(self):
+        """A list with one CosIng-only ingredient (plus an approved hit) is partial."""
+
+        rows = ground_ai_suggestions(
+            ["Aqua", "isobutyl mystery"],
+            [
+                ai_row(0, "identified", "Water"),
+                ai_row(1, "identified", "4-ISOBUTYLRESORCINOL"),
+            ],
+            APPROVED,
+            self.reference,
+        )
+        self.assertEqual(rows[0]["mapping"], "confirmed")
+        self.assertEqual(rows[1]["mapping"], "uncertain")
+        self.assertEqual(coverage_for_rows(rows), "partial")
+
+    def test_unknown_stays_unknown(self):
+        rows = ground_ai_suggestions(
+            ["blurred txt"],
+            [ai_row(0, "unknown", explanation="gibberish")],
+            APPROVED,
+            self.reference,
+        )
+        self.assertEqual(rows[0]["status"], "unknown")
         self.assertEqual(rows[0]["mapping"], "unmatched")
-        provider = FakeProvider({"ingredients": [ai_row(0, "uncertain", proposed="4-ISOBUTYLRESORCINOL")]})
-        updated, status, _, attempted = apply_ai_normalization(
-            rows, APPROVED, self.reference, provider=provider
+        self.assertEqual(rows[0]["explanation"], "gibberish")
+
+
+class MatchIngredientsTests(unittest.TestCase):
+    def setUp(self):
+        self.reference = reference_index()
+
+    def test_sends_every_nonempty_label_to_ai(self):
+        provider = FakeProvider({"ingredients": [
+            ai_row(0, "identified", "Water"),
+            ai_row(1, "identified", "Niacinamide"),
+            ai_row(2, "unknown", explanation="gibberish"),
+            ai_row(3, "unknown", explanation="empty"),
+        ]})
+        rows, status, model, run = match_ingredients(
+            ["Aqua", "niacinimide", "blurred txt", "   "],
+            APPROVED,
+            self.reference,
+            provider=provider,
         )
         self.assertEqual(status, "ok")
-        self.assertEqual(attempted, 1)
-        self.assertEqual(updated[0]["mapping"], "uncertain")
-        self.assertEqual(updated[0]["suggestedID"], "4-isobutylresorcinol")
-        self.assertIsNone(updated[0]["ingredientID"])
-        self.assertFalse(updated[0]["analysisEligible"])
-        self.assertIn("ai-suggested + reference-catalog-only", updated[0]["reason"])
-        self.assertEqual(updated[0]["originalText"], "isobutyl mystery")
+        self.assertEqual(run, "ok")
+        self.assertEqual(model, "fake-model")
+        self.assertEqual(provider.calls, [["Aqua", "niacinimide", "blurred txt", "   "]])
+        self.assertEqual([row["status"] for row in rows], ["identified", "identified", "unknown", "unknown"])
+        self.assertEqual(coverage_for_rows(rows), "partial")
 
-    def test_unknown_stays_unmatched(self):
-        rows = resolve(["blurred txt"], self.reference)
-        provider = FakeProvider({"ingredients": [ai_row(0, "unknown", reason="gibberish")]})
-        updated, status, _, attempted = apply_ai_normalization(
-            rows, APPROVED, self.reference, provider=provider
-        )
-        self.assertEqual(status, "ok")
-        self.assertEqual(attempted, 1)
-        self.assertEqual(updated[0]["mapping"], "unmatched")
-        self.assertIsNone(updated[0]["ingredientID"])
-        self.assertEqual(updated[0]["reason"], "not_in_catalog")
-
-    def test_ai_cannot_invent_an_id(self):
-        rows = resolve(["Mystery Complex 9"], self.reference)
-        provider = FakeProvider({"ingredients": [ai_row(
-            0, "matched", "totally-invented-id", ingredientID="water", suggestedID="retinol"
-        )]})
-        updated, status, _, _ = apply_ai_normalization(rows, APPROVED, self.reference, provider=provider)
-        self.assertEqual(status, "ok")
-        self.assertEqual(updated[0]["mapping"], "unmatched")
-        self.assertIsNone(updated[0]["ingredientID"])
-        self.assertIsNone(updated[0]["suggestedID"])
-        self.assertEqual(updated[0]["reason"], "ai-suggestion-not-in-catalog")
-        self.assertNotEqual(updated[0]["ingredientID"], "water")
-        self.assertNotIn("water", (updated[0].get("ingredientID"), updated[0].get("suggestedID")))
-
-    def test_failure_falls_back_to_lookup_only(self):
-        original = resolve(["Vit C", "Aqua", "Vitamin E"], self.reference)
+    def test_failure_preserves_list_as_unknown_not_success(self):
         provider = FakeProvider(error=ProviderError("provider_unavailable"))
-        updated, status, model, attempted = apply_ai_normalization(
-            original, APPROVED, self.reference, provider=provider
-        )
+        texts = ["Vit C", "Aqua", "Mystery"]
+        rows, status, model, run = match_ingredients(texts, APPROVED, self.reference, provider=provider)
+        self.assertEqual(run, "failed")
         self.assertEqual(status, "provider_unavailable")
         self.assertEqual(model, "fake-model")
-        self.assertEqual(attempted, 2)
-        self.assertEqual(updated, original)
-        self.assertEqual([row["mapping"] for row in updated], ["ambiguous", "confirmed", "ambiguous"])
+        self.assertEqual([row["originalText"] for row in rows], texts)
+        self.assertEqual([row["status"] for row in rows], ["unknown", "unknown", "unknown"])
+        self.assertEqual([row["reason"] for row in rows], ["ai-unavailable"] * 3)
+        self.assertEqual(coverage_for_rows(rows), "unknown")
 
-    def test_only_misses_are_sent(self):
-        rows = resolve(["Aqua", "4-Isobutylresorcinol", "Mystery Complex 9", "Vitamin E", "   "], self.reference)
-        provider = FakeProvider({"ingredients": [
-            ai_row(0, "unknown", reason="no"),
-            ai_row(1, "matched", "Tocopherol"),
-        ]})
-        updated, status, _, attempted = apply_ai_normalization(
-            rows, APPROVED, self.reference, provider=provider
-        )
-        self.assertEqual(status, "ok")
-        self.assertEqual(attempted, 2)
-        self.assertEqual(provider.calls, [["Mystery Complex 9", "Vitamin E"]])
-        self.assertEqual(updated[0]["mapping"], "confirmed")
-        self.assertEqual(updated[0]["ingredientID"], "water")
-        self.assertEqual(updated[1]["mapping"], "uncertain")
-        self.assertEqual(updated[2]["mapping"], "unmatched")
-        self.assertEqual(updated[3]["mapping"], "confirmed")
-        self.assertEqual(updated[3]["ingredientID"], "tocopherol")
-        self.assertEqual(updated[3]["originalText"], "Vitamin E")
-        self.assertEqual(updated[3]["reason"], "ai-suggested + approved match")
-        self.assertEqual(updated[4]["reason"], "empty_input")
-
-    def test_adapter_reason_and_engine_accept_ai_confirmed_row(self):
-        rows = resolve(["Vit C"], self.reference)
-        provider = FakeProvider({"ingredients": [ai_row(0, "matched", "Ascorbic Acid")]})
-        updated, status, model, _ = apply_ai_normalization(rows, APPROVED, self.reference, provider=provider)
-        product = analysis_product("serum", updated, APPROVED, list_status="complete")
+    def test_adapter_and_engine_accept_ai_identified_approved_row(self):
+        provider = FakeProvider({"ingredients": [ai_row(0, "identified", "Ascorbic Acid")]})
+        rows, status, model, run = match_ingredients(["Vit C"], APPROVED, self.reference, provider=provider)
+        # Vit C as identified Ascorbic Acid grounds cleanly to approved.
+        self.assertEqual(run, "ok")
+        self.assertEqual(rows[0]["mapping"], "confirmed")
+        product = analysis_product("serum", rows, APPROVED, list_status="complete")
         self.assertEqual(product["ingredients"][0]["status"], "matched")
         self.assertEqual(product["ingredients"][0]["canonicalName"], "Ascorbic Acid")
-        self.assertEqual(product["ingredients"][0]["reason"], "ai-suggested + approved match")
         envelope = analysis_normalization(
             [product], catalog_version=APPROVED["version"], provider_status=status,
-            model=model, prompt_version="ingredient-normalization-v1",
+            model=model, prompt_version="ingredient-matching-v2",
         )
         self.assertEqual(envelope["providerStatus"], "ok")
-        self.assertEqual(envelope["model"], "fake-model")
         if ENGINE is None:
             self.skipTest(f"{ANALYSIS_BRANCH_FILE} not available")
         products, _, has_unresolved, unresolved = ENGINE._validate_inputs(
@@ -212,6 +294,21 @@ class ApplyAINormalizationTests(unittest.TestCase):
         self.assertEqual(products[0]["ingredients"][0]["ingredientID"], "ascorbic-acid")
         self.assertFalse(has_unresolved)
         self.assertEqual(unresolved, [])
+
+    def test_apply_ai_normalization_wrapper_preserves_order(self):
+        catalog_rows = resolve_ingredient_texts(["niacinimide", "Aqua"], APPROVED, self.reference)
+        provider = FakeProvider({"ingredients": [
+            ai_row(0, "identified", "Niacinamide"),
+            ai_row(1, "identified", "Water"),
+        ]})
+        updated, status, model, attempted = apply_ai_normalization(
+            catalog_rows, APPROVED, self.reference, provider=provider
+        )
+        self.assertEqual(status, "ok")
+        self.assertEqual(attempted, 2)
+        self.assertEqual(model, "fake-model")
+        self.assertEqual([row["originalText"] for row in updated], ["niacinimide", "Aqua"])
+        self.assertEqual([row["status"] for row in updated], ["identified", "identified"])
 
 
 class ProviderTransportTests(unittest.TestCase):
@@ -228,7 +325,7 @@ class ProviderTransportTests(unittest.TestCase):
                 "choices": [{
                     "finish_reason": "stop",
                     "message": {"content": json.dumps({"ingredients": [
-                        ai_row(0, "matched", "Ascorbic Acid"),
+                        ai_row(0, "identified", "Ascorbic Acid"),
                     ]})},
                 }]
             }
@@ -239,7 +336,7 @@ class ProviderTransportTests(unittest.TestCase):
             transport=transport,
         )
         output = provider.resolve(["Vit C"])
-        self.assertEqual(output["ingredients"][0]["canonicalName"], "Ascorbic Acid")
+        self.assertEqual(output["ingredients"][0]["normalizedName"], "Ascorbic Acid")
         self.assertEqual(provider.last_model, DEFAULT_FALLBACK_MODEL)
         self.assertIn(DEFAULT_MODEL, calls)
         self.assertIn(DEFAULT_FALLBACK_MODEL, calls)
@@ -285,41 +382,50 @@ class EndpointTests(unittest.TestCase):
         handler.do_POST()
         return captured
 
-    def test_default_response_unchanged_without_ai_flag(self):
-        captured = self.post({"contractVersion": 1, "ingredients": ["Vit C"]})
+    def test_ai_false_is_catalog_only(self):
+        captured = self.post({"contractVersion": 1, "ingredients": ["Vit C"], "ai": False})
         self.assertEqual(captured["status"], 200)
         self.assertNotIn("providerStatus", captured["body"])
-        self.assertNotIn("model", captured["body"])
+        self.assertEqual(captured["body"]["status"], "ok")
+        self.assertEqual(captured["body"]["coverage"], "unknown")
         self.assertEqual(captured["body"]["ingredients"][0]["mapping"], "ambiguous")
-        self.assertEqual(
-            captured["body"]["ingredients"][0]["candidateIDs"],
-            ["ascorbic-acid", "sodium-ascorbyl-phosphate", "magnesium-ascorbyl-phosphate", "ascorbyl-glucoside"],
-        )
+        self.assertEqual(captured["body"]["ingredients"][0]["status"], "tentative")
 
-    def test_ai_flag_resolves_miss_and_keeps_analysis_input(self):
-        provider = FakeProvider({"ingredients": [ai_row(0, "matched", "Ascorbic Acid")]})
+    def test_default_ai_primary_resolves_and_keeps_analysis_input(self):
+        provider = FakeProvider({"ingredients": [
+            ai_row(0, "identified", "Ascorbic Acid"),
+            ai_row(1, "identified", "Water"),
+        ]})
         captured = self.post(
-            {"contractVersion": 1, "ingredients": ["Vit C", "Aqua"], "ai": True,
+            {"contractVersion": 1, "ingredients": ["Vit C", "Aqua"],
              "format": "analysis-input", "productID": "serum", "listStatus": "complete"},
             provider=provider,
         )
         self.assertEqual(captured["status"], 200)
         body = captured["body"]
+        self.assertEqual(body["status"], "ok")
+        self.assertEqual(body["coverage"], "complete")
         self.assertEqual(body["providerStatus"], "ok")
+        self.assertEqual(body["promptVersion"], "ingredient-matching-v2")
+        self.assertEqual([row["status"] for row in body["ingredients"]], ["identified", "identified"])
         self.assertEqual([row["mapping"] for row in body["ingredients"]], ["confirmed", "confirmed"])
-        self.assertEqual(body["ingredients"][0]["reason"], "ai-suggested + approved match")
         row = body["analysisInput"]["products"][0]["ingredients"][0]
         self.assertEqual(row["status"], "matched")
         self.assertEqual(row["canonicalName"], "Ascorbic Acid")
-        self.assertEqual(row["reason"], "ai-suggested + approved match")
-        self.assertEqual(body["analysisInput"]["providerStatus"], "ok")
 
-    def test_ai_failure_keeps_lookup_rows(self):
+    def test_ai_failure_returns_full_unknown_list_not_bare_error(self):
         provider = FakeProvider(error=ProviderError("provider_rate_limited"))
-        captured = self.post({"contractVersion": 1, "ingredients": ["Vit C"], "ai": True}, provider=provider)
+        texts = ["Vit C", "Aqua"]
+        captured = self.post({"contractVersion": 1, "ingredients": texts}, provider=provider)
         self.assertEqual(captured["status"], 200)
-        self.assertEqual(captured["body"]["providerStatus"], "provider_rate_limited")
-        self.assertEqual(captured["body"]["ingredients"][0]["mapping"], "ambiguous")
+        body = captured["body"]
+        self.assertEqual(body["status"], "failed")
+        self.assertEqual(body["failureCode"], "provider_rate_limited")
+        self.assertEqual(body["coverage"], "unknown")
+        self.assertEqual(body["providerStatus"], "provider_rate_limited")
+        self.assertEqual([row["originalText"] for row in body["ingredients"]], texts)
+        self.assertEqual([row["status"] for row in body["ingredients"]], ["unknown", "unknown"])
+        self.assertEqual([row["reason"] for row in body["ingredients"]], ["ai-unavailable", "ai-unavailable"])
 
     def test_bad_ai_flag(self):
         self.assertEqual(self.post({"contractVersion": 1, "ingredients": ["Aqua"], "ai": "yes"})["status"], 400)
@@ -340,42 +446,36 @@ class LiveAINormalizationTests(unittest.TestCase):
             self.fail("OPENROUTER_API_KEY is not set")
         texts = ["Vit C", "niacinimide", "sodium hyaluronate", "parfum", "retinyl palmitat", "blurred txt"]
         reference = load_reference_index(APPROVED)
-        catalog_rows = resolve_ingredient_texts(texts, APPROVED, reference)
-        updated, status, model, attempted = apply_ai_normalization(
-            catalog_rows, APPROVED, reference, provider=provider
-        )
-        # Per-label report for the operator; never print credentials.
+        updated, status, model, run = match_ingredients(texts, APPROVED, reference, provider=provider)
         print("")
-        print(f"live providerStatus={status} model={model} attempted={attempted}")
+        print(f"live providerStatus={status} run={run} model={model}")
         for row in updated:
             print(
                 "live label:",
                 json.dumps({
                     "originalText": row["originalText"],
+                    "status": row["status"],
                     "mapping": row["mapping"],
-                    "canonicalName": row.get("canonicalName"),
+                    "normalizedName": row.get("normalizedName"),
+                    "bestGuess": row.get("bestGuess"),
                     "ingredientID": row.get("ingredientID"),
                     "suggestedID": row.get("suggestedID"),
                     "reason": row.get("reason"),
-                    "source": row.get("source"),
                 }, ensure_ascii=False),
             )
+        self.assertIn(run, {"ok", "failed"})
         self.assertIn(status, {"ok", "provider_unavailable", "provider_rate_limited",
                                "provider_invalid_response", "provider_incomplete_or_refused",
                                "provider_unconfigured", "provider_schema_unsupported"})
-        by_text = {row["originalText"]: row for row in updated}
-        self.assertEqual(by_text["sodium hyaluronate"]["mapping"], "confirmed")
-        self.assertEqual(by_text["sodium hyaluronate"]["canonicalName"], "Sodium Hyaluronate")
-        self.assertEqual(by_text["parfum"]["mapping"], "confirmed")
-        self.assertEqual(by_text["parfum"]["canonicalName"], "Fragrance")
-        self.assertNotEqual(by_text["blurred txt"]["mapping"], "confirmed")
-        for row in updated:
-            if row["mapping"] == "confirmed":
-                self.assertIn(row["ingredientID"], {item["id"] for item in APPROVED["ingredients"]})
+        if run == "ok":
+            by_text = {row["originalText"]: row for row in updated}
+            self.assertEqual(by_text["sodium hyaluronate"]["status"], "identified")
+            self.assertEqual(by_text["parfum"]["status"], "identified")
+            self.assertNotEqual(by_text["blurred txt"]["status"], "identified")
         product = analysis_product("messy-label", updated, APPROVED, list_status="complete")
         envelope = analysis_normalization(
             [product], catalog_version=APPROVED["version"], provider_status=status,
-            model=model, prompt_version="ingredient-normalization-v1",
+            model=model, prompt_version="ingredient-matching-v2",
         )
         engine = ENGINE or _load_analysis_engine()
         if engine is None:

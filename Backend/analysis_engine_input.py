@@ -16,7 +16,7 @@ expects the shared normalization contract instead:
 Mapping (PD-03 is unchanged, only approved-catalog matches become `matched`):
 
     confirmed  -> matched    canonicalName = the approved catalog name
-    uncertain  -> uncertain  proposedName  = the reference catalog name
+    uncertain  -> uncertain  proposedName  = bestGuess, else CosIng/canonical/suggestedID
     unmatched  -> unknown    reason        = not_in_catalog | empty_input
     ambiguous  -> unknown    reason        = ambiguous: <candidate ids>
 
@@ -104,7 +104,12 @@ def _reason(text: str) -> str:
 
 
 def analysis_row(row: Mapping[str, Any], index: int, approved_names: Mapping[str, str]) -> dict[str, Any]:
-    """Convert one #98 resolve row into one #99 normalized ingredient row."""
+    """Convert one #98 resolve row into one #99 normalized ingredient row.
+
+    ``uncertain`` rows set ``proposedName`` from ``bestGuess`` when present
+    (AI tentative), otherwise CosIng ``canonicalName`` / ``suggestedID``.
+    Only approved-catalog ``confirmed`` rows become ``matched``.
+    """
 
     original = row.get("originalText")
     if not isinstance(original, str):
@@ -127,8 +132,12 @@ def analysis_row(row: Mapping[str, Any], index: int, approved_names: Mapping[str
             default = f"approved-catalog match on {row.get('matchedOn') or 'name'}"
             out.update(status="matched", canonicalName=name, reason=row.get("reason") or default)
     elif mapping == "uncertain":
-        proposed = row.get("canonicalName") or row.get("suggestedID")
-        default = f"reference-catalog-only ({row.get('suggestedID')}); not approved for analysis"
+        # Tentative AI rows carry bestGuess; CosIng-only rows carry canonicalName / suggestedID.
+        proposed = row.get("bestGuess") or row.get("canonicalName") or row.get("suggestedID")
+        if row.get("status") == "tentative" and row.get("bestGuess"):
+            default = row.get("explanation") or row.get("reason") or "ai-tentative best guess"
+        else:
+            default = f"reference-catalog-only ({row.get('suggestedID')}); not approved for analysis"
         out.update(status="uncertain", proposedName=proposed, reason=row.get("reason") or default)
     elif mapping == "ambiguous":
         candidates = ", ".join(row.get("candidateIDs") or []) or "none"
@@ -167,7 +176,11 @@ def analysis_product(
     *,
     list_status: str | None = None,
 ) -> dict[str, Any]:
-    """One product in the #99 `normalization.products` shape."""
+    """Build one product object for the #99 ``normalization.products`` array.
+
+    Preserves resolve-row order and exact ``originalText``. ``list_status``
+    defaults via ``derive_list_status`` when omitted.
+    """
 
     if not isinstance(product_id, str) or not product_id.strip():
         raise AnalysisInputAdapterError("productID must be a non-empty string.")
@@ -192,11 +205,10 @@ def analysis_normalization(
     model: str | None = None,
     prompt_version: str | None = None,
 ) -> dict[str, Any]:
-    """The #99 `normalization` envelope for already-converted products.
+    """Build the #99 ``normalization`` envelope for already-converted products.
 
-    providerStatus defaults to "ok" for catalog-only lookup, which always
-    completes. When the optional AI fallback ran, pass its sanitized status
-    and the model that produced any suggestions.
+    Pass the sanitized ``provider_status`` and ``model`` from #98 matching.
+    ``providerStatus`` other than ``ok`` makes the #99 result incomplete.
     """
 
     product_list = [dict(product) for product in products]
