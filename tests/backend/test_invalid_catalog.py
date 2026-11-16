@@ -1,10 +1,10 @@
 import os
 import argparse
 
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-from demo_catalog import load, validate
+try:
+    from tests.backend.demo_catalog import load, validate
+except ImportError:
+    from demo_catalog import load, validate
 
 
 def main():
@@ -43,6 +43,14 @@ def main():
         ) from error
 
     print(f"PASS: Validated {len(products)} products.")
+
+    try:
+        import firebase_admin
+        from firebase_admin import credentials, firestore
+    except ImportError as error:
+        raise SystemExit(
+            "firebase_admin is not installed; install Backend/requirements.txt to run Firestore imports."
+        ) from error
 
     project_id = os.environ["FIREBASE_PROJECT_ID"]
     database_id = os.environ["FIRESTORE_DATABASE_ID"]
