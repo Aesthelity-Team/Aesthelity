@@ -21,6 +21,7 @@ sys.path.insert(0, str(ROOT))
 
 from analysis_engine import AnalysisInputError, evaluate_routine  # noqa: E402
 from analysis_engine.product_input import ProductInputError, load_alias_catalog  # noqa: E402
+from Backend.authentication import verified_firebase_uid  # noqa: E402
 
 
 CATALOG_PATH = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" / "ingredient-aliases.json"
@@ -87,6 +88,10 @@ def _error_body(code: str, message: str, request_id: str | None = None) -> dict[
 class APIHandler(BaseHTTPRequestHandler):
     server_version = "AesthelityAnalysis/1.0"
 
+    def __init__(self, *args: Any, **kwargs: Any):
+        self.authenticated_uid: str | None = None
+        super().__init__(*args, **kwargs)
+
     def do_GET(self) -> None:
         route = urlparse(self.path)
         if route.path == "/health":
@@ -143,15 +148,21 @@ class APIHandler(BaseHTTPRequestHandler):
     def _authorized(self) -> bool:
         if self.server.demo_mode:
             return True
-        scheme, _, token = self.headers.get("Authorization", "").partition(" ")
-        if scheme.lower() != "bearer" or not token.strip():
-            return False
-        try:
+
+        def verify_token(token: str) -> dict[str, Any]:
             from firebase_admin import auth
-            auth.verify_id_token(token.strip(), app=self.server.firebase_app)
-            return True
+            return auth.verify_id_token(token, app=self.server.firebase_app)
+
+        try:
+            self.authenticated_uid = verified_firebase_uid(
+                self.headers.get("Authorization"), verify_token
+            )
         except Exception:
+            # Treat SDK/import/configuration errors as unavailable auth. Never
+            # let an infrastructure error turn a protected request public.
+            self.authenticated_uid = None
             return False
+        return self.authenticated_uid is not None
 
     def _list_products(self) -> None:
         try:
