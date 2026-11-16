@@ -21,6 +21,14 @@ iOS app. The server uses project `aesthelity-2026` and Firestore database
 `ogdb` by default; override with `FIREBASE_PROJECT_ID` and
 `FIRESTORE_DATABASE_ID` when needed.
 
+Ingredient aliases come from the approved `ingredientAliasCatalogs/active`
+document. The API reads it for each analysis and serves it to clients at
+`GET /api/v1/ingredient-aliases`. If the document is absent or Firestore is
+unavailable, the backend and iOS app use the bundled reviewed catalog. Seed it
+with `python3 Backend/seed_ingredient_aliases.py` to preview. Writing requires
+`INGREDIENT_ALIAS_EDITOR` and `--apply`; replacing an existing catalog also
+requires `--replace`.
+
 ## Start the simulator demo
 
 ```sh
@@ -40,15 +48,17 @@ The app's Analysis sheet offers four real API scenarios:
 - Partial-data example: `mask_partial`.
 
 For each run, the app gets product documents from `GET /api/v1/products`,
-normalizes the original ingredient strings with the bundled alias catalog,
-then posts the normalized product objects to `POST /api/v1/analyses`. The
-server verifies the catalog version through the active catalog and returns
-findings for display. Scenarios are labeled demo data; they are not a saved
-personal routine or profile.
+loads the current alias catalog from `GET /api/v1/ingredient-aliases`,
+normalizes the original ingredient strings deterministically, then posts the
+normalized product objects to `POST /api/v1/analyses`. The server verifies the
+catalog version through the active catalog and returns findings for display.
+Scenarios are labeled demo data; they are not a saved personal routine or
+profile.
 
 ## Routes
 
 - `GET /health`: API, rule, catalog, and Firestore database identifiers.
+- `GET /api/v1/ingredient-aliases`: current approved alias catalog for deterministic client normalization.
 - `GET /api/v1/products`: shared catalog records in API camelCase.
 - `GET /api/v1/products/{productID}`: one shared product.
 - `POST /api/v1/analyses`: evaluate one normalized AM or PM routine.

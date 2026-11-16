@@ -52,6 +52,36 @@ Imports use existing stable document IDs. Repeating an import replaces
 the same records without generating duplicate IDs. Imports do not delete
 records absent from the source dataset.
 
+## Approved ingredient aliases: ingredientAliasCatalogs/active
+
+This shared document is the current reviewed alias catalog used by the app and
+backend. Its document ID is `active`; increment `version` whenever a reviewed
+name, alias, class, or ambiguous term changes. The backend reads it for every
+analysis request and serves it through `GET /api/v1/ingredient-aliases`, so a
+valid update is available on the next request.
+
+| Field | Type | Requirement |
+|---|---|---|
+| version | integer | Required; non-negative content version |
+| reviewStatus | string | Required; must be `approved` to be served |
+| ingredients | array of maps | Required; `id`, `name`, `aliases`, `classes`, and optional reviewed references |
+| ambiguousTerms | array of maps | Required; terms, at least two known `candidateIDs`, and a note |
+| updatedAt | Firestore timestamp | Required; written by the seed/update operation |
+| updatedBy | string | Required; authorized editor's team identity |
+
+The `ingredients` and `ambiguousTerms` fields use the same shape as
+`Aesthelity/Aesthelity/Resources/SampleData/ingredient-aliases.json`. Exact
+names must not map to multiple canonical IDs or conflict with an ambiguous
+term. Unreviewed names stay out of `aliases`. The app retains the original
+ingredient text and only writes `ingredientID` for a confirmed match; uncertain,
+ambiguous, and unmatched rows remain ineligible for analysis.
+
+If the document is missing or Firestore cannot be read, the app and backend
+use the bundled approved catalog and report `catalogSource` as
+`bundled-fallback`. The seed command is dry-run by default. Use `--apply` for
+the initial write; replacing an existing active catalog also requires
+`--replace` and an authorized `INGREDIENT_ALIAS_EDITOR` identity.
+
 ## Proposed profile: users/{uid}
 
 The document ID is the Firebase Authentication UID.

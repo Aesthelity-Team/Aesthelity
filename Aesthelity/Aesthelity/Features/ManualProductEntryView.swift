@@ -7,7 +7,8 @@ struct ManualProductEntryView: View {
     @State private var attemptedSubmission = false
     @State private var preparedProduct: ManualProduct?
     @State private var saveError: String?
-    private let normalizer = try? IngredientNormalizer(catalog: .loadBundled())
+    @State private var normalizer: IngredientNormalizer?
+    @State private var loadingNormalizer = true
 
     private var errors: [ManualProductDraft.ValidationError] {
         attemptedSubmission ? draft.validationErrors() : []
@@ -44,7 +45,7 @@ struct ManualProductEntryView: View {
                 } footer: {
                     Text("Copy the label using commas or line breaks between ingredients. Use at most 120 characters per ingredient.")
                 }
-                if normalizer == nil {
+                if !loadingNormalizer && normalizer == nil {
                     Section {
                         Text("Ingredient information could not be loaded. Close this form and try again.")
                             .foregroundStyle(.red)
@@ -92,6 +93,16 @@ struct ManualProductEntryView: View {
             .onChange(of: draft) { _, _ in
                 preparedProduct = nil
                 saveError = nil
+            }
+            .task {
+                guard normalizer == nil else { return }
+                do {
+                    let catalog = try await IngredientAliasCatalogService().loadCatalog()
+                    normalizer = IngredientNormalizer(catalog: catalog)
+                } catch {
+                    loadingNormalizer = false
+                }
+                loadingNormalizer = false
             }
         }
     }

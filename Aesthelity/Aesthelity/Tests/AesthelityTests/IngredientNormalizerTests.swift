@@ -74,6 +74,24 @@ struct IngredientNormalizerTests {
         #expect(result.originalText == input)
     }
 
+    @Test func firestoreCatalogPayloadMapsReviewedAliasAndKeepsUnknownUnconfirmed() throws {
+        let data = Data("""
+        {"version":7,"catalogSource":"firestore","ingredients":[
+          {"id":"hyaluronic-acid","name":"Hyaluronic Acid","aliases":["Hyaluronan"],"classes":["humectant"]}
+        ],"ambiguousTerms":[]}
+        """.utf8)
+        let remoteCatalog = try IngredientAliasCatalog.load(data: data)
+        let remoteNormalizer = IngredientNormalizer(catalog: remoteCatalog)
+        let matched = remoteNormalizer.normalize("  Hyaluronan ")
+        let unknown = remoteNormalizer.normalize("Unobtainium Extract")
+
+        #expect(remoteNormalizer.catalogVersion == 7)
+        #expect(matched.status == .matched(ingredientID: "hyaluronic-acid"))
+        #expect(matched.originalText == "  Hyaluronan ")
+        #expect(unknown.status == .unmatched)
+        #expect(unknown.ingredientID == nil)
+    }
+
     @Test func spellingVariantsConverge() {
         let variants = ["Ascorbic Acid", "L-Ascorbic Acid", "l ascorbic acid", "ASCORBIC ACID", "Ascórbic Acid"]
         let ids = Set(variants.map { normalizer.normalize($0).ingredientID })
