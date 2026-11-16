@@ -14,6 +14,18 @@ struct RoutineProductPicker: View {
             || (product.brand?.localizedCaseInsensitiveContains(text) ?? false)
     }
 
+    private func isAlreadyAdded(_ product: RoutineProductSnapshot) -> Bool {
+        steps.contains { (step: RoutineStepItem) -> Bool in
+            if let stepRef = step.product?.reference {
+                return stepRef == product.reference
+            }
+            if let stepProdId = step.productId {
+                return stepProdId == product.productID
+            }
+            return false
+        }
+    }
+
     var body: some View {
         NavigationStack {
             List {
@@ -47,7 +59,7 @@ struct RoutineProductPicker: View {
     }
 
     private func row(_ product: RoutineProductSnapshot) -> some View {
-        let alreadyAdded = steps.contains { $0.product?.reference == product.reference || $0.productId == product.productID }
+        let alreadyAdded = isAlreadyAdded(product)
         return VStack(alignment: .leading, spacing: 8) {
             Text(product.name).font(.headline)
             if let brand = product.brand { Text(brand).font(.subheadline) }
@@ -103,35 +115,7 @@ struct RoutineStepsEditor: View {
             Text("STEPS · \(steps.count)").font(.headline)
             if steps.isEmpty { Text("Add your first product to build this routine.") }
             ForEach(Array(steps.enumerated()), id: \.element.id) { index, step in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("\(index + 1). \(step.title)").font(.headline)
-                        .accessibilityIdentifier("routine-step-\(index)")
-                    if let product = step.product {
-                        Text(product.provenance).font(.caption)
-                        RoutineIngredientInfo(product: product)
-                    } else {
-                        Text("Ingredient information unavailable for this existing step.").font(.caption)
-                    }
-                    HStack {
-                        Button { steps = RoutineEditor.moving(steps, from: index, to: index - 1) } label: {
-                            Image(systemName: "arrow.up").frame(minWidth: 44, minHeight: 44)
-                        }
-                        .disabled(index == 0)
-                        .accessibilityLabel("Move \(step.title) up")
-                        .accessibilityIdentifier("routine-up-\(index)")
-                        Button { steps = RoutineEditor.moving(steps, from: index, to: index + 1) } label: {
-                            Image(systemName: "arrow.down").frame(minWidth: 44, minHeight: 44)
-                        }
-                        .disabled(index == steps.count - 1)
-                        .accessibilityLabel("Move \(step.title) down")
-                        .accessibilityIdentifier("routine-down-\(index)")
-                        Spacer()
-                        Button("Remove", role: .destructive) { pendingRemoval = step }
-                            .accessibilityIdentifier("routine-remove-\(index)")
-                    }
-                }
-                .padding(14)
-                .background(.white, in: RoundedRectangle(cornerRadius: 14))
+                stepRow(index: index, step: step)
             }
             if steps.count >= RoutineEditor.maximumSteps {
                 Text("This routine has the maximum of eight steps.").font(.footnote)
@@ -152,5 +136,38 @@ struct RoutineStepsEditor: View {
             }
             Button("Keep product") { pendingRemoval = nil }
         }
+    }
+
+    private func stepRow(index: Int, step: RoutineStepItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("\(index + 1). \(step.title)").font(.headline)
+                .accessibilityIdentifier("routine-step-\(index)")
+                .accessibilityLabel(step.title)
+            if let product = step.product {
+                Text(product.provenance).font(.caption)
+                RoutineIngredientInfo(product: product)
+            } else {
+                Text("Ingredient information unavailable for this existing step.").font(.caption)
+            }
+            HStack {
+                Button { steps = RoutineEditor.moving(steps, from: index, to: index - 1) } label: {
+                    Image(systemName: "arrow.up").frame(minWidth: 44, minHeight: 44)
+                }
+                .disabled(index == 0)
+                .accessibilityLabel("Move \(step.title) up")
+                .accessibilityIdentifier("routine-up-\(index)")
+                Button { steps = RoutineEditor.moving(steps, from: index, to: index + 1) } label: {
+                    Image(systemName: "arrow.down").frame(minWidth: 44, minHeight: 44)
+                }
+                .disabled(index == steps.count - 1)
+                .accessibilityLabel("Move \(step.title) down")
+                .accessibilityIdentifier("routine-down-\(index)")
+                Spacer()
+                Button("Remove", role: .destructive) { pendingRemoval = step }
+                    .accessibilityIdentifier("routine-remove-\(index)")
+            }
+        }
+        .padding(14)
+        .background(.white, in: RoundedRectangle(cornerRadius: 14))
     }
 }

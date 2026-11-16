@@ -91,6 +91,8 @@ public struct ConfidenceScoreView: View {
                 .foregroundStyle(AppTheme.Semantic.inkBrand)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("Back")
+            .accessibilityLabel("Back")
             
             Spacer()
             

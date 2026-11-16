@@ -14,7 +14,7 @@ final class Sprint1DemoUITests: XCTestCase {
     private func launchFreshApp() -> XCUIApplication {
         XCUIDevice.shared.orientation = .portrait
         let app = XCUIApplication()
-        app.launchArguments = ["--pf01-ui-testing", "--pf01-reset-profile"]
+        app.launchArguments = ["--pf01-ui-testing", "--pf01-reset-profile", "--seed-routines"]
         app.launch()
         XCTAssertTrue(app.buttons["profile-get-started"].waitForExistence(timeout: 10), "A fresh launch should show the welcome screen.")
         return app
@@ -100,7 +100,7 @@ final class Sprint1DemoUITests: XCTestCase {
         XCTAssertTrue(text(app, "SPF 46").waitForExistence(timeout: 5), "Home should open on the AM routine.")
 
         app.buttons["PM"].tap()
-        let pmOrder = ["Oil Cleanser", "Niacinamide Serum", "Night Recovery Cream", "Hydrating Eye Balm"].map { text(app, $0) }
+        let pmOrder = ["Micellar Pre-Cleanse", "Gentle Foaming Wash", "Hyaluronic Acid", "Barrier Night Cream", "Lip Sleep Mask"].map { text(app, $0) }
         XCTAssertTrue(pmOrder[0].waitForExistence(timeout: 5), "PM should show the PM routine.")
         XCTAssertTrue(text(app, "SPF 46").waitForNonExistence(timeout: 5), "PM should not show AM steps.")
         for element in pmOrder {
@@ -109,11 +109,11 @@ final class Sprint1DemoUITests: XCTestCase {
         for (earlier, later) in zip(pmOrder, pmOrder.dropFirst()) {
             XCTAssertLessThan(earlier.frame.minY, later.frame.minY, "PM steps should appear in application order.")
         }
-        XCTAssertTrue(text(app, "Pending · Step 5").exists, "PM steps should show their status and step number.")
+        XCTAssertTrue(text(app, "Nourish · Step 5").exists, "PM steps should show their status and step number.")
 
         app.buttons["AM"].tap()
         XCTAssertTrue(text(app, "SPF 46").waitForExistence(timeout: 5), "AM should show the AM routine again.")
-        XCTAssertFalse(text(app, "Hydrating Eye Balm").exists)
+        XCTAssertFalse(text(app, "Lip Sleep Mask").exists)
     }
 
     @MainActor

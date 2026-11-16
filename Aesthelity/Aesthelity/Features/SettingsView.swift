@@ -52,6 +52,7 @@ public struct SettingsView: View {
     public var onBack: (() -> Void)?
     public var onSelectTab: ((Int) -> Void)?
     public var onDeleteScanHistory: (() -> Void)?
+    public var onSignOut: (() -> Void)?
     
     // MARK: - Local State
     @ObservedObject private var authService = FirebaseAuthService.shared
@@ -77,7 +78,8 @@ public struct SettingsView: View {
         selectedTab: Int = 4,
         onBack: (() -> Void)? = nil,
         onSelectTab: ((Int) -> Void)? = nil,
-        onDeleteScanHistory: (() -> Void)? = nil
+        onDeleteScanHistory: (() -> Void)? = nil,
+        onSignOut: (() -> Void)? = nil
     ) {
         self.skinType = skinType
         self.concerns = concerns
@@ -90,6 +92,7 @@ public struct SettingsView: View {
         self.onBack = onBack
         self.onSelectTab = onSelectTab
         self.onDeleteScanHistory = onDeleteScanHistory
+        self.onSignOut = onSignOut
     }
     
     public var body: some View {
@@ -119,6 +122,10 @@ public struct SettingsView: View {
                     
                     // Section 4: Cloud Sync & Account
                     accountSection
+                        .padding(.bottom, 24)
+                    
+                    // Section 5: Sign Out Button
+                    signOutButtonSection
                         .padding(.bottom, showsTabBar ? 24 : 36)
                 }
                 .padding(.horizontal, 24)
@@ -367,10 +374,12 @@ public struct SettingsView: View {
                     Button("Sign Out") {
                         syncService.stopRoutineListener()
                         try? authService.signOut()
+                        onSignOut?()
                     }
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(Color(hex: "#842029"))
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings.signOut")
                 }
             }
             .padding(.horizontal, 18)
@@ -383,6 +392,35 @@ public struct SettingsView: View {
                     .stroke(cardBorderColor, lineWidth: 1.2)
             )
         }
+    }
+    
+    // MARK: - 5.6. Sign Out Button Section
+    private var signOutButtonSection: some View {
+        Button(role: .destructive, action: {
+            syncService.stopRoutineListener()
+            try? authService.signOut()
+            onSignOut?()
+        }) {
+            HStack(spacing: 10) {
+                Spacer()
+                Image(systemName: "rectangle.portrait.and.arrow.right")
+                    .font(.system(size: 15, weight: .semibold))
+                Text("Sign Out")
+                    .font(.system(size: 15, weight: .semibold))
+                Spacer()
+            }
+            .foregroundStyle(Color(hex: "#DC3545"))
+            .padding(.vertical, 14)
+            .frame(maxWidth: .infinity)
+            .background(Color(hex: "#DC3545").opacity(0.08))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color(hex: "#DC3545").opacity(0.2), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("settings.signOut")
     }
     
     // MARK: - 6. Bottom Tab Bar
