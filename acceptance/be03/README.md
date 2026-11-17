@@ -38,17 +38,22 @@ profile/routine data when requests fail. Invalidate in-flight screen requests on
 selection changes, sign-out, or account changes (the #96 lifecycle pattern).
 Never store a result from a previous account into the newly selected account.
 
-## Remaining integration dependencies
+## Backend endpoints & integration status
 
-The checked-in backend exposes GET products, GET product, and POST analyses only.
-There are no profile or routine HTTP endpoints to call. Do not invent their
-schemas or send user IDs as an ownership override. Agree those routes/models with
-the #27/#28 backend owners, including verified Firebase identity and ownership.
+The backend endpoints supporting authenticated operations are now fully implemented and verified on this branch:
+- `POST /api/v1/analyses`: Protected analysis endpoint requiring a verified Firebase Bearer ID token with revocation check (`check_revoked=True`). Evaluates normalized routines against the AN-02 engine contract. Returns `401 UNAUTHENTICATED` on invalid/missing/revoked credentials, `400 INVALID_REQUEST` on bad input, and `500 INTERNAL_ERROR` on server failures.
+- `GET/PUT/DELETE /api/v1/users/{uid}/{kind}`: Landed via Issue #28 (`Backend/private_data.py`). Supports user-scoped storage for `profile`, `routines`, `analyses`, and `products`. Strictly enforces that the authenticated token UID matches the URL owner and prevents cross-user data access.
 
-Personal analysis screen integration is intentionally pending: the team's
-#97–#99 contract/fixtures, a configured HTTPS backend, and the #27/#28 auth/data
-isolation handoff are needed. Existing stores remain authoritative for local
-profile/routine data. This branch does not enable Firestore synchronization.
+### Remaining frontend integration work
+
+1. **Wire personal analysis screen to `BackendAnalysisAPI.analyzeAuthenticated`**:
+   Connect the analysis UI to call the authenticated client method instead of demo loopback endpoints when signed in.
+2. **UI lifecycle & error handling**:
+   Show loading state during analysis; handle `APIClientError.signInRequired` by presenting a sign-in prompt; retain local routine/profile data when analysis fails; cancel in-flight analysis requests if user switches accounts or signs out.
+3. **Configure deployment HTTPS URL**:
+   `AuthenticatedAPIClient` requires HTTPS (`http://` is rejected with `.configuration`). Configure `AesthelityAPIBaseURL` in `Info.plist` with a valid HTTPS host.
+4. **End-to-end verification with live Firebase**:
+   Perform end-to-end testing with a live signed-in Firebase user session, verifying token refresh, revoked-token handling, and UI response rendering.
 
 ## Validation
 

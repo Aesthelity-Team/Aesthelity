@@ -15,6 +15,7 @@ import json
 import sys
 import threading
 import unittest
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -490,6 +491,48 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
                 self.assertEqual(status, 401)
                 self.assertIn("requestID", body["error"])
                 self.assertTrue(body["error"]["requestID"])  # non-empty
+
+
+    def test_server_failure_returns_500_with_internal_error(self):
+        """
+        Unexpected engine or internal errors must return 500 INTERNAL_ERROR
+        without leaking server details or secrets in the response.
+        """
+        with patch("Backend.analysis_api.evaluate_routine", side_effect=RuntimeError("internal crash detail")):
+            status, body = _request(self.server, "POST", body=VALID_NORMAL_PAYLOAD)
+            self.assertEqual(status, 500)
+            self.assertEqual(body["error"]["code"], "INTERNAL_ERROR")
+            self.assertEqual(body["error"]["message"], "The analysis could not be completed.")
+            self.assertNotIn("internal crash detail", json.dumps(body))
+            self.assertIn("requestID", body["error"])
+
+    def test_production_auth_verifies_with_check_revoked_true(self):
+        """
+        When token_verifier is not injected (production configuration), the
+        server must call firebase_admin.auth.verify_id_token with check_revoked=True.
+        """
+        prod_server = _make_server(demo_mode=False)
+        # Delete injected token_verifier so it takes the production SDK branch
+        del prod_server.token_verifier
+        fake_app = object()
+        prod_server.firebase_app = fake_app
+
+        t = threading.Thread(target=prod_server.serve_forever, daemon=True)
+        t.start()
+        try:
+            mock_verify = MagicMock(return_value={"uid": "prod-user-123"})
+            with patch("firebase_admin.auth.verify_id_token", mock_verify):
+                status, body = _request(
+                    prod_server, "POST", body=VALID_NORMAL_PAYLOAD, token="prod-raw-token"
+                )
+                self.assertEqual(status, 200)
+                mock_verify.assert_called_once_with(
+                    "prod-raw-token", app=fake_app, check_revoked=True
+                )
+        finally:
+            prod_server.shutdown()
+            prod_server.server_close()
+            t.join()
 
 
 if __name__ == "__main__":
