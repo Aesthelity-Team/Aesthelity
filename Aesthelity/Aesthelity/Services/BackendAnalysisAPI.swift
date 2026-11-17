@@ -8,7 +8,17 @@ struct ProductListResponse: Decodable {
 
 struct RecordedAllergiesPayload: Encodable {
     let status: String
-    let ingredientIDs: [String]
+    let ingredientIDs: [String]?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, ingredientIDs
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(ingredientIDs, forKey: .ingredientIDs)
+    }
 }
 
 struct AnalysisRequestPayload: Encodable {
