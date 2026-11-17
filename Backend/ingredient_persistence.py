@@ -8,6 +8,10 @@ Manual products follow #108 isolation: ownerUID must equal the authenticated
 Firebase UID; callers supply the client-assigned ManualProduct UUID as productId.
 Catalog products use their stable catalog IDs and may omit ownerUID.
 
+Before replacing ``productIngredients/{productId}``, a transaction reads the
+existing doc: another user's manual record → ``forbidden``; catalog vs manual
+collision → ``conflict``; same owner + same sourceType → update.
+
 Unresolved IDs are ``unresolved-<sha256(name_key)[:16]>`` so identical normalized
 originalText values share one unresolved master record. Tentative/unknown rows
 never merge into an identified master record.
@@ -240,6 +244,9 @@ class FakeFirestore:
     def batch(self) -> "FakeBatch":
         return FakeBatch(self)
 
+    def transaction(self) -> "FakeTransaction":
+        return FakeTransaction(self)
+
 
 class FakeCollection:
     def __init__(self, db: FakeFirestore, name: str):
@@ -256,7 +263,7 @@ class FakeDocumentRef:
         self.collection = collection
         self.id = doc_id
 
-    def get(self) -> "FakeSnapshot":
+    def get(self, transaction: Any = None) -> "FakeSnapshot":
         data = self.db.docs.get((self.collection, self.id))
         return FakeSnapshot(self.id, data)
 
@@ -307,6 +314,27 @@ class FakeBatch:
         self.ops.clear()
 
 
+class FakeTransaction:
+    """Minimal transaction stand-in: read current docs, buffer sets, commit once."""
+
+    def __init__(self, db: FakeFirestore):
+        self.db = db
+        self.ops: list[tuple[FakeDocumentRef, dict[str, Any], bool]] = []
+
+    def set(self, ref: FakeDocumentRef, data: Mapping[str, Any], merge: bool = False) -> None:
+        self.ops.append((ref, dict(data), merge))
+
+    def commit(self) -> None:
+        if self.db.fail_next_commit:
+            self.db.fail_next_commit = False
+            raise IngredientPersistenceError("firestore_unavailable")
+        if len(self.ops) > MAX_BATCH_OPS:
+            raise IngredientPersistenceError("firestore_batch_too_large")
+        for ref, data, merge in self.ops:
+            ref.set(data, merge=merge)
+        self.db.commits += 1
+        self.ops.clear()
+
 def _firestore_array_union(values: Sequence[str]) -> Any:
     """Prefer the Admin SDK ArrayUnion when available; otherwise the local stand-in."""
 
@@ -329,6 +357,52 @@ def _prepare_writes(payload: Mapping[str, Any]) -> dict[str, Any]:
     return prepared
 
 
+def assert_product_overwrite_allowed(
+    existing: Mapping[str, Any] | None,
+    *,
+    source_type: str,
+    owner_uid: str | None,
+) -> None:
+    """Gate replacing ``productIngredients/{id}`` (ownership + sourceType).
+
+    - Missing doc → allow create.
+    - Existing ``sourceType`` differs from the write → ``conflict``.
+    - Existing manual owned by another user (or no actor) → ``forbidden``.
+    - Same sourceType and (for manual) same owner → allow update.
+    """
+
+    if existing is None:
+        return
+    existing_source = existing.get("sourceType")
+    if existing_source not in SOURCE_TYPES or existing_source != source_type:
+        raise IngredientPersistenceError("conflict")
+    if source_type == "manual":
+        if not owner_uid or existing.get("ownerUID") != owner_uid:
+            raise IngredientPersistenceError("forbidden")
+
+
+def _execute_persist_transaction(db: Any, callback) -> None:
+    """Run ``callback(transaction)`` on FakeFirestore or the Admin SDK."""
+
+    transaction = db.transaction()
+    if isinstance(transaction, FakeTransaction):
+        callback(transaction)
+        transaction.commit()
+        return
+    try:
+        from google.cloud.firestore_v1 import transactional
+    except ImportError:
+        from firebase_admin import firestore as admin_firestore
+
+        transactional = admin_firestore.transactional
+
+    @transactional
+    def _run(transaction):
+        callback(transaction)
+
+    _run(transaction)
+
+
 def persist_matching_result(
     db: Any,
     *,
@@ -345,12 +419,13 @@ def persist_matching_result(
     failure_code: str | None = None,
     updated_by: str = "ingredient-matching",
 ) -> dict[str, Any]:
-    """Write ``productIngredients`` + master merges in one Firestore batch.
+    """Write ``productIngredients`` + master merges in one Firestore transaction.
 
-    Masters use ``set(..., merge=True)`` so CosIng import fields are not wiped.
-    Raises ``IngredientPersistenceError`` on failure; callers must return an
-    explicit failure (HTTP 503) and must not claim success. Unit tests should
-    pass ``FakeFirestore`` — do not write to the real project without asking.
+    Reads the existing product doc first (ownership / sourceType gate). Masters
+    use ``set(..., merge=True)`` so CosIng import fields are not wiped. Raises
+    ``IngredientPersistenceError`` (``forbidden``, ``conflict``, or
+    ``firestore_unavailable``); callers must not claim success. Unit tests
+    should pass ``FakeFirestore`` — do not write to the real project without asking.
     """
 
     submitted = (
@@ -375,14 +450,23 @@ def persist_matching_result(
     if len(plan["masters"]) + 1 > MAX_BATCH_OPS:
         raise IngredientPersistenceError("firestore_batch_too_large")
 
-    try:
-        batch = db.batch()
-        product_ref = db.collection(PRODUCT_INGREDIENTS_COLLECTION).document(product_id)
-        batch.set(product_ref, _prepare_writes(plan["product"]), merge=False)
-        for master_id, payload in plan["masters"].items():
+    product_ref = db.collection(PRODUCT_INGREDIENTS_COLLECTION).document(product_id)
+    prepared_product = _prepare_writes(plan["product"])
+    prepared_masters = {
+        master_id: _prepare_writes(payload) for master_id, payload in plan["masters"].items()
+    }
+
+    def _write(transaction: Any) -> None:
+        snapshot = product_ref.get(transaction=transaction)
+        existing = snapshot.to_dict() if snapshot.exists else None
+        assert_product_overwrite_allowed(existing, source_type=source_type, owner_uid=owner_uid)
+        transaction.set(product_ref, prepared_product, merge=False)
+        for master_id, payload in prepared_masters.items():
             master_ref = db.collection(INGREDIENTS_COLLECTION).document(master_id)
-            batch.set(master_ref, _prepare_writes(payload), merge=True)
-        batch.commit()
+            transaction.set(master_ref, payload, merge=True)
+
+    try:
+        _execute_persist_transaction(db, _write)
     except IngredientPersistenceError:
         raise
     except Exception as error:

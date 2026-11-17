@@ -15,6 +15,7 @@ from Backend.analysis_engine_input import (
     AnalysisInputAdapterError,
     analysis_normalization,
     analysis_product,
+    analysis_routine_normalization,
     analysis_row,
     canonical_records,
     derive_list_status,
@@ -26,6 +27,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BUNDLED = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" / "ingredient-aliases.json"
 APPROVED = json.loads(BUNDLED.read_text(encoding="utf-8"))
 ANALYSIS_BRANCH_FILE = "origin/99-ai-analysis-engine:analysis_engine/ai_analysis.py"
+_ENGINE_TMP = None
 
 CSV = """COSING Ref No,INCI name,INN name,Ph. Eur. Name,CAS No,EINECS/ELINCS No,Chem/IUPAC Name / Description,Restriction,Function,Update Date
 31959,"AQUA","water","",7732-18-5,231-791-2,"Water","","SOLVENT",01/01/2010
@@ -198,13 +200,15 @@ class EndpointTests(unittest.TestCase):
 def _load_analysis_engine():
     """Load ai_analysis.py from the #99 branch into a temp dir; nothing is vendored."""
 
+    global _ENGINE_TMP
     try:
         source = subprocess.run(["git", "show", ANALYSIS_BRANCH_FILE], cwd=ROOT, capture_output=True,
                                 text=True, check=True, timeout=20).stdout
     except (OSError, subprocess.SubprocessError):
         return None
-    directory = tempfile.mkdtemp(prefix="ai-analysis-")
-    path = Path(directory) / "ai_analysis_branch99.py"
+    # Keep TemporaryDirectory alive for the process; it removes the dir on exit.
+    _ENGINE_TMP = tempfile.TemporaryDirectory(prefix="ai-analysis-")
+    path = Path(_ENGINE_TMP.name) / "ai_analysis_branch99.py"
     path.write_text(source, encoding="utf-8")
     spec = importlib.util.spec_from_file_location("ai_analysis_branch99", path)
     module = importlib.util.module_from_spec(spec)
@@ -282,6 +286,127 @@ class AnalysisEngineIntegrationTests(unittest.TestCase):
         self.assertEqual(cautions[0]["ingredientIDs"], ["retinol", "glycolic-acid"])
         sent = {p["productID"]: [r["ingredientID"] for r in p["ingredients"]] for p in provider.contexts[0]["products"]}
         self.assertNotIn("4-isobutylresorcinol", sent["retinol-serum"])
+
+
+def product_envelope(product_id, texts, list_status=None, **kwargs):
+    """One product as the resolve endpoint's analysisInput would carry it."""
+
+    product = analysis_product(product_id, resolve(texts), APPROVED, list_status=list_status)
+    return analysis_normalization([product], catalog_version=APPROVED["version"],
+                                  normalization_id=f"n-{product_id}", **kwargs)
+
+
+class RoutineNormalizationTests(unittest.TestCase):
+    def test_merges_products_and_keeps_provenance(self):
+        cleanser = product_envelope("cleanser", ["Aqua", "Glycolic Acid"], "complete")
+        serum = product_envelope("serum", ["Water", "Retinol"], "complete")
+        routine = analysis_routine_normalization([{"analysisInput": cleanser}, serum], normalization_id="r1")
+        self.assertEqual(routine["contractVersion"], 1)
+        self.assertEqual(routine["normalizationID"], "r1")
+        self.assertEqual([p["productID"] for p in routine["products"]], ["cleanser", "serum"])
+        self.assertEqual([r["originalText"] for r in routine["products"][1]["ingredients"]], ["Water", "Retinol"])
+        self.assertEqual([r["index"] for r in routine["products"][1]["ingredients"]], [0, 1])
+        self.assertEqual(routine["sourceNormalizationIDs"], {"cleanser": ["n-cleanser"], "serum": ["n-serum"]})
+        self.assertEqual(routine["canonicalDataVersion"], APPROVED["version"])
+        self.assertEqual(routine["providerStatus"], "ok")
+
+    def test_duplicate_product_dedupes_or_rejects(self):
+        serum = product_envelope("serum", ["Retinol"], "complete")
+        routine = analysis_routine_normalization([serum, copy.deepcopy(serum)])
+        self.assertEqual([p["productID"] for p in routine["products"]], ["serum"])
+        other = product_envelope("serum", ["Aqua"], "complete")
+        with self.assertRaises(AnalysisInputAdapterError):
+            analysis_routine_normalization([serum, other])
+
+    def test_routine_list_status(self):
+        done = product_envelope("a", ["Aqua"], "complete")
+        partial = product_envelope("b", ["Retinol"])
+        none = product_envelope("c", [])
+        self.assertEqual(analysis_routine_normalization([done])["routineListStatus"], "complete")
+        mixed = analysis_routine_normalization([done, partial])
+        self.assertEqual(mixed["routineListStatus"], "partial")
+        self.assertEqual([p["listStatus"] for p in mixed["products"]], ["complete", "partial"])
+        self.assertEqual(analysis_routine_normalization([done, none])["routineListStatus"], "partial")
+        self.assertEqual(analysis_routine_normalization([none])["routineListStatus"], "unavailable")
+
+    def test_unknowns_and_uncertain_rows_preserved(self):
+        env = product_envelope("toner", ["Aqua", "4-Isobutylresorcinol", "Mystery Complex 9", "Vitamin E"], "complete")
+        routine = analysis_routine_normalization([env])
+        self.assertEqual([r["status"] for r in routine["products"][0]["ingredients"]],
+                         ["matched", "uncertain", "unknown", "unknown"])
+        self.assertEqual(routine["products"][0]["ingredients"], env["products"][0]["ingredients"])
+        self.assertTrue(routine["uncertaintyPreserved"])
+
+    def test_provider_status_and_versions(self):
+        ok = product_envelope("a", ["Aqua"], "complete")
+        down = product_envelope("b", ["Aqua"], "complete", provider_status="unavailable")
+        routine = analysis_routine_normalization([ok, down])
+        self.assertEqual(routine["providerStatus"], "unavailable")
+        ok2 = dict(product_envelope("c", ["Aqua"], "complete"), canonicalDataVersion=999)
+        self.assertIsNone(analysis_routine_normalization([ok, ok2])["canonicalDataVersion"])
+
+    def test_empty_and_invalid_input(self):
+        with self.assertRaises(AnalysisInputAdapterError):
+            analysis_routine_normalization([])
+        with self.assertRaises(AnalysisInputAdapterError):
+            analysis_routine_normalization([{"contractVersion": 2, "products": []}])
+        with self.assertRaises(AnalysisInputAdapterError):
+            analysis_routine_normalization(["not-an-object"])
+        bad = product_envelope("a", ["Aqua", "Retinol"], "complete")
+        bad["products"][0]["ingredients"][1]["index"] = 5
+        with self.assertRaises(AnalysisInputAdapterError):
+            analysis_routine_normalization([bad])
+
+
+@unittest.skipIf(ENGINE is None, f"{ANALYSIS_BRANCH_FILE} not available (git fetch origin 99-ai-analysis-engine)")
+class RoutineEngineContractTests(unittest.TestCase):
+    """Routine helper output fed straight into Mia's real #99 engine."""
+
+    CONTEXT = {"period": "pm", "recordedAllergies": {"status": "known", "ingredientIDs": []}}
+
+    def routine(self):
+        return analysis_routine_normalization([
+            product_envelope("retinol-serum", ["Aqua", "Retinol", "4-Isobutylresorcinol"], "complete"),
+            {"analysisInput": product_envelope("glycolic-toner", ["Water", "Glycolic Acid", "Mystery"], "complete")},
+            product_envelope("unknown-cream", []),
+        ], normalization_id="routine-contract")
+
+    def test_validate_inputs_accepts_routine(self):
+        products, _, has_unresolved, unresolved = ENGINE._validate_inputs(
+            self.routine(), self.CONTEXT, canonical_records(APPROVED), [CAUTION_REFERENCE])
+        resolved = {p["productID"]: [r["ingredientID"] for r in p["ingredients"]] for p in products}
+        self.assertEqual(resolved, {"retinol-serum": ["water", "retinol"],
+                                    "glycolic-toner": ["water", "glycolic-acid"], "unknown-cream": []})
+        self.assertTrue(has_unresolved)
+        self.assertEqual(sorted(u["reasonCode"] for u in unresolved),
+                         ["normalization-uncertain", "normalization-unknown", "unavailable-list"])
+
+    def test_analyze_normalized_routine_returns_result(self):
+        provider = FakeProvider({"assessment": "findings", "findings": [{
+            "referenceIDs": ["retinoid-exfoliant"], "outcome": "caution",
+            "productIDs": ["retinol-serum", "glycolic-toner"], "ingredientIDs": ["retinol", "glycolic-acid"],
+            "explanation": "Retinol with an exfoliant may increase irritation.", "reason": "Reference matches.",
+        }]})
+        result = ENGINE.analyze_normalized_routine(
+            self.routine(), self.CONTEXT, canonical_records(APPROVED), [CAUTION_REFERENCE], provider)
+        self.assertEqual(result["contractVersion"], 1)
+        self.assertEqual(result["normalizationID"], "routine-contract")
+        self.assertEqual(result["analysisProviderStatus"], "ok")
+        self.assertEqual(result["productIDs"], ["retinol-serum", "glycolic-toner", "unknown-cream"])
+        self.assertEqual(result["completeness"], "incomplete")
+        self.assertEqual(len([f for f in result["findings"] if f["outcome"] == "caution"]), 1)
+
+    def test_all_complete_routine_can_be_complete(self):
+        routine = analysis_routine_normalization([
+            product_envelope("serum", ["Retinol"], "complete"),
+            product_envelope("toner", ["Glycolic Acid"], "complete"),
+        ])
+        self.assertEqual(routine["routineListStatus"], "complete")
+        provider = FakeProvider({"assessment": "no_findings", "findings": []})
+        result = ENGINE.analyze_normalized_routine(
+            routine, self.CONTEXT, canonical_records(APPROVED), [CAUTION_REFERENCE], provider)
+        self.assertEqual(result["completeness"], "complete")
+        self.assertEqual(result["outcome"], "noFindings")
 
 
 if __name__ == "__main__":

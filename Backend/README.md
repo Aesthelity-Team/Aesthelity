@@ -95,6 +95,12 @@ Same auth as analyses (Firebase ID token). Local demo mode
 | `format` | no | — | `analysis-input` adds the #99 envelope |
 | `listStatus` | with format | derived | `complete` \| `partial` \| `unavailable` |
 
+**listStatus for manual entry.** With rows and no `listStatus`, the default is
+`partial` (a scan or paste does not prove the whole label was read), which the
+#99 engine reports as incomplete. When the user typed the full ingredient list,
+manual entry should send `"listStatus": "complete"`; send `partial` when they
+entered only some ingredients.
+
 **Example request**
 
 ```json
@@ -104,7 +110,9 @@ Same auth as analyses (Firebase ID token). Local demo mode
   "ai": true,
   "persist": true,
   "productID": "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
-  "sourceType": "manual"
+  "sourceType": "manual",
+  "format": "analysis-input",
+  "listStatus": "complete"
 }
 ```
 
@@ -182,6 +190,17 @@ Same auth as analyses (Firebase ID token). Local demo mode
 }
 ```
 
+**Ownership on persist.** Replacing `productIngredients/{productID}` reads the
+existing doc in a Firestore transaction first. Another user's manual record →
+HTTP **403** (`forbidden`, no write). Catalog vs manual collision on the same
+id → HTTP **409** (`conflict`, no write). Same owner + same `sourceType` →
+update.
+
+**Request validation** (`contractVersion`, `ai`, `ingredients`, `persist`,
+`sourceType`, `productID`, `format`, `listStatus`) runs **before** any AI call
+or Firestore write. Invalid `format` → HTTP **400** with zero AI calls and
+zero writes.
+
 **Firestore write failure** when `persist: true` — HTTP **503**, rows still in the body:
 
 ```json
@@ -258,6 +277,22 @@ records = canonical_records(approved_catalog)
 
 Over HTTP, add `"format": "analysis-input"` (optional `productID`, `listStatus`).
 Default without one: empty → `unavailable`, else `partial`.
+
+**Routine (several products).** `analysis_routine_normalization(payloads)`
+merges per-product `analysisInput` envelopes (or whole resolve responses) into
+one normalization for `analyze_normalized_routine`. Each product keeps its own
+`productID`, `listStatus` and rows; unknown/uncertain rows stay as they are.
+The same product twice with identical content is kept once; conflicting
+content under one `productID` is rejected. `providerStatus` is `ok` only if
+every source was ok. `routineListStatus` is `complete` only if every product
+is complete (`unavailable` if all are, else `partial`).
+
+```python
+from Backend.analysis_engine_input import analysis_routine_normalization
+
+routine = analysis_routine_normalization([cleanser_response, serum_response])
+result = analyze_normalized_routine(routine, routine_context, records, references, provider)
+```
 
 ### Run locally
 

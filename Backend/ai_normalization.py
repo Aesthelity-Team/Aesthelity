@@ -50,6 +50,7 @@ __all__ = [
     "ProviderError",
     "OpenRouterNormalizationProvider",
     "apply_ai_normalization",
+    "catalog_issue_status_rows",
     "coverage_for_rows",
     "empty_ai_failure_rows",
     "ground_ai_suggestions",
@@ -175,6 +176,43 @@ def coverage_for_rows(rows: Sequence[Mapping[str, Any]]) -> str:
     if confirmed == 0:
         return "unknown"
     return "partial"
+
+
+def catalog_issue_status_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Attach #98 issue statuses when AI matching is explicitly opted out.
+
+    Catalog resolver rows reuse a ``status`` field for resolved/ambiguous/
+    unknown kinds; overwrite it with the issue statuses used for coverage.
+    """
+
+    enriched: list[dict[str, Any]] = []
+    for row in rows:
+        out = dict(row)
+        mapping = out.get("mapping")
+        if mapping == "confirmed":
+            out["status"] = "identified"
+            out["normalizedName"] = out.get("canonicalName")
+            out["bestGuess"] = None
+            out["explanation"] = out.get("reason") or "approved-catalog match"
+        elif mapping == "uncertain":
+            out["status"] = "tentative"
+            out["normalizedName"] = None
+            out["bestGuess"] = out.get("canonicalName") or out.get("suggestedID")
+            out["explanation"] = out.get("reason") or "reference-catalog-only"
+        elif mapping == "ambiguous":
+            candidates = ", ".join(out.get("candidateIDs") or []) or "none"
+            out["status"] = "tentative"
+            out["normalizedName"] = None
+            out["bestGuess"] = None
+            out["explanation"] = f"ambiguous: {candidates}"
+            out["reason"] = out.get("reason") or f"ambiguous: {candidates}"
+        else:
+            out["status"] = "unknown"
+            out["normalizedName"] = None
+            out["bestGuess"] = None
+            out["explanation"] = out.get("reason") or "not_in_catalog"
+        enriched.append(out)
+    return enriched
 
 
 def _base_row(index: int, text: str) -> dict[str, Any]:

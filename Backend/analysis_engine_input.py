@@ -233,3 +233,95 @@ def analysis_normalization(
             for product in product_list
         ),
     }
+
+
+def _routine_list_status(statuses: list[str]) -> str:
+    # The routine is complete only when every product's full list was captured.
+    if all(status == "complete" for status in statuses):
+        return "complete"
+    if all(status == "unavailable" for status in statuses):
+        return "unavailable"
+    return "partial"
+
+
+def _shared(values: list[Any]) -> Any:
+    # A version/model field survives the merge only when every source agrees.
+    distinct = {repr(value) for value in values}
+    return values[0] if values and len(distinct) == 1 else None
+
+
+def analysis_routine_normalization(
+    payloads: Iterable[Mapping[str, Any]],
+    *,
+    normalization_id: str | None = None,
+) -> dict[str, Any]:
+    """Combine per-product #99 envelopes into one routine ``normalization``.
+
+    Each payload is an ``analysis_normalization`` envelope, or a resolve
+    response body carrying one under ``analysisInput``. Products keep their
+    own ``productID``, ``listStatus`` and rows (index, ``originalText``,
+    status) untouched, so unknown/uncertain rows stay unknown/uncertain and
+    every row stays attributable to its product. The same product sent twice
+    with identical content is kept once; different content under one
+    ``productID`` is rejected.
+
+    ``providerStatus`` is ``ok`` only if every source was ok, otherwise the
+    first non-ok status (the #99 engine then reports incomplete).
+    ``routineListStatus`` is ``complete`` only if every product is complete,
+    ``unavailable`` if every product is, else ``partial``.
+    """
+
+    envelopes: list[Mapping[str, Any]] = []
+    for payload in payloads:
+        if not isinstance(payload, Mapping):
+            raise AnalysisInputAdapterError("Each routine payload must be an object.")
+        envelope = payload.get("analysisInput", payload)
+        if not isinstance(envelope, Mapping) or envelope.get("contractVersion") != CONTRACT_VERSION:
+            raise AnalysisInputAdapterError("Each routine payload needs a contractVersion 1 analysis-input envelope.")
+        if not isinstance(envelope.get("products"), list):
+            raise AnalysisInputAdapterError("Each analysis-input envelope needs a products array.")
+        envelopes.append(envelope)
+    if not envelopes:
+        raise AnalysisInputAdapterError("At least one product payload is required.")
+
+    products: list[dict[str, Any]] = []
+    by_id: dict[str, dict[str, Any]] = {}
+    sources: dict[str, list[str]] = {}
+    for envelope in envelopes:
+        source_id = envelope.get("normalizationID")
+        for product in envelope["products"]:
+            if not isinstance(product, Mapping):
+                raise AnalysisInputAdapterError("Each product must be an object.")
+            product_id = product.get("productID")
+            if not isinstance(product_id, str) or not product_id.strip():
+                raise AnalysisInputAdapterError("productID must be a non-empty string.")
+            rows = product.get("ingredients")
+            if not isinstance(rows, list) or any(
+                not isinstance(row, Mapping) or row.get("index") != index for index, row in enumerate(rows)
+            ):
+                raise AnalysisInputAdapterError(f"Product {product_id!r} needs ingredient rows with sequential index.")
+            status = derive_list_status(rows, product.get("listStatus"))
+            merged = {**dict(product), "listStatus": status, "ingredients": [dict(row) for row in rows]}
+            if product_id in by_id:
+                if by_id[product_id] != merged:
+                    raise AnalysisInputAdapterError(f"productID {product_id!r} appears twice with different content.")
+                continue
+            by_id[product_id] = merged
+            products.append(merged)
+            if isinstance(source_id, str):
+                sources.setdefault(product_id, []).append(source_id)
+
+    provider_statuses = [envelope.get("providerStatus") or "ok" for envelope in envelopes]
+    provider_status = next((status for status in provider_statuses if status != "ok"), "ok")
+    routine = analysis_normalization(
+        products,
+        catalog_version=_shared([envelope.get("canonicalDataVersion") for envelope in envelopes]),
+        reference_catalog_version=_shared([envelope.get("referenceCatalogVersion") for envelope in envelopes]),
+        normalization_id=normalization_id,
+        provider_status=provider_status,
+        model=_shared([envelope.get("model") for envelope in envelopes]),
+        prompt_version=_shared([envelope.get("promptVersion") for envelope in envelopes]),
+    )
+    routine["routineListStatus"] = _routine_list_status([product["listStatus"] for product in products])
+    routine["sourceNormalizationIDs"] = sources
+    return routine

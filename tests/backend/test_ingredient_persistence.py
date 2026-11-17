@@ -13,6 +13,7 @@ from Backend.ingredient_persistence import (
     FakeFirestore,
     IngredientPersistenceError,
     assert_owner_can_read,
+    assert_product_overwrite_allowed,
     master_id_for_row,
     persist_matching_result,
     unresolved_master_id,
@@ -197,6 +198,127 @@ class PersistenceTests(unittest.TestCase):
         self.assertNotIn(("productIngredients", "p-fail"), self.db.docs)
         self.assertEqual(self.db.commits, 0)
 
+    def test_other_user_cannot_overwrite_manual_record(self):
+        persist_matching_result(
+            self.db,
+            product_id="shared-id",
+            rows=self.rows[:1],
+            coverage="complete",
+            source_type="manual",
+            owner_uid="user-a",
+            submitted_ingredients=["niacinimide"],
+        )
+        before = dict(self.db.docs[("productIngredients", "shared-id")])
+        commits_before = self.db.commits
+        with self.assertRaises(IngredientPersistenceError) as ctx:
+            persist_matching_result(
+                self.db,
+                product_id="shared-id",
+                rows=self.rows[:1],
+                coverage="complete",
+                source_type="manual",
+                owner_uid="user-b",
+                submitted_ingredients=["Water"],
+            )
+        self.assertEqual(str(ctx.exception), "forbidden")
+        self.assertEqual(self.db.docs[("productIngredients", "shared-id")], before)
+        self.assertEqual(self.db.commits, commits_before)
+
+    def test_catalog_and_manual_cannot_clobber_each_other(self):
+        persist_matching_result(
+            self.db,
+            product_id="clash-id",
+            rows=self.rows[:1],
+            coverage="complete",
+            source_type="manual",
+            owner_uid="user-a",
+        )
+        before = dict(self.db.docs[("productIngredients", "clash-id")])
+        with self.assertRaises(IngredientPersistenceError) as ctx:
+            persist_matching_result(
+                self.db,
+                product_id="clash-id",
+                rows=self.rows[:1],
+                coverage="complete",
+                source_type="catalog",
+                owner_uid=None,
+            )
+        self.assertEqual(str(ctx.exception), "conflict")
+        self.assertEqual(self.db.docs[("productIngredients", "clash-id")], before)
+
+        catalog_db = FakeFirestore()
+        persist_matching_result(
+            catalog_db,
+            product_id="catalog-1",
+            rows=self.rows[:1],
+            coverage="complete",
+            source_type="catalog",
+            owner_uid=None,
+        )
+        catalog_before = dict(catalog_db.docs[("productIngredients", "catalog-1")])
+        with self.assertRaises(IngredientPersistenceError) as ctx:
+            persist_matching_result(
+                catalog_db,
+                product_id="catalog-1",
+                rows=self.rows[:1],
+                coverage="complete",
+                source_type="manual",
+                owner_uid="user-a",
+            )
+        self.assertEqual(str(ctx.exception), "conflict")
+        self.assertEqual(catalog_db.docs[("productIngredients", "catalog-1")], catalog_before)
+
+    def test_same_user_manual_update_still_works(self):
+        persist_matching_result(
+            self.db,
+            product_id="mine",
+            rows=self.rows[:1],
+            coverage="complete",
+            source_type="manual",
+            owner_uid="user-a",
+            submitted_ingredients=["niacinimide"],
+        )
+        persist_matching_result(
+            self.db,
+            product_id="mine",
+            rows=self.rows[1:2],
+            coverage="complete",
+            source_type="manual",
+            owner_uid="user-a",
+            submitted_ingredients=["Aqua"],
+        )
+        product = self.db.docs[("productIngredients", "mine")]
+        self.assertEqual(product["ownerUID"], "user-a")
+        self.assertEqual(product["submittedIngredients"], ["Aqua"])
+        self.assertEqual(product["ingredients"][0]["originalText"], "Aqua")
+
+    def test_overwrite_gate_helpers(self):
+        assert_product_overwrite_allowed(None, source_type="manual", owner_uid="user-a")
+        with self.assertRaises(IngredientPersistenceError):
+            assert_product_overwrite_allowed(
+                {"sourceType": "manual", "ownerUID": "user-a"},
+                source_type="manual",
+                owner_uid="user-b",
+            )
+        with self.assertRaises(IngredientPersistenceError):
+            assert_product_overwrite_allowed(
+                {"sourceType": "catalog", "ownerUID": None},
+                source_type="manual",
+                owner_uid="user-a",
+            )
+
+
+class CountingProvider:
+    model = "fake"
+    last_model = "fake"
+
+    def __init__(self):
+        self.calls = 0
+
+    def resolve(self, texts):
+        self.calls += 1
+        return {"ingredients": [ai_row(index, "identified", "Water") for index, _ in enumerate(texts)]}
+
 
 class EndpointPersistTests(unittest.TestCase):
     def post(self, body, *, db=None, provider=None, uid="user-a"):
@@ -262,6 +384,92 @@ class EndpointPersistTests(unittest.TestCase):
         self.assertEqual(captured["body"]["status"], "failed")
         self.assertEqual(captured["body"]["failureCode"], "firestore_unavailable")
         self.assertEqual([row["originalText"] for row in captured["body"]["ingredients"]], ["Aqua"])
+
+    def test_other_user_persist_returns_403_without_write(self):
+        provider = CountingProvider()
+        db = FakeFirestore()
+        first, db = self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "productID": "manual-owned",
+                "persist": True,
+                "sourceType": "manual",
+            },
+            db=db,
+            provider=provider,
+            uid="user-a",
+        )
+        self.assertEqual(first["status"], 200)
+        before = dict(db.docs[("productIngredients", "manual-owned")])
+        commits = db.commits
+        captured, db = self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "productID": "manual-owned",
+                "persist": True,
+                "sourceType": "manual",
+            },
+            db=db,
+            provider=CountingProvider(),
+            uid="user-b",
+        )
+        self.assertEqual(captured["status"], 403)
+        self.assertEqual(captured["body"]["failureCode"], "forbidden")
+        self.assertEqual(db.docs[("productIngredients", "manual-owned")], before)
+        self.assertEqual(db.commits, commits)
+
+    def test_source_type_collision_returns_409(self):
+        db = FakeFirestore()
+        self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "productID": "id-1",
+                "persist": True,
+                "sourceType": "manual",
+            },
+            db=db,
+            provider=CountingProvider(),
+            uid="user-a",
+        )
+        before = dict(db.docs[("productIngredients", "id-1")])
+        captured, db = self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "productID": "id-1",
+                "persist": True,
+                "sourceType": "catalog",
+            },
+            db=db,
+            provider=CountingProvider(),
+            uid="user-a",
+        )
+        self.assertEqual(captured["status"], 409)
+        self.assertEqual(captured["body"]["failureCode"], "conflict")
+        self.assertEqual(db.docs[("productIngredients", "id-1")], before)
+
+    def test_invalid_format_returns_400_without_ai_or_writes(self):
+        provider = CountingProvider()
+        db = FakeFirestore()
+        captured, db = self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "format": "other",
+                "persist": True,
+                "productID": "should-not-write",
+                "sourceType": "manual",
+            },
+            db=db,
+            provider=provider,
+        )
+        self.assertEqual(captured["status"], 400)
+        self.assertEqual(provider.calls, 0)
+        self.assertEqual(db.docs, {})
+        self.assertEqual(db.commits, 0)
 
 
 if __name__ == "__main__":

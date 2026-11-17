@@ -9,7 +9,9 @@ struct IngredientResolveAPITests {
             ai: true,
             productID: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890",
             persist: true,
-            sourceType: "manual"
+            sourceType: "manual",
+            format: "analysis-input",
+            listStatus: "complete"
         )
         let data = try JSONEncoder().encode(request)
         let object = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
@@ -18,6 +20,8 @@ struct IngredientResolveAPITests {
         #expect(object["persist"] as? Bool == true)
         #expect(object["productID"] as? String == "A1B2C3D4-E5F6-7890-ABCD-EF1234567890")
         #expect(object["sourceType"] as? String == "manual")
+        #expect(object["format"] as? String == "analysis-input")
+        #expect(object["listStatus"] as? String == "complete")
         #expect(object["ingredients"] as? [String] == ["Water", "Niacinimide"])
     }
 

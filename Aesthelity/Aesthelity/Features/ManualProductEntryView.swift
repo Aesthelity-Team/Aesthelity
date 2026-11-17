@@ -178,7 +178,9 @@ struct ManualProductEntryView: View {
                     productID: productID.uuidString,
                     persist: false,
                     sourceType: "manual",
-                    ai: true
+                    ai: true,
+                    format: "analysis-input",
+                    listStatus: "complete"
                 )
                 let ingredients = response.ingredients
                     .sorted { $0.index < $1.index }
@@ -247,7 +249,9 @@ struct ManualProductEntryView: View {
                         productID: product.id.uuidString,
                         persist: true,
                         sourceType: "manual",
-                        ai: true
+                        ai: true,
+                        format: "analysis-input",
+                        listStatus: "complete"
                     )
                     if response.status == "failed" {
                         cloudNote = "Saved on this device. Cloud matching reported a failure (\(response.failureCode ?? "unknown")); try syncing again later."

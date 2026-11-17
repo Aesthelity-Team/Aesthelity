@@ -4,7 +4,9 @@ import FirebaseAuth
 // IngredientResolveAPI.swift — iOS client for #98 ingredient resolution.
 // Calls POST /api/v1/ingredients/resolve (AI-primary by default). Review uses
 // persist: false; Save (signed-in) uses persist: true with ManualProduct.id as
-// productID. See Backend/README.md → "Ingredient resolution (#98)".
+// productID. Manual full-list entry also sends format: analysis-input and
+// listStatus: complete (listStatus is ignored without format). See
+// Backend/README.md → "Ingredient resolution (#98)".
 
 /// Request/response types for `POST /api/v1/ingredients/resolve` (#98).
 struct IngredientResolveRequest: Encodable {
@@ -14,13 +16,19 @@ struct IngredientResolveRequest: Encodable {
     let productID: String?
     let persist: Bool
     let sourceType: String?
+    /// When set, must be `analysis-input` so the backend attaches the #99 envelope.
+    let format: String?
+    /// Only applied when `format` is `analysis-input` (`complete` | `partial` | `unavailable`).
+    let listStatus: String?
 
     init(
         ingredients: [String],
         ai: Bool = true,
         productID: String? = nil,
         persist: Bool = false,
-        sourceType: String? = nil
+        sourceType: String? = nil,
+        format: String? = nil,
+        listStatus: String? = nil
     ) {
         self.contractVersion = 1
         self.ingredients = ingredients
@@ -28,6 +36,8 @@ struct IngredientResolveRequest: Encodable {
         self.productID = productID
         self.persist = persist
         self.sourceType = sourceType
+        self.format = format
+        self.listStatus = listStatus
     }
 }
 
@@ -141,7 +151,9 @@ extension BackendAnalysisAPI {
         productID: String? = nil,
         persist: Bool = false,
         sourceType: String? = "manual",
-        ai: Bool = true
+        ai: Bool = true,
+        format: String? = nil,
+        listStatus: String? = nil
     ) async throws -> IngredientResolveResponse {
         let root = try baseURL()
         let url = root
@@ -165,7 +177,9 @@ extension BackendAnalysisAPI {
             ai: ai,
             productID: productID,
             persist: persist,
-            sourceType: persist ? sourceType : nil
+            sourceType: persist ? sourceType : nil,
+            format: format,
+            listStatus: listStatus
         )
         request.httpBody = try encoder.encode(payload)
         let (data, response) = try await session.data(for: request)
