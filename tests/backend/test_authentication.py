@@ -3,11 +3,35 @@
 from __future__ import annotations
 
 import unittest
+from types import SimpleNamespace
 
-from Backend.authentication import verified_firebase_uid
+from Backend.analysis_api import APIHandler
+from Backend.authentication import verified_firebase_claims, verified_firebase_uid
 
 
 class VerifiedFirebaseUIDTests(unittest.TestCase):
+    def test_verified_claims_preserve_admin_claims_only_after_token_verification(self):
+        claims = {"uid": "catalog-writer", "catalogWriter": True}
+        self.assertEqual(
+            verified_firebase_claims("Bearer signed-token", lambda token: claims),
+            claims,
+        )
+
+    def test_api_handler_retains_verified_custom_claims(self):
+        claims = {"uid": "catalog-writer", "catalogWriter": True}
+        handler = object.__new__(APIHandler)
+        handler.authenticated_uid = None
+        handler.authenticated_claims = None
+        handler.headers = {"Authorization": "Bearer signed-token"}
+        handler.server = SimpleNamespace(
+            demo_mode=False,
+            token_verifier=lambda token: claims if token == "signed-token" else {},
+        )
+
+        self.assertTrue(handler._authorized())
+        self.assertEqual(handler.authenticated_uid, "catalog-writer")
+        self.assertEqual(handler.authenticated_claims, claims)
+
     def test_valid_bearer_token_returns_uid_from_verified_claims(self):
         calls = []
 

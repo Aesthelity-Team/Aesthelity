@@ -12,7 +12,7 @@ import os
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 from urllib.parse import unquote, urlparse
 from uuid import uuid4
 
@@ -22,7 +22,7 @@ sys.path.insert(0, str(ROOT))
 from analysis_engine import AnalysisInputError, evaluate_routine  # noqa: E402
 from analysis_engine.product_input import ProductInputError, load_alias_catalog  # noqa: E402
 from Backend.private_data import PrivateDataStore, PrivateDataError
-from Backend.authentication import verified_firebase_uid  # noqa: E402
+from Backend.authentication import verified_firebase_claims, verified_firebase_uid  # noqa: E402
 from Backend.ingredient_alias_store import load_approved_alias_catalog  # noqa: E402
 from Backend.analysis_engine_input import (  # noqa: E402
     LIST_STATUSES,
@@ -114,6 +114,7 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def __init__(self, *args: Any, **kwargs: Any):
         self.authenticated_uid: str | None = None
+        self.authenticated_claims: Mapping[str, Any] | None = None
         super().__init__(*args, **kwargs)
 
     def do_GET(self) -> None:
@@ -247,19 +248,23 @@ class APIHandler(BaseHTTPRequestHandler):
         if self.server.demo_mode:
             return True
 
-        def verify_token(token: str) -> dict[str, Any]:
-            from firebase_admin import auth
-            return auth.verify_id_token(token, app=self.server.firebase_app)
+        verifier = getattr(self.server, "token_verifier", None)
+        if verifier is None:
+            def verifier(token: str) -> dict[str, Any]:
+                from firebase_admin import auth
+                return auth.verify_id_token(
+                    token, app=self.server.firebase_app, check_revoked=True
+                )
 
-        try:
-            self.authenticated_uid = verified_firebase_uid(
-                self.headers.get("Authorization"), verify_token
-            )
-        except Exception:
+        self.authenticated_claims = verified_firebase_claims(
+            self.headers.get("Authorization"), verifier
+        )
+        if self.authenticated_claims is None:
             # Treat SDK/import/configuration errors as unavailable auth. Never
             # let an infrastructure error turn a protected request public.
             self.authenticated_uid = None
             return False
+        self.authenticated_uid = str(self.authenticated_claims["uid"])
         return self.authenticated_uid is not None
 
     def _reference_index(self) -> Any:
@@ -334,6 +339,17 @@ class APIHandler(BaseHTTPRequestHandler):
                 return
             if not isinstance(product_id, str) or not product_id.strip():
                 self._send(400, _error_body("INVALID_REQUEST", "productID is required when persist is true."))
+                return
+            # This Firebase custom claim must be set by trusted server tooling;
+            # request fields such as sourceType never grant shared write access.
+            claims = getattr(self, "authenticated_claims", None)
+            if source_type == "catalog" and (
+                not claims or claims.get("catalogWriter") is not True
+            ):
+                self._send(403, _error_body(
+                    "FORBIDDEN",
+                    "Catalog ingredient writes require an authorized catalog writer.",
+                ))
                 return
             if source_type == "manual" and not owner_uid:
                 if self.server.demo_mode:

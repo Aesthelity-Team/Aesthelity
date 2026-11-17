@@ -23,6 +23,7 @@ from Backend.ai_normalization import (
     validate_matching_output,
 )
 from Backend.ingredient_catalog import ReferenceIndex, build_catalog, parse_cosing_csv, resolve_ingredient_texts
+from Backend.ingredient_persistence import FakeFirestore
 
 from test_analysis_engine_input import ANALYSIS_BRANCH_FILE, CAUTION_REFERENCE, ENGINE, _load_analysis_engine
 
@@ -365,15 +366,16 @@ class ProviderTransportTests(unittest.TestCase):
 
 
 class EndpointTests(unittest.TestCase):
-    def post(self, body, provider=None):
+    def post(self, body, provider=None, claims=None, db=None):
         handler = object.__new__(APIHandler)
         handler.path = "/api/v1/ingredients/resolve"
         handler.command = "POST"
+        handler.authenticated_claims = claims
         encoded = json.dumps(body).encode()
         handler.headers = {"Content-Type": "application/json", "Content-Length": str(len(encoded))}
         handler.rfile = io.BytesIO(encoded)
         handler.server = SimpleNamespace(
-            db=SimpleNamespace(collection=lambda name: (_ for _ in ()).throw(RuntimeError("offline"))),
+            db=db or SimpleNamespace(collection=lambda name: (_ for _ in ()).throw(RuntimeError("offline"))),
             catalog=APPROVED, database_id="test", demo_mode=True, reference_index=reference_index(),
             ai_provider=provider,
         )
@@ -412,6 +414,45 @@ class EndpointTests(unittest.TestCase):
         row = body["analysisInput"]["products"][0]["ingredients"][0]
         self.assertEqual(row["status"], "matched")
         self.assertEqual(row["canonicalName"], "Ascorbic Acid")
+
+    def test_catalog_persistence_requires_authorized_writer_before_ai(self):
+        provider = FakeProvider({"ingredients": [
+            ai_row(0, "identified", "Water"),
+        ]})
+        captured = self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "productID": "shared-product",
+                "persist": True,
+                "sourceType": "catalog",
+            },
+            provider=provider,
+            claims={"uid": "ordinary-user"},
+        )
+        self.assertEqual(captured["status"], 403)
+        self.assertEqual(captured["body"]["error"]["code"], "FORBIDDEN")
+        self.assertEqual(len(provider.calls), 0)
+
+    def test_catalog_writer_claim_can_persist_catalog_record(self):
+        provider = FakeProvider({"ingredients": [
+            ai_row(0, "identified", "Water"),
+        ]})
+        captured = self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "productID": "shared-product",
+                "persist": True,
+                "sourceType": "catalog",
+            },
+            provider=provider,
+            claims={"uid": "catalog-admin", "catalogWriter": True},
+            db=FakeFirestore(),
+        )
+        self.assertEqual(captured["status"], 200)
+        self.assertTrue(captured["body"]["persisted"])
+        self.assertEqual(len(provider.calls), 1)
 
     def test_ai_failure_returns_full_unknown_list_not_bare_error(self):
         provider = FakeProvider(error=ProviderError("provider_rate_limited"))

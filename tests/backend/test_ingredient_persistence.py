@@ -321,11 +321,12 @@ class CountingProvider:
 
 
 class EndpointPersistTests(unittest.TestCase):
-    def post(self, body, *, db=None, provider=None, uid="user-a"):
+    def post(self, body, *, db=None, provider=None, uid="user-a", claims=None):
         handler = object.__new__(APIHandler)
         handler.path = "/api/v1/ingredients/resolve"
         handler.command = "POST"
         handler.authenticated_uid = uid
+        handler.authenticated_claims = claims
         encoded = json.dumps(body).encode()
         handler.headers = {"Content-Type": "application/json", "Content-Length": str(len(encoded))}
         handler.rfile = io.BytesIO(encoded)
@@ -446,6 +447,7 @@ class EndpointPersistTests(unittest.TestCase):
             db=db,
             provider=CountingProvider(),
             uid="user-a",
+            claims={"uid": "catalog-admin", "catalogWriter": True},
         )
         self.assertEqual(captured["status"], 409)
         self.assertEqual(captured["body"]["failureCode"], "conflict")
