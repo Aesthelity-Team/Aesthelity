@@ -1700,3 +1700,214 @@ struct AuthenticatedAPIClientTests {
         }
     }
 }
+
+@MainActor
+struct AccountDataAPITests {
+    private let identity = AccountIdentity(uid: "alice", session: "session-one")
+    private let url = URL(string: "https://api.example.com")!
+
+    private func reply(_ request: URLRequest, _ data: Data, status: Int = 200) -> (Data, URLResponse) {
+        (data, HTTPURLResponse(url: request.url!, statusCode: status, httpVersion: nil, headerFields: nil)!)
+    }
+
+    private struct EncodedRecord<V: Encodable>: Encodable { let id: String; let ownerUID: String; let data: V }
+    private struct EncodedResponse<V: Encodable>: Encodable { let contractVersion: Int; let record: EncodedRecord<V> }
+
+    private func envelope<Value: Encodable>(_ value: Value, id: String, owner: String = "alice", version: Int = 1) throws -> Data {
+        return try JSONEncoder().encode(EncodedResponse(contractVersion: version, record: EncodedRecord(id: id, ownerUID: owner, data: value)))
+    }
+
+    @Test func profileSaveAndLoadUseProtectedRoutesAndPreserveModel() async throws {
+        let profile = SkinProfile(skinType: .dry, concerns: [.barrierRepair], setupStatus: .completed)
+        var methods: [String] = []
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "valid-token" }, transport: { request in
+            methods.append(request.httpMethod!)
+            #expect(request.url?.path == "/api/v1/users/alice/profile/skinProfile")
+            #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer valid-token")
+            if request.httpMethod == "PUT" {
+                let data = try #require(request.httpBody)
+                let object = try JSONSerialization.jsonObject(with: data)
+                let body = try #require(object as? [String: Any])
+                #expect(Set(body.keys) == ["contractVersion", "data"])
+                #expect(body["contractVersion"] as? Int == 1)
+                let encoded = try JSONSerialization.data(withJSONObject: #require(body["data"]))
+                #expect(try JSONDecoder().decode(SkinProfile.self, from: encoded) == profile)
+            } else { #expect(request.httpBody == nil) }
+            return try reply(request, envelope(profile, id: "skinProfile"))
+        })
+        try await api.save(profile, kind: "profile", id: "skinProfile")
+        let loaded = try await api.load("profile", id: "skinProfile", as: SkinProfile.self)
+        #expect(loaded == profile)
+        #expect(methods == ["PUT", "GET"])
+    }
+
+    @Test(arguments: [401, 403, 404, 503])
+    func failuresLeaveLocalProfileAndRoutineFilesIntact(status: Int) async throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let profileURL = directory.appendingPathComponent("profile.json")
+        let routinesURL = directory.appendingPathComponent("routines.json")
+        let store = SkinProfileStore(fileURL: profileURL)
+        let routines = RoutineStore(fileURL: routinesURL)
+        try store.save(.skipped)
+        try routines.save(RoutineRecord(name: "Local routine"))
+        let beforeProfile = try Data(contentsOf: profileURL)
+        let beforeRoutines = try Data(contentsOf: routinesURL)
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "expired-token" }, transport: { request in
+            reply(request, Data("private backend diagnostics".utf8), status: status)
+        })
+        let error: APIClientError = status == 401 ? .signInRequired : status == 403 ? .forbidden : status == 404 ? .notFound : .server(status)
+        await #expect(throws: error) { try await api.load("profile", id: "skinProfile", as: SkinProfile.self) }
+        await #expect(throws: error) { try await api.save(RoutineStorageDocument(routines: routines.routines), kind: "routines", id: "savedRoutines") }
+        #expect(try Data(contentsOf: profileURL) == beforeProfile)
+        #expect(try Data(contentsOf: routinesURL) == beforeRoutines)
+        #expect(!error.localizedDescription.contains("diagnostics"))
+    }
+
+    @Test(arguments: ["owner", "id", "version"])
+    func rejectsWrongAccountRecordOrContract(change: String) async throws {
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "token" }, transport: { request in
+            try reply(request, envelope(SkinProfile.skipped, id: change == "id" ? "other" : "skinProfile", owner: change == "owner" ? "bob" : "alice", version: change == "version" ? 2 : 1))
+        })
+        await #expect(throws: APIClientError.invalidResponse) { try await api.load("profile", id: "skinProfile", as: SkinProfile.self) }
+    }
+
+    @Test func accountChangeDuringTokenLookupDoesNotSendRequest() async throws {
+        var current: AccountIdentity? = identity
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { current }, token: {
+            current = AccountIdentity(uid: "bob", session: "two")
+            return "alice-token"
+        }, transport: { _ in
+            Issue.record("A credential escaped its original account context")
+            throw URLError(.cancelled)
+        })
+        await #expect(throws: APIClientError.signInRequired) { try await api.load("profile", id: "skinProfile", as: SkinProfile.self) }
+    }
+
+    @Test func signOutAndBackIntoSameAccountDiscardsOldResponse() async throws {
+        var current: AccountIdentity? = identity
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { current }, token: { "token" }, transport: { request in
+            current = AccountIdentity(uid: "alice", session: "new-session")
+            return try reply(request, envelope(SkinProfile.skipped, id: "skinProfile"))
+        })
+        await #expect(throws: APIClientError.signInRequired) { try await api.load("profile", id: "skinProfile", as: SkinProfile.self) }
+    }
+
+    @Test func signedOutRequestDoesNotAskForAToken() async throws {
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { nil }, token: {
+            Issue.record("Signed-out request reached token provider")
+            return "token"
+        })
+        await #expect(throws: APIClientError.signInRequired) { try await api.load("profile", id: "skinProfile", as: SkinProfile.self) }
+    }
+
+    @Test func routineSnapshotsRoundTripProductDetails() async throws {
+        let catalog = try DemoCatalog.load()
+        let snapshot = RoutineProductSnapshot(try #require(catalog.products.first))
+        let routine = RoutineRecord(name: "Saved routine", period: .pm, steps: [snapshot.step])
+        let archive = RoutineStorageDocument(routines: [routine])
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "token" }, transport: { request in
+            #expect(request.url?.path == "/api/v1/users/alice/routines/savedRoutines")
+            return try reply(request, envelope(archive, id: "savedRoutines"))
+        })
+        try await api.save(archive, kind: "routines", id: "savedRoutines")
+        let loaded = try await api.load("routines", id: "savedRoutines", as: RoutineStorageDocument.self)
+        try AccountDataValidation.routines(loaded)
+        #expect(loaded == archive)
+        #expect(loaded.routines[0].steps[0].product?.ingredientNames == snapshot.ingredientNames)
+    }
+
+    @Test func malformedDownloadsFailWithoutTouchingStores() async throws {
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "token" }, transport: { request in
+            reply(request, Data(#"{"contractVersion":1,"record":{"id":"skinProfile","ownerUID":"alice","data":{}}}"#.utf8))
+        })
+        await #expect(throws: APIClientError.invalidResponse) { try await api.load("profile", id: "skinProfile", as: SkinProfile.self) }
+        #expect(throws: APIClientError.invalidResponse) { try AccountDataValidation.profile(SkinProfile(schemaVersion: 99)) }
+        let routine = RoutineRecord(name: "Duplicate")
+        #expect(throws: APIClientError.invalidResponse) { try AccountDataValidation.routines(RoutineStorageDocument(routines: [routine, routine])) }
+    }
+
+    @Test func incompleteAccountRoutineDoesNotUseLegacyIdentityDefaults() async throws {
+        let routine = RoutineRecord(name: "Account routine")
+        let data = try JSONEncoder().encode(RoutineStorageDocument(routines: [routine]))
+        var document = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        var records = try #require(document["routines"] as? [[String: Any]])
+        records[0].removeValue(forKey: "id")
+        document["routines"] = records
+        let legacyData = try JSONSerialization.data(withJSONObject: document)
+        // Legacy local files still load; downloads cannot synthesize identity.
+        #expect(try JSONDecoder().decode(RoutineStorageDocument.self, from: legacyData).routines.count == 1)
+        let response = try JSONSerialization.data(withJSONObject: [
+            "contractVersion": 1,
+            "record": ["id": "savedRoutines", "ownerUID": "alice", "data": document]
+        ])
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "token" }, transport: { request in
+            reply(request, response)
+        })
+        await #expect(throws: APIClientError.invalidResponse) {
+            try await api.load("routines", id: "savedRoutines", as: RoutineStorageDocument.self)
+        }
+    }
+
+    @Test func personalInputsRetainUnavailableStepsAndDoNotInventAllergies() throws {
+        let normalizer = try IngredientNormalizer(catalog: .loadBundled())
+        let catalog = try DemoCatalog.load()
+        let product = try #require(catalog.products.first)
+        let knownStep = RoutineProductSnapshot(product).step
+        let missing = RoutineStepItem(stepNumber: 2, title: "Unlinked", subtitle: "", state: .incomplete)
+        let input = PersonalAnalysisInput.make(steps: [knownStep, missing], period: .pm, normalizer: normalizer)
+        #expect(input.period == "pm")
+        #expect(input.products.count == 2)
+        #expect(input.products[0].ingredients.count == product.ingredients.count)
+        #expect(input.products[1].listStatus == .unavailable)
+        #expect(input.recordedAllergies.status == "unknown")
+        #expect(input.recordedAllergies.ingredientIDs == nil)
+    }
+
+    @Test func manualProductCompletenessIsNeverAssumed() throws {
+        let normalizer = try IngredientNormalizer(catalog: .loadBundled())
+        let product = ManualProduct(name: "My label", rawIngredientList: "Water, Retinol", ingredients: normalizer.normalize(label: "Water, Retinol"))
+        let step = RoutineProductSnapshot(product).step
+        let input = PersonalAnalysisInput.make(steps: [step], period: .am, normalizer: normalizer)
+        #expect(input.products[0].listStatus == .partial)
+        #expect(input.products[0].catalogVersion == normalizer.catalogVersion)
+    }
+
+    @Test func analysisCanBeEvaluatedSavedAndRetrievedWithMatchingInputs() async throws {
+        let normalizer = try IngredientNormalizer(catalog: .loadBundled())
+        let step = RoutineStepItem(stepNumber: 1, title: "Unknown product", subtitle: "", state: .incomplete)
+        let payload = PersonalAnalysisInput.make(steps: [step], period: .am, normalizer: normalizer)
+        let response = AnalysisResponsePayload(contractVersion: 1, ruleVersion: "AN-02-v1", period: "am", activeCatalogVersion: normalizer.catalogVersion,
+                                               outcome: "noFindings", completeness: "incomplete", productIDs: [step.id.uuidString], findings: [], limitations: ["Missing ingredient list"], displayLabel: nil)
+        let routineID = UUID()
+        let saved = SavedPersonalAnalysis(schemaVersion: 1, routineID: routineID, request: payload, response: response,
+                                          productNames: [step.id.uuidString: step.title], savedAt: Date())
+        var requests = 0
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "token" }, transport: { request in
+            requests += 1
+            if request.httpMethod == "POST" {
+                #expect(request.url?.path == "/api/v1/analyses")
+                #expect(try JSONDecoder().decode(AnalysisRequestPayload.self, from: #require(request.httpBody)) == payload)
+                return try reply(request, JSONEncoder().encode(response))
+            }
+            return try reply(request, envelope(saved, id: routineID.uuidString))
+        })
+        let evaluated = try await api.analyze(payload, catalogVersion: normalizer.catalogVersion)
+        #expect(evaluated.completeness == "incomplete")
+        try await api.save(saved, kind: "analyses", id: routineID.uuidString)
+        let loaded = try await api.load("analyses", id: routineID.uuidString, as: SavedPersonalAnalysis.self)
+        #expect(loaded.request == payload)
+        #expect(loaded.routineID == routineID)
+        #expect(requests == 3)
+        #expect(throws: APIClientError.invalidResponse) { try AccountDataAPI.validate(response, for: payload, catalogVersion: -1) }
+    }
+
+    @Test(arguments: ["..", "a/b", "a\\b", "%2F", "\n"])
+    func malformedRouteNeverReachesTransport(segment: String) async throws {
+        let api = try AccountDataAPI(baseURL: url, identity: identity, currentIdentity: { identity }, token: { "token" }, transport: { _ in
+            Issue.record("Invalid path reached transport")
+            throw URLError(.cancelled)
+        })
+        await #expect(throws: APIClientError.configuration) { try await api.load("profile", id: segment, as: SkinProfile.self) }
+    }
+}
