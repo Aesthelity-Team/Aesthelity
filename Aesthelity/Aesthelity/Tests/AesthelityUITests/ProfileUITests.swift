@@ -372,6 +372,19 @@ final class RoutineEditorUITests: XCTestCase {
     }
 
     @MainActor
+    private func finishManualSave(in app: XCUIApplication, productName: String) {
+        let library = app.buttons["manual-add"]
+        if !app.navigationBars["Add product"].waitForNonExistence(timeout: 5) {
+            let note = app.staticTexts["manual-matching-note"]
+            XCTAssertTrue(note.waitForExistence(timeout: 5))
+            XCTAssertTrue(note.label.contains("Saved on this device"))
+            app.buttons["manual-cancel"].tap()
+            XCTAssertTrue(library.waitForExistence(timeout: 5))
+        }
+        XCTAssertTrue(app.staticTexts[productName].waitForExistence(timeout: 5))
+    }
+
+    @MainActor
     private func name(_ text: String, in app: XCUIApplication) {
         reveal(app.textFields["routine-name"], in: app, upwards: true)
         app.textFields["routine-name"].tap()
@@ -442,6 +455,7 @@ final class RoutineEditorUITests: XCTestCase {
         app.buttons["manual-review"].tap()
         reveal(app.buttons["manual-save"], in: app)
         app.buttons["manual-save"].tap()
+        finishManualSave(in: app, productName: "Routine manual serum")
         XCTAssertTrue(app.buttons["tab.home"].waitForExistence(timeout: 5))
         app.buttons["tab.home"].tap()
         create(in: app)
@@ -477,6 +491,7 @@ final class RoutineEditorUITests: XCTestCase {
         app.buttons["manual-review"].tap()
         reveal(app.buttons["manual-save"], in: app)
         app.buttons["manual-save"].tap()
+        finishManualSave(in: app, productName: "RT smoke manual")
         app.buttons["tab.home"].tap()
         create(in: app)
         name("RT restart smoke", in: app)

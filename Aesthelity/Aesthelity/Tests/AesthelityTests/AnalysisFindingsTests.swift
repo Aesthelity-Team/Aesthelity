@@ -22,12 +22,89 @@ struct AnalysisFindingsTests {
         #expect(finding.ruleStatus == .known(.aiAssisted))
         #expect(finding.severity == .known(.moderate))
         #expect(finding.ingredientIDs == ["retinol", "glycolic-acid"])
+        #expect(finding.productIDs == response.productIDs)
+        #expect(finding.plainLanguageReason == nil)
         let evidence = try #require(finding.evidence?.first)
         #expect(evidence.referenceID == "ref.retinol-with-exfoliant")
         #expect(evidence.referenceVersion == 1)
         #expect(evidence.source.publisher == "Aesthelity Fixture")
         #expect(!evidence.claim.isEmpty)
         #expect(!finding.limitations.isEmpty)
+    }
+
+    @Test func findingLabelsUseBundledNamesAndPreserveUnresolvedText() throws {
+        let response = try decode(fixture("supported_finding"))
+        let finding = try #require(response.findings.first)
+        #expect(finding.affectedIngredientText == "Affected ingredients: Retinol · Glycolic Acid")
+        #expect(finding.affectedProductTitle == "Affected products")
+        #expect(finding.affectedProductNames([
+            response.productIDs[0]: "Night Serum", response.productIDs[1]: "Toner"
+        ]) == "Night Serum · Toner")
+
+        var body = try fixtureObject("supported_finding")
+        var findings = try #require(body["findings"] as? [[String: Any]])
+        findings[0]["ingredientIDs"] = ["alcohol-denat", "unlisted-extract"]
+        body["findings"] = findings
+        let catalogFinding = try #require(decode(JSONSerialization.data(withJSONObject: body)).findings.first)
+        #expect(catalogFinding.ingredientLabel == "Alcohol Denat. · Unlisted Extract")
+
+        findings[0]["ingredientIDs"] = ["glycolic-acid"]
+        findings[0]["productIDs"] = [response.productIDs[0]]
+        body["findings"] = findings
+        let singleFinding = try #require(decode(JSONSerialization.data(withJSONObject: body)).findings.first)
+        #expect(singleFinding.affectedIngredientText == "Affected ingredient: Glycolic Acid")
+        #expect(singleFinding.affectedProductTitle == "Affected product")
+
+        findings[0]["originalText"] = "mYSTERY-extract (label)"
+        findings[0]["outcome"] = "unknown"
+        body["findings"] = findings
+        let unresolved = try #require(decode(JSONSerialization.data(withJSONObject: body)).findings.first)
+        #expect(unresolved.affectedIngredientText == "Affected ingredient: mYSTERY-extract (label)")
+    }
+
+    @Test(arguments: ["formulation-unknown", "stale-catalog", "missing-catalog-version"])
+    func legacyApprovedUnknownPreservesReason(_ code: String) throws {
+        var body = try fixtureObject("incomplete_unknown")
+        body["ruleVersion"] = "AN-02-v1"
+        var findings = try #require(body["findings"] as? [[String: Any]])
+        findings[0]["ruleStatus"] = "approved"
+        findings[0]["reasonCode"] = code
+        findings[0]["reason"] = "The available product details are out of date."
+        body["findings"] = findings
+        let response = try decode(JSONSerialization.data(withJSONObject: body))
+        #expect(response.findings.first?.plainLanguageReason == "The available product details are out of date.")
+    }
+
+    @Test(arguments: [
+        "coverage.ai-analysis-unavailable",
+        "coverage.reference-context-incomplete",
+        "coverage.reference-evidence-insufficient"
+    ])
+    func internalCoverageCodesStayHidden(_ code: String) throws {
+        var body = try fixtureObject("incomplete_unknown")
+        var findings = try #require(body["findings"] as? [[String: Any]])
+        findings[0]["reasonCode"] = code
+        findings[0]["ruleStatus"] = "approved"
+        body["findings"] = findings
+        let response = try decode(JSONSerialization.data(withJSONObject: body))
+        #expect(response.findings.first?.plainLanguageReason == nil)
+        #expect(response.checkStatusLabel == "Incomplete check")
+        #expect(AnalysisResponsePayload.incompleteTitle == "We couldn’t fully check this routine")
+        #expect(!response.showsNoFindings)
+    }
+
+    @Test(arguments: ["high", "moderate", "low", "unknown"])
+    func resultBadgeUsesSeverityOrUnknown(_ severity: String) throws {
+        var body = try fixtureObject("supported_finding")
+        var findings = try #require(body["findings"] as? [[String: Any]])
+        if severity == "unknown" {
+            findings[0]["outcome"] = "unknown"
+        } else {
+            findings[0]["severity"] = severity
+        }
+        body["findings"] = findings
+        let response = try decode(JSONSerialization.data(withJSONObject: body))
+        #expect(response.findings.first?.badgeLabel == severity.capitalized)
     }
 
     @Test func unknownFixtureDrivesIncompletePresentation() throws {
@@ -43,7 +120,39 @@ struct AnalysisFindingsTests {
         #expect(gap.ingredientLabel == "Mystery Extract")
         #expect(gap.rowIndex == 0)
         #expect(gap.evidence == nil)
-        #expect(response.findings.last?.reasonCode == "allergy-status-unknown")
+        #expect(gap.plainLanguageReason == "We couldn’t match this ingredient to a verified record.")
+        let allergy = try #require(response.findings.last)
+        #expect(allergy.ruleID == "coverage.allergy-input-unknown")
+        #expect(allergy.reasonCode == "allergy-status-unknown")
+        #expect(allergy.plainLanguageReason == "We don’t know which allergies are recorded for this routine.")
+    }
+
+    @Test(arguments: ["analysis-incomplete", "partial-list", "unavailable-list"])
+    func coverageReasonUsesCurrentResponseFields(_ code: String) throws {
+        var body = try fixtureObject("incomplete_unknown")
+        let findings = try #require(body["findings"] as? [[String: Any]])
+        var gap = try #require(findings.last)
+        if code == "analysis-incomplete" {
+            gap["ruleID"] = "coverage.analysis-incomplete"
+            gap["reasonCode"] = code
+            gap["reason"] = "The assessment could not be completed with the supplied inputs or references."
+        } else {
+            gap["ruleID"] = "coverage.unresolved-input"
+            gap.removeValue(forKey: "reasonCode")
+            gap["reason"] = code
+        }
+        body["findings"] = [gap]
+        let response = try decode(JSONSerialization.data(withJSONObject: body))
+        try AccountDataAPI.validate(response, for: request(ids: response.productIDs), catalogVersion: 3)
+        let finding = try #require(response.findings.first)
+        let expected = [
+            "analysis-incomplete": "Some information or references needed to check this routine were unavailable.",
+            "partial-list": "The product’s ingredient list is incomplete.",
+            "unavailable-list": "The product’s ingredient list is unavailable."
+        ]
+        #expect(finding.plainLanguageReason == expected[code])
+        #expect(finding.severity == nil)
+        #expect(response.hasIncompleteAssessment)
     }
 
     @Test(arguments: ["complete", "empty findings", "supported finding", "unrecognized finding", "display label", "null label"])
@@ -165,9 +274,14 @@ struct AnalysisFindingsTests {
         var body = try fixtureObject("supported_finding")
         body["outcome"] = "noFindings"
         body["findings"] = []
+        body["displayLabel"] = "No recorded conflicts"
         let complete = try decode(JSONSerialization.data(withJSONObject: body))
         try AccountDataAPI.validate(complete, for: request(ids: complete.productIDs), catalogVersion: 3)
         #expect(complete.showsNoFindings)
+        #expect(complete.checkStatusLabel == "Complete check")
+        #expect(AnalysisResponsePayload.noFindingsTitle == "No recorded conflicts")
+        #expect(complete.displayLabel == AnalysisResponsePayload.noFindingsTitle)
+        #expect(AnalysisResponsePayload.noFindingsExplanation.contains("not a safety guarantee"))
 
         body["completeness"] = "incomplete"
         let incomplete = try decode(JSONSerialization.data(withJSONObject: body))
