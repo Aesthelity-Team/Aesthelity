@@ -13,8 +13,10 @@ public struct RoutineProductSnapshot: Equatable, Codable {
     public let ingredientNames: [String]
     public let listStatus: String
     let normalizedIngredients: [NormalizedIngredient]
+    let category: DemoProductCategory?
 
     init(_ product: DemoProduct) {
+        category = product.category
         reference = .catalog(product.id)
         name = product.name
         brand = product.brand
@@ -24,6 +26,7 @@ public struct RoutineProductSnapshot: Equatable, Codable {
     }
 
     init(_ product: ManualProduct) {
+        category = product.category
         reference = .manual(product.id)
         name = product.name
         brand = product.brand

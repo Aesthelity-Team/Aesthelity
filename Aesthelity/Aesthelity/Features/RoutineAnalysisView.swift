@@ -53,6 +53,7 @@ struct RoutineAnalysisView: View {
                             Text("\(step.stepNumber). \(step.title)")
                         }
                     }
+                    LayeringGuidanceView(steps: currentSteps, period: currentRoutine?.period ?? period)
                     Text("Analyze the ingredient details attached to this routine. Missing lists and unverified manual lists remain incomplete. Ingredient-avoidance preferences are not treated as confirmed allergies.")
                         .font(.subheadline).foregroundStyle(.secondary)
                     if currentSteps.contains(where: { $0.product?.provenance == "Fictional demo catalog" }) {
