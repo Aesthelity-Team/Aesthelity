@@ -2,7 +2,7 @@
 //  ScanSavedView.swift
 //  Aesthelity
 //
-//  Scan Result / Saved to Library Screen for Aesthelity Skincare Scanner.
+//  Sample scan preview. This screen does not analyze a product or write to Library.
 //
 
 import SwiftUI
@@ -35,35 +35,28 @@ public struct SavedRibbonIcon: View {
 // MARK: - Scan Saved View
 
 public struct ScanSavedView: View {
+    public static let routinePreviewTitle = ScanResultSheet.routinePreviewTitle
+
     public var productTitle: String = "Vitamin C Serum"
     public var brand: String = "CeraVe"
-    public var routineMatch: Int = 91
-    public var isAddedToRoutine: Bool = false
     public var showsTabBar: Bool = false
     public var onSelectTab: ((Int) -> Void)?
     public var onViewProductDetail: () -> Void
-    public var onToggleRoutine: () -> Void
     public var onScanAnother: () -> Void
     
     public init(
         productTitle: String = "Vitamin C Serum",
         brand: String = "CeraVe",
-        routineMatch: Int = 91,
-        isAddedToRoutine: Bool = false,
         showsTabBar: Bool = false,
         onSelectTab: ((Int) -> Void)? = nil,
         onViewProductDetail: @escaping () -> Void = {},
-        onToggleRoutine: @escaping () -> Void = {},
         onScanAnother: @escaping () -> Void = {}
     ) {
         self.productTitle = productTitle
         self.brand = brand
-        self.routineMatch = routineMatch
-        self.isAddedToRoutine = isAddedToRoutine
         self.showsTabBar = showsTabBar
         self.onSelectTab = onSelectTab
         self.onViewProductDetail = onViewProductDetail
-        self.onToggleRoutine = onToggleRoutine
         self.onScanAnother = onScanAnother
     }
     
@@ -73,28 +66,28 @@ public struct ScanSavedView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     // 1. Header Section
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Scan Result")
+                        Text("Sample scan")
                             .font(.system(size: 28, weight: .bold))
                             .foregroundStyle(Color(red: 0.38, green: 0.26, blue: 0.18))
                         
-                        Text("\(productTitle) · \(brand)")
+                        Text("UI preview · \(productTitle) · \(brand)")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(Color(red: 0.31, green: 0.34, blue: 0.56))
                     }
                     .padding(.top, 4)
                     .padding(.bottom, 4)
                     
-                    // 2. Saved to Library Hero Card
+                    // 2. Preview hero. This flow does not write to Library.
                     VStack(spacing: 12) {
                         SavedRibbonIcon()
                             .padding(.top, 8)
                             .padding(.bottom, 2)
                         
-                        Text("Saved to Library")
+                        Text("Not saved")
                             .font(.system(size: 20, weight: .bold))
                             .foregroundStyle(Color(red: 0.38, green: 0.26, blue: 0.18))
                         
-                        Text("\(productTitle) has been added\nto your saved products.")
+                        Text("This sample did not add \(productTitle)\nto your Library.")
                             .font(.system(size: 14, weight: .regular))
                             .foregroundStyle(Color(red: 0.31, green: 0.34, blue: 0.56))
                             .multilineTextAlignment(.center)
@@ -108,13 +101,13 @@ public struct ScanSavedView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                     .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
                     
-                    // 3. Routine Match Card
+                    // 3. Sample status. Not a compatibility verdict.
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(routineMatch)% Routine Match")
+                        Text("Not analyzed")
                             .font(.system(size: 16, weight: .bold))
                             .foregroundStyle(Color(red: 0.31, green: 0.34, blue: 0.56))
                         
-                        Text("Compatible with your AM routine")
+                        Text("Sample scan only. Not a compatibility result.")
                             .font(.system(size: 13, weight: .regular))
                             .foregroundStyle(Color(red: 0.49, green: 0.51, blue: 0.65))
                     }
@@ -132,14 +125,13 @@ public struct ScanSavedView: View {
                             onViewProductDetail()
                         }
                         
-                        // Secondary Button: Add to PM Routine (Secondary)
+                        // Preview only. This control does not add a product to a routine.
                         LabeledButton(
-                            isAddedToRoutine ? "Added to PM Routine" : "Add to PM Routine",
-                            systemImage: isAddedToRoutine ? "checkmark" : nil,
+                            Self.routinePreviewTitle,
                             variant: .secondary
-                        ) {
-                            onToggleRoutine()
-                        }
+                        ) {}
+                        .disabled(true)
+                        .accessibilityIdentifier("sample-saved-does-not-add")
                         
                         // Text Button: Scan another product (Tertiary)
                         LabeledButton(
@@ -151,9 +143,9 @@ public struct ScanSavedView: View {
                     }
                     .padding(.top, 4)
                     
-                    // 5. Recently Saved Section
+                    // 5. Sample list. These rows are not saved products.
                     VStack(alignment: .leading, spacing: 10) {
-                        Text("Recently Saved")
+                        Text("Sample list")
                             .font(.system(size: 17, weight: .bold))
                             .foregroundStyle(Color(red: 0.38, green: 0.26, blue: 0.18))
                             .padding(.top, 6)
@@ -171,15 +163,14 @@ public struct ScanSavedView: View {
                                         .font(.system(size: 15, weight: .bold))
                                         .foregroundStyle(Color(red: 0.38, green: 0.26, blue: 0.18))
                                     
-                                    Text("Just saved · \(routineMatch)% match")
+                                    Text("Sample · Not analyzed")
                                         .font(.system(size: 13, weight: .regular))
                                         .foregroundStyle(Color(red: 0.44, green: 0.35, blue: 0.30))
                                 }
                                 
                                 Spacer()
                                 
-                                // Saved pill tag
-                                Text("Saved")
+                                Text("Preview")
                                     .font(.system(size: 12, weight: .semibold))
                                     .foregroundStyle(Color(red: 0.31, green: 0.34, blue: 0.56))
                                     .padding(.horizontal, 12)

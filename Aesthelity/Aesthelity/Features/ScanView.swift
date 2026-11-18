@@ -2,7 +2,7 @@
 //  ScanView.swift
 //  Aesthelity
 //
-//  Aesthetic AI Skincare Ingredient Scanner & Routine Harmony Checker.
+//  Sample camera UI. This flow does not analyze a product or write to Library.
 //
 
 import SwiftUI
@@ -417,9 +417,9 @@ public struct ScanProTipCard: View {
     @State private var currentTipIndex: Int = 0
     
     let tips: [(title: String, body: String, icon: String)] = [
-        ("Pro tip", "AI reads ingredient lists best in bright lighting.", "sparkles"),
+        ("UI preview", "This camera screen is a sample. It does not analyze a product.", "eye"),
         ("Clear View", "Hold bottles steady 4–6 inches away with text flat.", "viewfinder"),
-        ("Safety First", "Ingredients are instantly checked against your routine to avoid clashes.", "shield.lefthalf.filled")
+        ("Not saved", "A sample scan does not write a product to your Library.", "bookmark.slash")
     ]
     
     public init() {}
@@ -537,15 +537,15 @@ public struct RecentScanRowCard: View {
                 Spacer()
                 
                 HStack(spacing: 4) {
-                    Image(systemName: item.safetyLevel.iconName)
+                    Image(systemName: "circle.dashed")
                         .font(.system(size: 11, weight: .bold))
                     Text(item.safetyText)
                         .font(.system(size: 11, weight: .semibold))
                 }
-                .foregroundStyle(item.safetyLevel.textColor)
+                .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
                 .padding(.horizontal, 9)
                 .padding(.vertical, 5)
-                .background(item.safetyLevel.badgeColor.opacity(0.85))
+                .background(Color(red: 0.93, green: 0.91, blue: 0.88))
                 .clipShape(Capsule())
             }
             .padding(.horizontal, 14)
@@ -566,6 +566,9 @@ public struct RecentScanRowCard: View {
 // MARK: - Scan Analysis Result Sheet
 
 public struct ScanResultSheet: View {
+    public static let routinePreviewTitle = "Sample · does not add to a routine"
+    public static let libraryPreviewTitle = "Sample · does not save to Library"
+
     public let scannedTitle: String
     public let scannedBrand: String
     public let compatibilityScore: Int
@@ -573,15 +576,12 @@ public struct ScanResultSheet: View {
     public let routineSummary: String
     public var onDismiss: () -> Void
     
-    @State private var isSavedToLibrary: Bool = false
-    @State private var isAddedToRoutine: Bool = false
-    
     public init(
         scannedTitle: String = "Niacinamide 10% + Zinc 1%",
         scannedBrand: String = "The Ordinary",
         compatibilityScore: Int = 94,
         actives: [ScannedActiveIngredient]? = nil,
-        routineSummary: String = "Harmonious with your AM Routine. Safely layers before Daily Moisturizer and SPF 46.",
+        routineSummary: String = "UI preview. This sample scan is not a compatibility result and was not saved to Library.",
         onDismiss: @escaping () -> Void
     ) {
         self.scannedTitle = scannedTitle
@@ -595,21 +595,21 @@ public struct ScanResultSheet: View {
                 concentration: "10%",
                 role: "Sebum balancer & pores",
                 safetyLevel: .safe,
-                compatibilityNote: "Synergistic with your Gentle Cleanser & SPF 46."
+                compatibilityNote: "Sample ingredient line. Not a safety result."
             ),
             ScannedActiveIngredient(
                 name: "Zinc PCA",
                 concentration: "1%",
                 role: "Anti-inflammatory & oil control",
                 safetyLevel: .safe,
-                compatibilityNote: "No clash detected with daytime actives."
+                compatibilityNote: "Sample ingredient line. Not a safety result."
             ),
             ScannedActiveIngredient(
                 name: "Hyaluronic Acid",
                 concentration: "1%",
                 role: "Hydration booster",
                 safetyLevel: .safe,
-                compatibilityNote: "Enhances moisture retention."
+                compatibilityNote: "Sample ingredient line. Not a safety result."
             )
         ]
     }
@@ -650,37 +650,24 @@ public struct ScanResultSheet: View {
                     )
                     
                     VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("ROUTINE HARMONY")
-                                    .font(.system(size: 11, weight: .bold))
-                                    .tracking(0.5)
-                                    .foregroundStyle(Color(red: 0.44, green: 0.31, blue: 0.22))
-                                
-                                Text("Confidence Score")
-                                    .font(.system(size: 15, weight: .semibold))
-                                    .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.16))
-                            }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("UI PREVIEW")
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(0.5)
+                                .foregroundStyle(Color(red: 0.44, green: 0.31, blue: 0.22))
                             
-                            Spacer()
-                            
-                            HStack(alignment: .firstTextBaseline, spacing: 2) {
-                                Text("\(compatibilityScore)")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundStyle(Color(red: 0.44, green: 0.31, blue: 0.22))
-                                Text("/100")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
-                            }
+                            Text("Not analyzed")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.16))
                         }
                         
                         Divider()
                             .overlay(Color(red: 0.85, green: 0.81, blue: 0.94))
                         
                         HStack(spacing: 8) {
-                            Image(systemName: "checkmark.seal.fill")
+                            Image(systemName: "eye")
                                 .font(.system(size: 16))
-                                .foregroundStyle(Color(red: 0.28, green: 0.55, blue: 0.22))
+                                .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
                             Text(routineSummary)
                                 .font(.system(size: 13))
                                 .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.16))
@@ -719,15 +706,15 @@ public struct ScanResultSheet: View {
                                     Spacer()
                                     
                                     HStack(spacing: 4) {
-                                        Image(systemName: active.safetyLevel.iconName)
+                                        Image(systemName: "circle.dashed")
                                             .font(.system(size: 11))
-                                        Text(active.safetyLevel.rawValue)
+                                        Text("Sample")
                                             .font(.system(size: 11, weight: .semibold))
                                     }
-                                    .foregroundStyle(active.safetyLevel.textColor)
+                                    .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
                                     .padding(.horizontal, 8)
                                     .padding(.vertical, 4)
-                                    .background(active.safetyLevel.badgeColor.opacity(0.85))
+                                    .background(Color(red: 0.93, green: 0.91, blue: 0.88))
                                     .clipShape(Capsule())
                                 }
                                 
@@ -750,15 +737,11 @@ public struct ScanResultSheet: View {
                     }
                     
                     VStack(spacing: 12) {
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isAddedToRoutine.toggle()
-                            }
-                        }) {
+                        Button(action: {}) {
                             HStack {
-                                Image(systemName: isAddedToRoutine ? "checkmark" : "plus.circle.fill")
+                                Image(systemName: "plus.circle")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text(isAddedToRoutine ? "Added to AM Routine" : "Add to AM Routine")
+                                Text(Self.routinePreviewTitle)
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundStyle(Color.white)
@@ -768,16 +751,14 @@ public struct ScanResultSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                        .disabled(true)
+                        .accessibilityIdentifier("sample-scan-does-not-add")
                         
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isSavedToLibrary.toggle()
-                            }
-                        }) {
+                        Button(action: {}) {
                             HStack {
-                                Image(systemName: isSavedToLibrary ? "bookmark.fill" : "bookmark")
+                                Image(systemName: "bookmark")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text(isSavedToLibrary ? "Saved in Library" : "Save to My Library")
+                                Text(Self.libraryPreviewTitle)
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundStyle(Color(red: 0.31, green: 0.34, blue: 0.56))
@@ -791,13 +772,15 @@ public struct ScanResultSheet: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .disabled(true)
+                        .accessibilityIdentifier("sample-scan-does-not-save")
                     }
                     .padding(.top, 8)
                 }
                 .padding(24)
             }
             .background(Color(red: 0.97, green: 0.95, blue: 0.93))
-            .navigationTitle("Scan Analysis")
+            .navigationTitle("Sample scan")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -825,7 +808,6 @@ public struct ScanView: View {
     @State private var showScanResultSheet: Bool = false
     @State private var selectedHistoryItem: ScanHistoryItem?
     @State private var showProductDetailSheet: Bool = false
-    @State private var isAddedToPMRoutine: Bool = false
     
     // Photo Picker State
     @State private var selectedPickerItem: PhotosPickerItem?
@@ -836,7 +818,7 @@ public struct ScanView: View {
             brand: "The Ordinary",
             productName: "Niacinamide 10% + Zinc 1%",
             timeAgo: "2 hours ago",
-            safetyText: "Harmonious",
+            safetyText: "Sample",
             safetyLevel: .safe,
             actives: ["Niacinamide", "Zinc PCA"]
         ),
@@ -844,7 +826,7 @@ public struct ScanView: View {
             brand: "Paula's Choice",
             productName: "Skin Perfecting 2% BHA Liquid",
             timeAgo: "Yesterday",
-            safetyText: "PM Routine Only",
+            safetyText: "Sample",
             safetyLevel: .caution,
             actives: ["Salicylic Acid", "Green Tea"]
         ),
@@ -852,7 +834,7 @@ public struct ScanView: View {
             brand: "CeraVe",
             productName: "Hydrating Facial Cleanser",
             timeAgo: "3 days ago",
-            safetyText: "Harmonious",
+            safetyText: "Sample",
             safetyLevel: .safe,
             actives: ["Ceramides 1, 3, 6-II", "Hyaluronic Acid"]
         )
@@ -891,17 +873,10 @@ public struct ScanView: View {
                     ScanSavedView(
                         productTitle: "Vitamin C Serum",
                         brand: "CeraVe",
-                        routineMatch: 91,
-                        isAddedToRoutine: isAddedToPMRoutine,
                         showsTabBar: false,
                         onSelectTab: onSelectTab,
                         onViewProductDetail: {
                             showProductDetailSheet = true
-                        },
-                        onToggleRoutine: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isAddedToPMRoutine.toggle()
-                            }
                         },
                         onScanAnother: {
                             withAnimation(.easeInOut(duration: 0.35)) {
@@ -971,9 +946,7 @@ public struct ScanView: View {
                 scannedTitle: selectedHistoryItem?.productName ?? "Niacinamide 10% + Zinc 1%",
                 scannedBrand: selectedHistoryItem?.brand ?? "The Ordinary",
                 compatibilityScore: selectedHistoryItem?.safetyLevel == .caution ? 74 : 94,
-                routineSummary: selectedHistoryItem?.safetyLevel == .caution
-                    ? "Contains 2% Salicylic Acid. Alternate with Vitamin C in AM to avoid skin barrier irritation."
-                    : "Harmonious with your current AM routine. Safely layers before moisturizer and SPF 46.",
+                routineSummary: "UI preview. This sample scan is not a compatibility result and was not saved to Library.",
                 onDismiss: {
                     showScanResultSheet = false
                     selectedHistoryItem = nil
@@ -1048,12 +1021,12 @@ public struct ScanView: View {
                     .lineLimit(1)
             }
             
-            Text("Analyze products instantly.")
+            Text("UI preview")
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.16))
                 .padding(.top, 2)
             
-            Text("Check skincare labels for active synergy and routine harmony.")
+            Text("Sample scan only. This does not analyze a product or save it to Library.")
                 .font(.system(size: 13, weight: .regular))
                 .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
         }
@@ -1171,7 +1144,7 @@ public struct ScanView: View {
     private var recentScansSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Recent Scans")
+                Text("Sample scans")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color(red: 0.10, green: 0.09, blue: 0.16))
                 

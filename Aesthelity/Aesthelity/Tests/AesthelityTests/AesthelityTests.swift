@@ -161,7 +161,7 @@ struct AesthelityTests {
         
         let amFit = item.routineFits.first(where: { $0.routineName == "AM routine" })
         #expect(amFit?.note == "Works before SPF")
-        #expect(amFit?.badgeText == "Best")
+        #expect(amFit?.badgeText == "Reference")
         
         let pmFit = item.routineFits.first(where: { $0.routineName == "PM routine" })
         #expect(pmFit?.note == "Do not combine with retinol")
@@ -310,6 +310,12 @@ struct AesthelityTests {
         #expect(resultSheet.scannedBrand == "The Ordinary")
         #expect(resultSheet.compatibilityScore == 96)
         #expect(resultSheet.actives.count == 3)
+        #expect(ScanResultSheet.routinePreviewTitle == "Sample · does not add to a routine")
+        #expect(ScanResultSheet.libraryPreviewTitle == "Sample · does not save to Library")
+        #expect(ScanSavedView.routinePreviewTitle == ScanResultSheet.routinePreviewTitle)
+        let saved = ScanSavedView()
+        #expect(saved.productTitle == "Vitamin C Serum")
+        #expect(saved.brand == "CeraVe")
     }
     
     @Test func profileViewInitializationAndDefaults() throws {
