@@ -3,6 +3,12 @@ import Testing
 @testable import Aesthelity
 
 struct AnalysisFindingsTests {
+    @Test func invalidResponseDoesNotUseIncompleteTitle() {
+        let message = APIClientError.invalidResponse.localizedDescription
+        #expect(message == "The server returned an unreadable response.")
+        #expect(!message.contains(AnalysisResponsePayload.incompleteTitle))
+    }
+
     @Test func supportedFixtureKeepsEvidence() throws {
         let response = try decode(fixture("supported_finding"))
         try AccountDataAPI.validate(

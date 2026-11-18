@@ -164,11 +164,7 @@ struct RoutineAnalysisView: View {
             } catch is CancellationError {
             } catch {
                 guard operation == id else { return }
-                if (error as? APIClientError) == .invalidResponse {
-                    message = AnalysisResponsePayload.incompleteTitle + ". The response could not be verified. Try analyzing again."
-                } else {
-                    message = error.localizedDescription
-                }
+                message = error.localizedDescription
                 needsSignIn = (error as? APIClientError) == .signInRequired
             }
         }
