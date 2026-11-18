@@ -612,3 +612,75 @@ public struct LabeledButton: View {
     }
     .background(AppTheme.Semantic.surfaceBase)
 }
+
+// MARK: - Analysis results
+
+
+struct AnalysisIncompleteCard: View {
+    let coverage: AnalysisCoveragePayload?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(AnalysisResponsePayload.incompleteTitle, systemImage: "exclamationmark.triangle")
+                .font(.headline)
+            Text("Some information needed for the assessment was unavailable.")
+                .font(.subheadline)
+            if let count = coverage?.unknownIngredientCount, count > 0 {
+                Text(count == 1 ? "1 unverified ingredient" : "\(count) unverified ingredients")
+                    .font(.caption)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct AnalysisFindingBadge: View {
+    let finding: AnalysisFindingPayload
+
+    private var tint: Color {
+        if !finding.isSupported { return .orange }
+        switch finding.severity {
+        case .known(.high): return .red
+        case .known(.moderate): return .orange
+        case .known(.low): return .blue
+        default: return AppTheme.Semantic.inkBrand
+        }
+    }
+
+    var body: some View {
+        if let label = finding.badgeLabel {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .foregroundStyle(AppTheme.Semantic.inkPrimary)
+                .background(tint.opacity(0.18), in: Capsule())
+        }
+    }
+}
+
+struct AnalysisFindingDetails: View {
+    let finding: AnalysisFindingPayload
+
+    var body: some View {
+        if let reason = finding.plainLanguageReason, !reason.isEmpty {
+            Text(reason).font(.caption).foregroundStyle(.secondary)
+        }
+        if let ingredients = finding.affectedIngredientText {
+            Text(ingredients).font(.caption)
+        }
+        ForEach(Array((finding.evidence ?? []).enumerated()), id: \.offset) { _, reference in
+            VStack(alignment: .leading, spacing: 3) {
+                Text(reference.source.title).font(.caption.weight(.semibold))
+                Text(reference.source.publisher).font(.caption)
+                Text(reference.claim).font(.caption)
+            }
+            .accessibilityElement(children: .combine)
+        }
+        ForEach(Array(finding.limitations.enumerated()), id: \.offset) { _, limitation in
+            Text(limitation).font(.caption)
+        }
+    }
+}

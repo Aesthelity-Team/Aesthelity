@@ -127,7 +127,7 @@ struct LiveAnalysisView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
-                Text(response.hasIncompleteAssessment ? "Incomplete input" : "Complete input")
+                Text(response.checkStatusLabel)
                     .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
@@ -157,7 +157,7 @@ struct LiveAnalysisView: View {
                     title: finding.outcomeTitle,
                     category: finding.categoryID,
                     explanation: finding.explanation,
-                    products: finding.productIDs.map { live.productNames[$0] ?? $0 }.joined(separator: " · "),
+                    products: finding.affectedProductNames(live.productNames),
                     finding: finding
                 )
             }
@@ -165,7 +165,7 @@ struct LiveAnalysisView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Rule version \(response.ruleVersion) · Ingredient catalog v\(response.activeCatalogVersion)")
                     .font(.system(size: 11, weight: .medium))
-                ForEach(response.limitations + (response.coverage?.limitations ?? []), id: \.self) { limitation in
+                ForEach(Array((response.limitations + (response.coverage?.limitations ?? [])).enumerated()), id: \.offset) { _, limitation in
                     Text(limitation)
                         .font(.system(size: 11))
                 }
@@ -203,10 +203,10 @@ struct LiveAnalysisView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(AppTheme.Semantic.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if let products, !products.isEmpty {
-                detailRow(finding?.productIDs.count == 1 ? "Affected product" : "Affected products", value: products)
-            }
             if let finding {
+                if let products, !products.isEmpty {
+                    detailRow(finding.affectedProductTitle, value: products)
+                }
                 AnalysisFindingDetails(finding: finding)
             }
         }

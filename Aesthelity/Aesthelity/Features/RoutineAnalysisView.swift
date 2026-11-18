@@ -206,88 +206,20 @@ private struct PersonalAnalysisResultView: View {
                         AnalysisFindingBadge(finding: finding)
                     }
                     if !finding.productIDs.isEmpty {
-                        let label = finding.productIDs.count == 1 ? "Affected product" : "Affected products"
-                        let products = finding.productIDs.map { names[$0] ?? "Product" }.joined(separator: " · ")
-                        Text("\(label): \(products)").font(.subheadline)
+                        Text("\(finding.affectedProductTitle): \(finding.affectedProductNames(names))")
+                            .font(.subheadline)
                     }
                     Text(finding.explanation)
                     AnalysisFindingDetails(finding: finding)
                 }
                 .padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
-            ForEach(result.limitations + (result.coverage?.limitations ?? []), id: \.self) { Text($0).font(.caption) }
+            ForEach(Array((result.limitations + (result.coverage?.limitations ?? [])).enumerated()), id: \.offset) { _, limitation in
+                Text(limitation).font(.caption)
+            }
             Text("Rules \(result.ruleVersion) · Ingredient reference v\(result.activeCatalogVersion)")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .accessibilityIdentifier("personal-analysis-result")
-    }
-}
-
-
-struct AnalysisIncompleteCard: View {
-    let coverage: AnalysisCoveragePayload?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Label(AnalysisResponsePayload.incompleteTitle, systemImage: "exclamationmark.triangle")
-                .font(.headline)
-            Text("Some information needed for the assessment was unavailable.")
-                .font(.subheadline)
-            if let count = coverage?.unknownIngredientCount, count > 0 {
-                Text(count == 1 ? "1 unverified ingredient" : "\(count) unverified ingredients")
-                    .font(.caption)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
-    }
-}
-
-struct AnalysisFindingBadge: View {
-    let finding: AnalysisFindingPayload
-
-    private var tint: Color {
-        if !finding.isSupported { return .orange }
-        switch finding.severity {
-        case .known(.high): return .red
-        case .known(.moderate): return .orange
-        case .known(.low): return .blue
-        default: return AppTheme.Semantic.inkBrand
-        }
-    }
-
-    var body: some View {
-        if let label = finding.isSupported ? finding.severityLabel : "Unknown" {
-            Text(label)
-                .font(.caption2.weight(.semibold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .foregroundStyle(AppTheme.Semantic.inkPrimary)
-                .background(tint.opacity(0.18), in: Capsule())
-        }
-    }
-}
-
-struct AnalysisFindingDetails: View {
-    let finding: AnalysisFindingPayload
-
-    var body: some View {
-        if let reason = finding.plainLanguageReason, !reason.isEmpty {
-            Text(reason).font(.caption).foregroundStyle(.secondary)
-        }
-        if !finding.ingredientLabel.isEmpty {
-            Text("Affected ingredients: " + finding.ingredientLabel)
-                .font(.caption)
-        }
-        ForEach(Array((finding.evidence ?? []).enumerated()), id: \.offset) { _, reference in
-            VStack(alignment: .leading, spacing: 3) {
-                Text(reference.source.title).font(.caption.weight(.semibold))
-                Text(reference.source.publisher).font(.caption)
-                Text(reference.claim).font(.caption)
-            }
-            .accessibilityElement(children: .combine)
-        }
-        ForEach(finding.limitations, id: \.self) { Text($0).font(.caption) }
     }
 }

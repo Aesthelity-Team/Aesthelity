@@ -100,6 +100,10 @@ struct AnalysisResponsePayload: Codable {
             || (outcome != .known(.noFindings) && outcome != .known(.findings))
     }
 
+    var checkStatusLabel: String {
+        hasIncompleteAssessment ? "Incomplete check" : "Complete check"
+    }
+
     var showsNoFindings: Bool {
         outcome == .known(.noFindings) && findings.isEmpty && !hasIncompleteAssessment
     }
@@ -171,7 +175,28 @@ struct AnalysisFindingPayload: Codable {
         return value.rawValue.capitalized
     }
 
+    var badgeLabel: String? {
+        isSupported ? severityLabel : "Unknown"
+    }
+
+    func affectedProductNames(_ names: [String: String]) -> String {
+        productIDs.map { names[$0] ?? "Product" }.joined(separator: " · ")
+    }
+
+    var affectedProductTitle: String {
+        productIDs.count == 1 ? "Affected product" : "Affected products"
+    }
+
     var plainLanguageReason: String? {
+        let internalCodes: Set<String> = [
+            "coverage.ai-analysis-unavailable",
+            "coverage.reference-context-incomplete",
+            "coverage.reference-evidence-insufficient"
+        ]
+        guard !internalCodes.contains(ruleID),
+              !internalCodes.contains(reasonCode ?? reason),
+              !internalCodes.contains(reason) else { return nil }
+
         if isSupported {
             // AI responses put reference-processing details in reason. The card already has the explanation and evidence.
             return ruleStatus == .known(.aiAssisted) ? nil : reason
@@ -197,13 +222,27 @@ struct AnalysisFindingPayload: Codable {
         case "allergy-id-not-in-canonical-records":
             return "We couldn’t match a recorded allergy to a verified ingredient."
         default:
-            return nil
+            return outcome == .known(.unknown) && ruleStatus == .known(.approved) ? reason : nil
         }
+    }
+
+    private static let bundledIngredientNames: [String: String] = {
+        guard let catalog = try? IngredientAliasCatalog.loadBundled() else { return [:] }
+        return Dictionary(uniqueKeysWithValues: catalog.ingredients.map { ($0.id, $0.name) })
+    }()
+
+    var affectedIngredientText: String? {
+        let names = ingredientLabel
+        guard !names.isEmpty else { return nil }
+        let title = originalText != nil || ingredientIDs.count == 1 ? "Affected ingredient" : "Affected ingredients"
+        return "\(title): \(names)"
     }
 
     var ingredientLabel: String {
         if let originalText { return originalText }
-        return ingredientIDs.joined(separator: " · ")
+        return ingredientIDs.map { id in
+            Self.bundledIngredientNames[id] ?? id.replacingOccurrences(of: "-", with: " ").capitalized
+        }.joined(separator: " · ")
     }
 }
 
