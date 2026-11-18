@@ -135,7 +135,8 @@ public final class RoutineStore: ObservableObject {
         title: String,
         subtitle: String,
         period: RoutinePeriod,
-        productId: UUID?
+        productId: UUID?,
+        product: RoutineProductSnapshot? = nil
     ) throws -> RoutineRecord {
         let periodName = period == .am ? "Morning" : "Evening"
         if let existing = routines.first(where: { $0.period == period }) {
@@ -146,7 +147,8 @@ public final class RoutineStore: ObservableObject {
                 subtitle: subtitle,
                 state: .incomplete,
                 hasClash: false,
-                productId: productId
+                productId: productId,
+                product: product
             )
             updated.steps.append(newStep)
             try save(updated)
@@ -163,7 +165,8 @@ public final class RoutineStore: ObservableObject {
                     subtitle: subtitle,
                     state: .incomplete,
                     hasClash: false,
-                    productId: productId
+                    productId: productId,
+                    product: product
                 )
             ]
         )

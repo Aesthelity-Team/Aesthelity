@@ -12,6 +12,12 @@ import SwiftUI
 /// and direct routine addition.
 public struct ProductCatalogView: View {
     public let products: [DemoProduct]
+    private let loadsLiveCatalog: Bool
+    @StateObject private var liveCatalog = ProductCatalogStore()
+
+    private var availableProducts: [DemoProduct] {
+        loadsLiveCatalog ? liveCatalog.products ?? products : products
+    }
     public var onSelectProduct: ((DemoProduct) -> Void)?
     public var onAddToRoutine: ((DemoProduct, RoutinePeriod) -> Void)?
     public var onBack: (() -> Void)?
@@ -39,6 +45,7 @@ public struct ProductCatalogView: View {
         fullScreenFrame: Bool = false,
         onSelectTab: ((Int) -> Void)? = nil
     ) {
+        self.loadsLiveCatalog = products == nil && !ProductCatalogStore.usesBundledCatalogForTests
         if let products = products {
             self.products = products
         } else {
@@ -83,7 +90,7 @@ public struct ProductCatalogView: View {
     // MARK: - Filtering Logic
     public func filteredProducts(for category: DemoProductCategory?, query: String) -> [DemoProduct] {
         let trimmed = query.trimmingCharacters(in: .whitespaces)
-        return products.filter { product in
+        return availableProducts.filter { product in
             let matchesCategory = (category == nil) || (product.category == category)
             if trimmed.isEmpty {
                 return matchesCategory
@@ -130,6 +137,9 @@ public struct ProductCatalogView: View {
                 catalogContent
             }
         }
+        .task {
+            if loadsLiveCatalog { await liveCatalog.load() }
+        }
         .sheet(item: $productForRoutineSheet) { product in
             addToRoutineSheet(for: product)
         }
@@ -152,6 +162,22 @@ public struct ProductCatalogView: View {
 
     private var catalogContent: some View {
         VStack(spacing: 0) {
+            if loadsLiveCatalog {
+                HStack {
+                    if liveCatalog.isLoading { ProgressView("Loading catalog…") }
+                    if let message = liveCatalog.message {
+                        Text(message).font(.caption)
+                    } else if liveCatalog.products != nil {
+                        Text("Live catalog").font(.caption)
+                            .accessibilityIdentifier("catalog.live")
+                    }
+                    Spacer()
+                    Button("Refresh") { Task { await liveCatalog.load() } }
+                        .disabled(liveCatalog.isLoading)
+                }
+                .foregroundStyle(Constants.semanticInkPrimary)
+                .padding(.horizontal, 20)
+            }
             // Header bar
             HStack(spacing: 12) {
                 if showsBackButton {
@@ -243,7 +269,7 @@ public struct ProductCatalogView: View {
                 Button(action: {
                     selectedCategory = nil
                 }) {
-                    Text("All (\(products.count))")
+                    Text("All (\(availableProducts.count))")
                         .font(.system(size: 13, weight: selectedCategory == nil ? .bold : .medium))
                         .foregroundStyle(selectedCategory == nil ? Color.white : Color(hex: "#50578F"))
                         .padding(.horizontal, 14)
@@ -262,7 +288,7 @@ public struct ProductCatalogView: View {
                 .accessibilityIdentifier("catalog.filter.all")
 
                 ForEach(DemoProductCategory.allCases, id: \.self) { category in
-                    let count = products.filter { $0.category == category }.count
+                    let count = availableProducts.filter { $0.category == category }.count
                     let isSelected = selectedCategory == category
 
                     Button(action: {
@@ -614,7 +640,8 @@ public struct ProductCatalogView: View {
                     title: product.name,
                     subtitle: "\(product.brand) · \(cat.rawValue)",
                     period: period,
-                    productId: detail.id
+                    productId: detail.id,
+                    product: RoutineProductSnapshot(product)
                 )
                 routineToastMessage = "Added to \(period == .am ? "AM" : "PM") routine"
             } catch {

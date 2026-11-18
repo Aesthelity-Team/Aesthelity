@@ -14,9 +14,11 @@ public struct RoutineProductSnapshot: Equatable, Codable {
     public let listStatus: String
     let normalizedIngredients: [NormalizedIngredient]
     let category: DemoProductCategory?
+    let isFictional: Bool?
 
     init(_ product: DemoProduct) {
         category = product.category
+        isFictional = product.isFictional
         reference = .catalog(product.id)
         name = product.name
         brand = product.brand
@@ -27,6 +29,7 @@ public struct RoutineProductSnapshot: Equatable, Codable {
 
     init(_ product: ManualProduct) {
         category = product.category
+        isFictional = false
         reference = .manual(product.id)
         name = product.name
         brand = product.brand
@@ -37,7 +40,7 @@ public struct RoutineProductSnapshot: Equatable, Codable {
 
     var provenance: String {
         switch reference {
-        case .catalog: return "Fictional demo catalog"
+        case .catalog: return isFictional == true ? "Fictional demo catalog" : "Catalog product"
         case .manual: return "Manually entered"
         }
     }

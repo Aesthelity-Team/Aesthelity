@@ -56,3 +56,5 @@ venv/
 # Local Firebase server credentials
 credentials/
 *-firebase-adminsdk-*.json
+
+Aesthelity/Config/*.local.xcconfig
