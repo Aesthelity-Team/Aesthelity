@@ -11,7 +11,7 @@ from analysis_engine.ai_analysis import _reference_matches_routine, analyze_norm
 from Backend.analysis_api import _public_analysis_body
 from Backend.seed_analysis_references import CONTRACT, REFERENCES
 from Backend.seed_demo_references import REFERENCES_V1_1, preview_references
-from test_ai_analysis import FakeProvider, candidate, context, normalization, row
+from tests.test_ai_analysis import FakeProvider, candidate, context, normalization, row
 
 CATALOG_PATH = (
     Path(__file__).resolve().parents[1]
@@ -84,6 +84,54 @@ class DemoReferenceTests(unittest.TestCase):
                 for near_miss in near_misses:
                     self.assertFalse(_reference_matches_routine(record, near_miss))
 
+
+    def test_multiple_ids_respect_all_and_any_criteria(self):
+        ids = ["linalool", "limonene"]
+        for key, matches_one in (("allIngredientIDs", False), ("anyIngredientIDs", True)):
+            reference = {
+                **REFERENCES_V1_1[0],
+                "canonicalIngredientIDs": ids,
+                "matchCriteria": {key: ids, "recordedAllergyRequired": True},
+            }
+            with self.subTest(criteria=key):
+                self.assertTrue(_reference_matches_routine(reference, routine(ids, ["limonene"])))
+                self.assertEqual(
+                    _reference_matches_routine(reference, routine(["linalool"], ["linalool"])),
+                    matches_one,
+                )
+                self.assertFalse(_reference_matches_routine(reference, routine(["linalool"], ["limonene"])))
+
+    def test_class_only_match_cannot_substitute_for_exact_recorded_id(self):
+        reference = {
+            **REFERENCES_V1_1[0],
+            "canonicalIngredientClasses": ["fragrance-allergen"],
+            "matchCriteria": {
+                "allIngredientClasses": ["fragrance-allergen"],
+                "recordedAllergyRequired": True,
+            },
+        }
+        self.assertFalse(_reference_matches_routine(reference, routine(["limonene"], ["limonene"])))
+        self.assertTrue(_reference_matches_routine(reference, routine(["linalool"], ["linalool"])))
+
+    def test_allergy_finding_cannot_name_an_unrecorded_ingredient(self):
+        record = {
+            **REFERENCES_V1_1[0],
+            "canonicalIngredientIDs": ["linalool", "limonene"],
+            "canonicalIngredientClasses": ["fragrance-allergen"],
+        }
+        provider = FakeProvider(candidate(record["referenceID"], "allergen", ["product"], ["limonene"]))
+        result = analyze_normalized_routine(
+            normalization(row(0, "Linalool", "Linalool"), row(1, "Limonene", "Limonene")),
+            context(recordedAllergies={"status": "known", "ingredientIDs": ["linalool"]}),
+            [{"id": key, "canonicalName": CATALOG[key]["name"], "classes": CATALOG[key]["classes"]}
+             for key in ("linalool", "limonene")],
+            [record],
+            provider,
+        )
+        response = _public_analysis_body(result, catalog_version=3, catalog_source="test")
+        self.assertEqual(response["outcome"], "unknown")
+        self.assertEqual(response["completeness"], "incomplete")
+        self.assertTrue(all(finding["outcome"] == "unknown" for finding in response["findings"]))
 
     def test_linalool_finding_carries_evidence_in_public_response(self):
         record = REFERENCES_V1_1[0]
