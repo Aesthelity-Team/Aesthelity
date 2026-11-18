@@ -42,12 +42,93 @@ struct IngredientResolveRequest: Encodable {
 }
 
 struct IngredientResolveResponse: Decodable, Equatable {
+    struct PersistenceReceipt: Decodable, Equatable {
+        let productPath: String
+    }
+
     let contractVersion: Int
     let status: String?
     let coverage: String?
     let failureCode: String?
     let providerStatus: String?
     let ingredients: [IngredientResolveRow]
+    let persisted: PersistenceReceipt?
+}
+
+/// A single Save attempt. Cloud and device storage are separate writes.
+struct ManualProductSaveOutcome {
+    let product: ManualProduct
+    let coverage: String?
+    let note: String?
+    let error: String?
+
+    var shouldDismiss: Bool { note == nil && error == nil }
+}
+
+@MainActor
+enum ManualProductSaving {
+    /// Inject both writes so regression tests exercise the same path as the form.
+    static func save(
+        _ reviewed: ManualProduct,
+        coverage reviewCoverage: String?,
+        persist: (() async throws -> IngredientResolveResponse)?,
+        writeLocal: (ManualProduct) throws -> Void
+    ) async -> ManualProductSaveOutcome {
+        var product = reviewed
+        var coverage = reviewCoverage
+        var note: String?
+        var cloudSaved = false
+        if let persist {
+            do {
+                let response = try await persist()
+                guard response.status != "failed" else {
+                    throw BackendAnalysisAPIError.invalidResponse
+                }
+                let rows = response.ingredients.sorted { $0.index < $1.index }
+                guard response.contractVersion == 1, response.status == "ok",
+                      response.failureCode == nil,
+                      response.persisted?.productPath == "productIngredients/\(reviewed.id.uuidString)",
+                      rows.count == reviewed.ingredients.count,
+                      rows.map(\.index) == Array(reviewed.ingredients.indices),
+                      rows.map(\.originalText) == reviewed.ingredients.map(\.originalText),
+                      rows.allSatisfy({ NormalizedIngredient.Mapping(rawValue: $0.mapping) != nil }) else {
+                    throw BackendAnalysisAPIError.invalidResponse
+                }
+                let ingredients = rows.map { $0.asNormalizedIngredient() }
+                let confirmed = ingredients.filter { $0.mapping == .confirmed }.count
+                let expectedCoverage = confirmed == 0 ? "unknown"
+                    : (confirmed == ingredients.count ? "complete" : "partial")
+                // Reject invalid confirmed IDs instead of silently downgrading a claimed match.
+                guard zip(rows, ingredients).allSatisfy({ pair in
+                    pair.0.mapping != "confirmed" || pair.1.mapping == .confirmed
+                }),
+                      response.coverage == expectedCoverage else {
+                    throw BackendAnalysisAPIError.invalidResponse
+                }
+                product.ingredients = ingredients
+                coverage = response.coverage
+                cloudSaved = true
+                if ingredients != reviewed.ingredients || coverage != reviewCoverage {
+                    note = "Saved on this device and to the cloud. Matching changed since Review; the latest saved matches and coverage are shown here."
+                }
+            } catch {
+                if error is CancellationError || (error as? URLError)?.code == .cancelled {
+                    return ManualProductSaveOutcome(product: reviewed, coverage: reviewCoverage, note: nil,
+                        error: "Save was cancelled. Your entries are still here; cloud save could not be confirmed. Try Save again.")
+                }
+                note = "Saved on this device using the reviewed matches. Cloud save could not be confirmed. Your entries are still here; try Save again to retry cloud matching and storage."
+            }
+        }
+        do {
+            try writeLocal(product)
+            return ManualProductSaveOutcome(product: product, coverage: coverage, note: note, error: nil)
+        } catch {
+            let message = cloudSaved
+                ? "The ingredient list was saved to the cloud, but this device could not save your product. The latest cloud matches and your entries are still here. Try Save again."
+                : "Your product could not be saved on this device. Your entries are still here.\(persist == nil ? "" : " Cloud save could not be confirmed.") Try Save again."
+            return ManualProductSaveOutcome(product: product, coverage: coverage, note: nil, error: message)
+        }
+    }
 }
 
 struct IngredientResolveRow: Decodable, Equatable {

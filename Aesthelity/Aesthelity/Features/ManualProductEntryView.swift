@@ -38,6 +38,7 @@ struct ManualProductEntryView: View {
                     }
                     .accessibilityIdentifier("manual-category")
                 }
+                .disabled(isSaving)
                 Section {
                     TextEditor(text: $draft.rawIngredientList)
                         .autocorrectionDisabled()
@@ -51,6 +52,7 @@ struct ManualProductEntryView: View {
                 } footer: {
                     Text("Copy the label using commas or line breaks between ingredients. Use at most 120 characters per ingredient.")
                 }
+                .disabled(isSaving)
                 if !loadingNormalizer && normalizer == nil {
                     Section {
                         Text("On-device ingredient catalog could not be loaded. Matching still tries the backend first.")
@@ -63,7 +65,7 @@ struct ManualProductEntryView: View {
                 Section {
                     Button("Review ingredients", action: review)
                         .accessibilityIdentifier("manual-review")
-                        .disabled(isResolving)
+                        .disabled(isResolving || isSaving)
                     if isResolving {
                         ProgressView("Matching ingredients…")
                             .accessibilityIdentifier("manual-resolving")
@@ -109,6 +111,7 @@ struct ManualProductEntryView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                         .accessibilityIdentifier("manual-cancel")
+                        .disabled(isSaving)
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -121,6 +124,7 @@ struct ManualProductEntryView: View {
                 matchingNote = nil
                 saveError = nil
             }
+            .interactiveDismissDisabled(isSaving)
             .task {
                 guard normalizer == nil else { return }
                 do {
@@ -235,16 +239,16 @@ struct ManualProductEntryView: View {
     }
 
     private func save(_ product: ManualProduct) {
+        guard !isSaving && !isResolving else { return }
         saveError = nil
         isSaving = true
         Task {
             defer { isSaving = false }
-            var cloudNote: String?
-            // Issue #98: persist the ordered list to Firestore when signed in.
+            let persist: (() async throws -> IngredientResolveResponse)?
             if Auth.auth().currentUser != nil {
-                do {
+                persist = {
                     let texts = product.ingredients.map(\.originalText)
-                    let response = try await api.resolveIngredients(
+                    return try await api.resolveIngredients(
                         texts,
                         productID: product.id.uuidString,
                         persist: true,
@@ -253,24 +257,17 @@ struct ManualProductEntryView: View {
                         format: "analysis-input",
                         listStatus: "complete"
                     )
-                    if response.status == "failed" {
-                        cloudNote = "Saved on this device. Cloud matching reported a failure (\(response.failureCode ?? "unknown")); try syncing again later."
-                    }
-                } catch {
-                    cloudNote = "Saved on this device. Cloud sync failed; your list is still here. Try again when the API is available."
                 }
+            } else {
+                persist = nil
             }
-            do {
-                try store.save(product)
-                if let cloudNote {
-                    matchingNote = cloudNote
-                    // Keep the sheet open so the note is visible; Cancel dismisses.
-                } else {
-                    dismiss()
-                }
-            } catch {
-                saveError = "Your product could not be saved. Your entries are still here. Please try again."
-            }
+            let result = await ManualProductSaving.save(product, coverage: coverage,
+                persist: persist, writeLocal: { try store.save($0) })
+            preparedProduct = result.product
+            coverage = result.coverage
+            matchingNote = result.note
+            saveError = result.error
+            if result.shouldDismiss { dismiss() }
         }
     }
 
