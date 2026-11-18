@@ -83,7 +83,7 @@ struct AuthenticatedAPIClient {
             !segment.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
         }) else { throw APIClientError.configuration }
         let url = path.reduce(baseURL) { $0.appendingPathComponent($1) }
-        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 120)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")

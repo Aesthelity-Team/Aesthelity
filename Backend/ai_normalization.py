@@ -504,6 +504,7 @@ class OpenRouterNormalizationProvider:
             with urlopen(request, timeout=timeout) as response:
                 return response.status, response.read(MAX_RESPONSE_BYTES + 1)
         except HTTPError as error:
+            print(f"OpenRouter HTTP status: {error.code}")
             if error.code == 429:
                 raise ProviderError("provider_rate_limited") from None
             if _schema_rejected(error):
@@ -558,11 +559,11 @@ class OpenRouterNormalizationProvider:
                 if self._is_openai_host():
                     body["store"] = False
 
-                elif "openrouter.ai" in self.base_url.lower():
+                '''elif "openrouter.ai" in self.base_url.lower():
                     body["provider"] = {
                         "data_collection": "deny",
                         "zdr": True,
-                    }
+                    }'''
 
                 if response_format == "json_schema":
                     body["response_format"] = {
