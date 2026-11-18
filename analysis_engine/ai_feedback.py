@@ -10,8 +10,11 @@ from __future__ import annotations
 import json
 import os
 from typing import Any, Protocol
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
+
+from Backend.ai_normalization import (
+    OpenRouterNormalizationProvider,
+    ProviderError,
+)
 
 
 PROMPT_VERSION = "analysis-feedback-v1"
@@ -62,70 +65,48 @@ class FeedbackProvider(Protocol):
     def generate(self, context: dict[str, Any]) -> Any: ...
 
 
-class OpenAIFeedbackProvider:
-    """Small server-side OpenAI Chat Completions client using strict JSON output."""
+class OpenRouterFeedbackProvider:
+    """Feedback provider using the shared OpenRouter client."""
 
-    def __init__(self, *, api_key: str, model: str, timeout: float = 30.0):
-        self.api_key = api_key
-        self.model = model
-        self.timeout = timeout
+    def __init__(self, client: OpenRouterNormalizationProvider):
+        self.client = client
+        self.model = client.model
 
     @classmethod
-    def from_environment(cls) -> "OpenAIFeedbackProvider":
-        return cls(
-            api_key=os.environ.get("OPENAI_API_KEY", ""),
-            model=os.environ.get("AESTHELITY_ANALYSIS_MODEL", ""),
+    def from_environment(cls) -> "OpenRouterFeedbackProvider":
+        client = OpenRouterNormalizationProvider.from_environment()
+        analysis_model = os.environ.get("AESTHELITY_ANALYSIS_MODEL")
+        if analysis_model:
+            client.model = analysis_model
+
+        client.fallback_model = (
+            os.environ.get("AESTHELITY_ANALYSIS_FALLBACK_MODEL") or None
         )
+        return cls(client)
 
     def generate(self, context: dict[str, Any]) -> Any:
-        if not self.api_key or not self.model:
-            raise FeedbackProviderError("ai_unconfigured")
-
-        body = {
-            "model": self.model,
-            "store": False,
-            "messages": [
-                {"role": "system", "content": PROMPT},
-                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "routine_analysis_feedback",
-                    "strict": True,
-                    "schema": _SCHEMA,
-                },
-            },
-        }
-        request = Request(
-            "https://api.openai.com/v1/chat/completions",
-            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-            method="POST",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-        )
         try:
-            with urlopen(request, timeout=self.timeout) as response:
-                raw = response.read(MAX_PROVIDER_RESPONSE_BYTES + 1)
-            if len(raw) > MAX_PROVIDER_RESPONSE_BYTES:
-                raise FeedbackProviderError("ai_invalid_response")
-            envelope = json.loads(raw)
-            choice = envelope["choices"][0]
-            message = choice["message"]
-            if choice.get("finish_reason") != "stop" or message.get("refusal"):
-                raise FeedbackProviderError("ai_refused_or_incomplete")
-            return json.loads(message["content"])
-        except HTTPError as error:
-            raise FeedbackProviderError(
-                "ai_rate_limited" if error.code == 429 else "ai_unavailable"
-            ) from None
-        except (URLError, TimeoutError, OSError):
-            raise FeedbackProviderError("ai_unavailable") from None
-        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
-            raise FeedbackProviderError("ai_invalid_response") from None
-
+            return self.client.complete_messages(
+                [
+                    {"role": "system", "content": PROMPT},
+                    {
+                        "role": "user",
+                        "content": json.dumps(context, ensure_ascii=False),
+                    },
+                ],
+                schema=_SCHEMA,
+                schema_name="routine_analysis_feedback",
+                model=self.model,
+            )
+        except ProviderError as error:
+            code = str(error)
+            mapped_code = {
+                "provider_unconfigured": "ai_unconfigured",
+                "provider_rate_limited": "ai_rate_limited",
+                "provider_incomplete_or_refused": "ai_refused_or_incomplete",
+                "provider_invalid_response": "ai_invalid_response",
+            }.get(code, "ai_unavailable")
+            raise FeedbackProviderError(mapped_code) from None
 
 def _ingredient_names(catalog: dict[str, Any]) -> dict[str, str]:
     rows = catalog.get("ingredients", []) if isinstance(catalog, dict) else []

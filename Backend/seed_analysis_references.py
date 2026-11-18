@@ -9,10 +9,6 @@ from __future__ import annotations
 import argparse
 import os
 
-import firebase_admin
-from firebase_admin import credentials, firestore
-
-
 CONTRACT_ID = "v1"
 
 REFERENCES = [
@@ -116,6 +112,20 @@ REFERENCES = [
     },
 ]
 
+CONTRACT = {
+    "contractVersion": 1,
+    "reviewStatus": "approved",
+    "ruleSetVersion": "AN-02-v1",
+    "resultOutcomes": ["findings", "noFindings"],
+    "findingOutcomes": ["caution", "conflict", "allergen", "unknown"],
+    "approvedReferenceOutcomes": ["caution", "conflict", "allergen"],
+    "severityValues": ["low", "moderate", "high"],
+    "policy": {
+        "ingredientOrderUsed": False,
+        "layeringRecommendations": False,
+        "missingOrUnmatchedDataOutcome": "unknown",
+    },
+}
 
 def main() -> None:
     parser = argparse.ArgumentParser()
@@ -131,6 +141,9 @@ def main() -> None:
     editor = os.environ.get("ANALYSIS_DATA_EDITOR", "").strip()
     if args.apply and not editor:
         raise SystemExit("Set ANALYSIS_DATA_EDITOR to your authorized team identity.")
+
+    import firebase_admin
+    from firebase_admin import credentials, firestore
 
     app = firebase_admin.initialize_app(
         credentials.ApplicationDefault(),
@@ -163,18 +176,7 @@ def main() -> None:
 
         now = firestore.SERVER_TIMESTAMP
         contract = {
-            "contractVersion": 1,
-            "reviewStatus": "approved",
-            "ruleSetVersion": "AN-02-v1",
-            "resultOutcomes": ["findings", "noFindings"],
-            "findingOutcomes": ["caution", "conflict", "allergen", "unknown"],
-            "approvedReferenceOutcomes": ["caution", "conflict", "allergen"],
-            "severityValues": ["low", "moderate", "high"],
-            "policy": {
-                "ingredientOrderUsed": False,
-                "layeringRecommendations": False,
-                "missingOrUnmatchedDataOutcome": "unknown",
-            },
+            **CONTRACT,
             "updatedAt": now,
             "updatedBy": editor,
         }

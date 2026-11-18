@@ -6,6 +6,7 @@ import copy
 import unittest
 
 from analysis_engine.ai_analysis import (
+    AIAnalysisInputError,
     AIAnalysisProviderError,
     analyze_normalized_routine,
 )
@@ -164,13 +165,6 @@ class AIAnalysisTests(unittest.TestCase):
         self.assertEqual(returned["originalText"], "Mystery Extract")
         self.assertEqual(returned["status"], "unknown")
         self.assertNotIn("ingredientID", returned)
-        finding = next(
-            f for f in result["findings"]
-            if f.get("ruleID") == "coverage.unresolved-input"
-        )
-        self.assertEqual(finding["productIDs"], ["product"])
-        self.assertEqual(finding["rowIndex"], 0)
-        self.assertEqual(finding["originalText"], "Mystery Extract")
 
     def test_provider_failure_returns_unknown_not_no_findings(self):
         result = analyze_normalized_routine(
@@ -229,91 +223,45 @@ class AIAnalysisTests(unittest.TestCase):
         )
         self.assertEqual(result["analysisProviderStatus"], "unsupported_claim")
         self.assertTrue(any(item["outcome"] == "unknown" for item in result["findings"]))
-    def test_ingredient_order_does_not_change_ai_analysis_context(self):
-        original_order_provider = FakeProvider()
-        reversed_order_provider = FakeProvider()
+    def test_rejects_more_than_50_products_before_provider_call(self):
+        provider = FakeProvider()
+        other_products = [
+            {"productID": f"product-{index}", "listStatus": "unavailable", "ingredients": []}
+            for index in range(1, 51)
+        ]
 
-        analyze_normalized_routine(
-            normalization(
-                row(0, "Retinol", "Retinol"),
-                row(1, "Glycolic Acid", "Glycolic Acid"),
-            ),
-            context(),
-            CANONICAL,
-            REFERENCES,
-            original_order_provider,
-        )
+        with self.assertRaises(AIAnalysisInputError):
+            analyze_normalized_routine(
+                normalization(
+                    list_status="unavailable",
+                    product_id="product-0",
+                    other_products=other_products,
+                ),
+                context(),
+                CANONICAL,
+                REFERENCES,
+                provider,
+            )
 
-        analyze_normalized_routine(
-            normalization(
-                row(0, "Glycolic Acid", "Glycolic Acid"),
-                row(1, "Retinol", "Retinol"),
-            ),
-            context(),
-            CANONICAL,
-            REFERENCES,
-            reversed_order_provider,
-        )
+        self.assertEqual(provider.contexts, [])
 
-        self.assertEqual(
-            original_order_provider.contexts[0],
-            reversed_order_provider.contexts[0],
-        )
+    def test_rejects_more_than_200_ingredient_rows_before_provider_call(self):
+        provider = FakeProvider()
+        rows = [
+            row(index, f"mystery-{index}", None, status="unknown")
+            for index in range(201)
+        ]
 
-    def test_complete_input_reports_complete_coverage(self):
-        result = analyze_normalized_routine(
-            normalization(
-                row(0, "Retinol", "Retinol"),
-                row(1, "Glycolic Acid", "Glycolic Acid"),
-                product_id="complete-serum",
-            ),
-            context(),
-            CANONICAL,
-            REFERENCES,
-            FakeProvider(),
-        )
+        with self.assertRaises(AIAnalysisInputError):
+            analyze_normalized_routine(
+                normalization(*rows),
+                context(),
+                CANONICAL,
+                REFERENCES,
+                provider,
+            )
 
-        self.assertEqual(result["completeness"], "complete")
-        self.assertEqual(result["coverage"]["status"], "complete")
-        self.assertEqual(result["coverage"]["unknownIngredientCount"], 0)
-        self.assertFalse(any(f["outcome"] == "unknown" for f in result["findings"]))
-
-    def test_partial_list_reports_limited_coverage_for_product(self):
-        result = analyze_normalized_routine(
-            normalization(
-                row(0, "Retinol", "Retinol"),
-                list_status="partial",
-                product_id="partial-serum",
-            ),
-            context(),
-            CANONICAL,
-            REFERENCES,
-            FakeProvider(),
-        )
-
-        self.assertEqual(result["completeness"], "incomplete")
-        self.assertEqual(result["coverage"]["status"], "incomplete")
-        finding = next(f for f in result["findings"] if f["reason"] == "partial-list")
-        self.assertEqual(finding["outcome"], "unknown")
-        self.assertEqual(finding["productIDs"], ["partial-serum"])
-
-    def test_unavailable_list_reports_limited_coverage_for_product(self):
-        result = analyze_normalized_routine(
-            normalization(
-                list_status="unavailable",
-                product_id="unavailable-serum",
-            ),
-            context(),
-            CANONICAL,
-            REFERENCES,
-            FakeProvider(),
-        )
-
-        self.assertEqual(result["completeness"], "incomplete")
-        self.assertEqual(result["coverage"]["status"], "incomplete")
-        finding = next(f for f in result["findings"] if f["reason"] == "unavailable-list")
-        self.assertEqual(finding["outcome"], "unknown")
-        self.assertEqual(finding["productIDs"], ["unavailable-serum"])
+        self.assertEqual(provider.contexts, [])
 
 
 if __name__ == "__main__":

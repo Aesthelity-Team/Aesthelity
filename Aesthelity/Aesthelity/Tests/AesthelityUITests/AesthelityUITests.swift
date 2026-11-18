@@ -9,20 +9,16 @@ final class AesthelityUITests: XCTestCase {
     @MainActor
     private func launchAppToHome() -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments.append("--seed-routines")
+        // These tests exercise routines, using the same isolated profile setup
+        // as the dedicated routine/profile UI suites. Real authentication is
+        // verified separately; ordinary onboarding now includes account setup.
+        app.launchArguments = ["--pf01-ui-testing", "--pf01-reset-profile", "--seed-routines"]
         app.launch()
 
-        // If onboarding appears, complete the sample setup flow.
-        let getStarted = app.buttons["Get Started"]
-
-        if getStarted.waitForExistence(timeout: 3) {
-            getStarted.tap()
-
-            let continueButton = app.buttons["Continue"]
-            if continueButton.waitForExistence(timeout: 5) {
-                continueButton.tap()
-            }
-        }
+        let explore = app.buttons["Explore without an account"]
+        XCTAssertTrue(explore.waitForExistence(timeout: 15))
+        explore.tap()
+        XCTAssertTrue(app.staticTexts["Today's Routine"].waitForExistence(timeout: 10))
 
         return app
     }

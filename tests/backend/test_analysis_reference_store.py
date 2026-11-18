@@ -112,13 +112,23 @@ class AnalysisReferenceStoreTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             load_approved_analysis_records(db, True)
 
-    def test_firestore_error_is_sanitized(self):
+    def test_firestore_error_uses_bundled_v1_fallback(self):
         db = FakeDatabase(error=RuntimeError("private database detail"))
 
-        with self.assertRaises(AnalysisReferenceStoreError) as raised:
-            load_approved_analysis_records(db, 1)
+        with self.assertLogs(
+            "Backend.analysis_reference_store", level="WARNING"
+        ) as captured:
+            contract, references = load_approved_analysis_records(db, 1)
 
-        self.assertNotIn("private database detail", str(raised.exception))
+        self.assertEqual(contract["contractVersion"], 1)
+        self.assertEqual(contract["reviewStatus"], "approved")
+        self.assertTrue(references)
+        self.assertTrue(
+            all(reference["reviewStatus"] == "approved" for reference in references)
+        )
+        self.assertNotIn(
+            "private database detail", "\n".join(captured.output)
+        )
     def test_new_approved_reference_is_available_on_next_read(self):
         first = {"referenceID": "first", "reviewStatus": "approved"}
         db = FakeDatabase(self.approved_contract(), [first])

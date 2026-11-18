@@ -7,6 +7,7 @@
 
 import FirebaseCore
 import SwiftUI
+import GoogleSignIn
 
 @main
 struct AesthelityApp: App {
@@ -87,6 +88,9 @@ struct AesthelityApp: App {
             .environmentObject(manualProductStore)
             .environmentObject(authService)
             .environmentObject(syncService)
+            .onOpenURL { url in
+                _ = GIDSignIn.sharedInstance.handle(url)
+            }
             .task {
                 // Cloud routine/profile sync stays off until isolation, rules, and DB ID are verified.
                 guard CloudSyncConfiguration.isEnabled else {

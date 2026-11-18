@@ -91,6 +91,16 @@ public struct RoutineStepItem: Identifiable, Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if decoder.userInfo[.protectedAPI] as? Bool == true {
+            let required: [CodingKeys] = [.id, .stepNumber, .title, .subtitle, .state, .hasClash]
+            for key in required {
+                guard container.contains(key), try !container.decodeNil(forKey: key) else {
+                    throw DecodingError.keyNotFound(key, .init(codingPath: decoder.codingPath,
+                                                             debugDescription: "Incomplete account record"))
+                }
+            }
+        }
+
         self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         self.stepNumber = try container.decode(Int.self, forKey: .stepNumber)
         self.title = try container.decode(String.self, forKey: .title)
@@ -1240,9 +1250,14 @@ struct ContentView: View {
     
     // MARK: - Sheets
     private var analysisDetailSheet: some View {
-        LiveAnalysisView(onDismiss: {
-            showAnalysisSheet = false
-        })
+        RoutineAnalysisView(
+            routineName: selectedRoutineDisplayName,
+            steps: currentSteps,
+            routineID: usesInjectedSteps ? nil : selectedPeriodRoutine?.id,
+            period: selectedPeriod,
+            routines: routineStore,
+            onDismiss: { showAnalysisSheet = false }
+        )
     }
     
     private var journalDetailSheet: some View {
@@ -1331,6 +1346,13 @@ struct ContentView: View {
             },
             onEditSkinProfile: {
                 showSkinProfileSetupSheet = true
+            },
+            onSignOut: {
+                if let onReset = onResetStartup {
+                    onReset()
+                } else {
+                    showStartupFlowSheet = true
+                }
             }
         )
     }

@@ -5,19 +5,30 @@ struct ProductListResponse: Decodable {
     let products: [DemoProduct]
 }
 
-struct RecordedAllergiesPayload: Encodable {
+struct RecordedAllergiesPayload: Codable, Equatable {
     let status: String
-    let ingredientIDs: [String]
+    let ingredientIDs: [String]?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, ingredientIDs
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(ingredientIDs, forKey: .ingredientIDs)
+    }
 }
 
-struct AnalysisRequestPayload: Encodable {
+struct AnalysisRequestPayload: Codable, Equatable {
     let contractVersion: Int
     let period: String
     let recordedAllergies: RecordedAllergiesPayload
     let products: [NormalizedProductIngredients]
 }
 
-struct AnalysisCoveragePayload: Decodable, Equatable {
+
+struct AnalysisCoveragePayload: Codable, Equatable {
     let status: String
     let unknownIngredientCount: Int
     let missingReferenceCount: Int
@@ -28,7 +39,8 @@ struct AnalysisCoveragePayload: Decodable, Equatable {
     }
 }
 
-struct AnalysisResponsePayload: Decodable, Equatable {
+struct AnalysisResponsePayload: Codable, Equatable {
+
     let contractVersion: Int
     let ruleVersion: String
     let period: String
@@ -54,7 +66,7 @@ struct AnalysisResponsePayload: Decodable, Equatable {
     }
 }
 
-struct AnalysisFindingPayload: Decodable, Equatable {
+struct AnalysisFindingPayload: Codable, Equatable {
     let ruleID: String
     let ruleStatus: String
     let outcome: String
@@ -141,6 +153,8 @@ enum BackendAnalysisAPIError: LocalizedError {
     case server(status: Int, message: String)
     case missingProduct(String)
     case catalogVersionMismatch(expected: Int, received: Int)
+    case authenticationRequired
+    case authenticationTokenUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -153,15 +167,19 @@ enum BackendAnalysisAPIError: LocalizedError {
         case .missingProduct(let productID):
             return "Product \(productID) was not returned by the Firestore catalog API."
         case .catalogVersionMismatch(let expected, let received):
-            return "The app alias catalog is version \(expected), but the API returned version \(received). Update both from the same alias file."
+            return "The app used alias catalog version \(expected), but the API analyzed version \(received). Reload the shared catalog and try again."
+        case .authenticationRequired:
+            return "Please sign in to analyze this routine."
+        case .authenticationTokenUnavailable:
+            return "Could not get your sign-in token. Please try again."
         }
     }
 }
 
 struct BackendAnalysisAPI {
-    private let session: URLSession
-    private let decoder = JSONDecoder()
-    private let encoder = JSONEncoder()
+    let session: URLSession
+    let decoder = JSONDecoder()
+    let encoder = JSONEncoder()
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -186,7 +204,7 @@ struct BackendAnalysisAPI {
             return product
         }
 
-        let aliasCatalog = try IngredientAliasCatalog.loadBundled()
+        let aliasCatalog = try await IngredientAliasCatalogService(session: session).loadCatalog()
         let normalizer = IngredientNormalizer(catalog: aliasCatalog)
         let normalizedProducts = selectedProducts.map(normalizer.normalizeCatalogProduct)
         let payload = AnalysisRequestPayload(
@@ -200,6 +218,7 @@ struct BackendAnalysisAPI {
         var analysisRequest = URLRequest(url: analysisURL)
         analysisRequest.httpMethod = "POST"
         analysisRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
         analysisRequest.httpBody = try encoder.encode(payload)
         let (analysisData, analysisResponse) = try await session.data(for: analysisRequest)
         try requireSuccess(analysisResponse, data: analysisData)
@@ -216,16 +235,45 @@ struct BackendAnalysisAPI {
         return LiveAnalysisResult(response: result, productNames: names)
     }
 
-    private func baseURL() throws -> URL {
+    /// Protected analysis for real inputs; never substitutes a fictional scenario.
+    /// The caller owns loading/error presentation and retains local data on failure.
+    @MainActor
+    static func analyzeAuthenticated(
+        payload: AnalysisRequestPayload,
+        expectedCatalogVersion: Int,
+        baseURL: URL,
+        token: @escaping () async throws -> String = FirebaseAPITokenProvider.token
+    ) async throws -> AnalysisResponsePayload {
+        let client = try AuthenticatedAPIClient(baseURL: baseURL, token: token)
+        return try await analyzeAuthenticated(payload: payload, expectedCatalogVersion: expectedCatalogVersion, client: client)
+    }
+
+    /// Uses the session-bound client supplied by AccountDataAPI.
+    @MainActor
+    static func analyzeAuthenticated(
+        payload: AnalysisRequestPayload,
+        expectedCatalogVersion: Int,
+        client: AuthenticatedAPIClient
+    ) async throws -> AnalysisResponsePayload {
+        let result = try await client.post(
+            ["api", "v1", "analyses"], body: payload, as: AnalysisResponsePayload.self
+        )
+        try AccountDataAPI.validate(result, for: payload, catalogVersion: expectedCatalogVersion)
+        return result
+    }
+
+    func baseURL() throws -> URL {
         let configured = Bundle.main.object(forInfoDictionaryKey: "AesthelityAPIBaseURL") as? String
             ?? "http://127.0.0.1:8765"
-        guard let url = URL(string: configured), url.scheme != nil, url.host != nil else {
+        guard let url = URL(string: configured), url.scheme == "http",
+              ["127.0.0.1", "localhost", "[::1]"].contains(url.host ?? ""),
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
             throw BackendAnalysisAPIError.badURL
         }
         return url
     }
 
-    private func requireSuccess(_ response: URLResponse, data: Data) throws {
+    func requireSuccess(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse else {
             throw BackendAnalysisAPIError.invalidResponse
         }

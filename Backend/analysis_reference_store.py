@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
+import logging
+from copy import deepcopy
 from typing import Any
+
+from Backend.seed_analysis_references import CONTRACT, REFERENCES
+
+
+logger = logging.getLogger(__name__)
 
 
 class AnalysisReferenceStoreError(RuntimeError):
@@ -13,10 +20,10 @@ def load_approved_analysis_records(
     db: Any,
     contract_version: int,
 ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """Load one approved contract and all currently approved references.
+    """Load approved records from Firestore, with a bundled v1 fallback.
 
-    Reads on each call so an authorized Firestore update is available to the
-    next analysis request. This module does not write to Firestore.
+    Reads Firestore on each call so approved updates are available on the next
+    request. Falls back to bundled v1 records only when a Firestore read fails.
     """
     if type(contract_version) is not int or contract_version < 1:
         raise ValueError("contract_version must be a positive integer.")
@@ -28,14 +35,18 @@ def load_approved_analysis_records(
             .get()
         )
         if not contract_snapshot.exists:
-            raise AnalysisReferenceStoreError("approved_analysis_contract_unavailable")
+            raise AnalysisReferenceStoreError(
+                "approved_analysis_contract_unavailable"
+            )
 
         contract = contract_snapshot.to_dict() or {}
         if (
             contract.get("reviewStatus") != "approved"
             or contract.get("contractVersion") != contract_version
         ):
-            raise AnalysisReferenceStoreError("approved_analysis_contract_unavailable")
+            raise AnalysisReferenceStoreError(
+                "approved_analysis_contract_unavailable"
+            )
 
         reference_snapshots = (
             db.collection("analysisReferences")
@@ -44,10 +55,16 @@ def load_approved_analysis_records(
         )
         references = [snapshot.to_dict() or {} for snapshot in reference_snapshots]
 
+        return contract, references
+
     except AnalysisReferenceStoreError:
         raise
     except Exception:
-        # Keep database details and credentials out of API responses.
-        raise AnalysisReferenceStoreError("approved_analysis_data_unavailable") from None
-
-    return contract, references
+        logger.warning(
+            "Firestore analysis data could not be read; using bundled v1 records."
+        )
+        if contract_version != 1:
+            raise AnalysisReferenceStoreError(
+                "approved_analysis_data_unavailable"
+            ) from None
+        return deepcopy(CONTRACT), deepcopy(REFERENCES)
