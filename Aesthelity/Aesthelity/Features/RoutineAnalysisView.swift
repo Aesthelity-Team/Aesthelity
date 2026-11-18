@@ -100,6 +100,7 @@ struct RoutineAnalysisView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(24)
             }
+            .accessibilityIdentifier("routine-analysis-scroll")
             .navigationTitle("Routine analysis")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Back", action: onDismiss) } }

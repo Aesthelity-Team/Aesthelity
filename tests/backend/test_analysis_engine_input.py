@@ -1,15 +1,13 @@
 """#98 resolve output -> #99 AI analysis engine input (Backend/analysis_engine_input.py)."""
 
 import copy
-import importlib.util
 import io
 import json
-import subprocess
-import tempfile
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
+from analysis_engine import ai_analysis as ENGINE
 from Backend.analysis_api import APIHandler
 from Backend.analysis_engine_input import (
     AnalysisInputAdapterError,
@@ -26,8 +24,6 @@ from Backend.ingredient_catalog import ReferenceIndex, build_catalog, parse_cosi
 ROOT = Path(__file__).resolve().parents[2]
 BUNDLED = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" / "ingredient-aliases.json"
 APPROVED = json.loads(BUNDLED.read_text(encoding="utf-8"))
-ANALYSIS_BRANCH_FILE = "origin/99-ai-analysis-engine:analysis_engine/ai_analysis.py"
-_ENGINE_TMP = None
 
 CSV = """COSING Ref No,INCI name,INN name,Ph. Eur. Name,CAS No,EINECS/ELINCS No,Chem/IUPAC Name / Description,Restriction,Function,Update Date
 31959,"AQUA","water","",7732-18-5,231-791-2,"Water","","SOLVENT",01/01/2010
@@ -197,27 +193,6 @@ class EndpointTests(unittest.TestCase):
                                     "format": "analysis-input", "listStatus": "full"})["status"], 400)
 
 
-def _load_analysis_engine():
-    """Load ai_analysis.py from the #99 branch into a temp dir; nothing is vendored."""
-
-    global _ENGINE_TMP
-    try:
-        source = subprocess.run(["git", "show", ANALYSIS_BRANCH_FILE], cwd=ROOT, capture_output=True,
-                                text=True, check=True, timeout=20).stdout
-    except (OSError, subprocess.SubprocessError):
-        return None
-    # Keep TemporaryDirectory alive for the process; it removes the dir on exit.
-    _ENGINE_TMP = tempfile.TemporaryDirectory(prefix="ai-analysis-")
-    path = Path(_ENGINE_TMP.name) / "ai_analysis_branch99.py"
-    path.write_text(source, encoding="utf-8")
-    spec = importlib.util.spec_from_file_location("ai_analysis_branch99", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
-
-
-ENGINE = _load_analysis_engine()
-
 CAUTION_REFERENCE = {
     "referenceID": "retinoid-exfoliant", "referenceVersion": 1, "reviewStatus": "approved",
     "source": {"title": "t", "publisher": "p", "url": "https://example.org/r", "accessedOn": "2026-11-15"},
@@ -240,7 +215,6 @@ class FakeProvider:
         return copy.deepcopy(self.output)
 
 
-@unittest.skipIf(ENGINE is None, f"{ANALYSIS_BRANCH_FILE} not available (git fetch origin 99-ai-analysis-engine)")
 class AnalysisEngineIntegrationTests(unittest.TestCase):
     def normalization(self):
         retinol = analysis_product("retinol-serum", resolve(["Aqua", "Retinol", "4-Isobutylresorcinol"]),
@@ -358,9 +332,8 @@ class RoutineNormalizationTests(unittest.TestCase):
             analysis_routine_normalization([bad])
 
 
-@unittest.skipIf(ENGINE is None, f"{ANALYSIS_BRANCH_FILE} not available (git fetch origin 99-ai-analysis-engine)")
 class RoutineEngineContractTests(unittest.TestCase):
-    """Routine helper output fed straight into Mia's real #99 engine."""
+    """Routine helper output fed into the checked-out analysis engine."""
 
     CONTEXT = {"period": "pm", "recordedAllergies": {"status": "known", "ingredientIDs": []}}
 

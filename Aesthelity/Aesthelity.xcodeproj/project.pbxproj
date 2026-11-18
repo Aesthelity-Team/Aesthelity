@@ -63,6 +63,7 @@
 				Tests/AesthelityUITests/AesthelityUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 				Tests/AesthelityUITests/OnboardingUITests.swift,
+				Tests/AesthelityUITests/IntegrationJourneyUITests.swift,
 				Tests/AesthelityUITests/ProfileUITests.swift,
 				Tests/AesthelityUITests/Sprint1DemoUITests.swift,
 			);
@@ -98,6 +99,7 @@
 				Tests/AesthelityUITests/AesthelityUITests.swift,
 				Tests/AesthelityUITests/AesthelityUITestsLaunchTests.swift,
 				Tests/AesthelityUITests/OnboardingUITests.swift,
+				Tests/AesthelityUITests/IntegrationJourneyUITests.swift,
 				Tests/AesthelityUITests/ProfileUITests.swift,
 				Tests/AesthelityUITests/Sprint1DemoUITests.swift,
 			);
