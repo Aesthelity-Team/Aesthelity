@@ -1,24 +1,33 @@
 import Foundation
-import FirebaseAuth
 
 struct ProductListResponse: Decodable {
     let contractVersion: Int
     let products: [DemoProduct]
 }
 
-struct RecordedAllergiesPayload: Encodable {
+struct RecordedAllergiesPayload: Codable, Equatable {
     let status: String
-    let ingredientIDs: [String]
+    let ingredientIDs: [String]?
+
+    private enum CodingKeys: String, CodingKey {
+        case status, ingredientIDs
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(status, forKey: .status)
+        try container.encodeIfPresent(ingredientIDs, forKey: .ingredientIDs)
+    }
 }
 
-struct AnalysisRequestPayload: Encodable {
+struct AnalysisRequestPayload: Codable, Equatable {
     let contractVersion: Int
     let period: String
     let recordedAllergies: RecordedAllergiesPayload
     let products: [NormalizedProductIngredients]
 }
 
-struct AnalysisResponsePayload: Decodable {
+struct AnalysisResponsePayload: Codable {
     let contractVersion: Int
     let ruleVersion: String
     let period: String
@@ -31,7 +40,7 @@ struct AnalysisResponsePayload: Decodable {
     let displayLabel: String?
 }
 
-struct AnalysisFindingPayload: Decodable {
+struct AnalysisFindingPayload: Codable {
     let ruleID: String
     let ruleStatus: String
     let outcome: String
@@ -173,22 +182,6 @@ struct BackendAnalysisAPI {
         analysisRequest.httpMethod = "POST"
         analysisRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        guard let user = Auth.auth().currentUser else {
-            throw BackendAnalysisAPIError.authenticationRequired
-        }
-
-        let idToken: String
-        do {
-            idToken = try await user.getIDToken()
-        } catch {
-            throw BackendAnalysisAPIError.authenticationTokenUnavailable
-        }
-
-        analysisRequest.setValue(
-            "Bearer \(idToken)",
-            forHTTPHeaderField: "Authorization"
-        )
-
         analysisRequest.httpBody = try encoder.encode(payload)
         let (analysisData, analysisResponse) = try await session.data(for: analysisRequest)
         try requireSuccess(analysisResponse, data: analysisData)
@@ -205,10 +198,39 @@ struct BackendAnalysisAPI {
         return LiveAnalysisResult(response: result, productNames: names)
     }
 
+    /// Protected analysis for real inputs; never substitutes a fictional scenario.
+    /// The caller owns loading/error presentation and retains local data on failure.
+    @MainActor
+    static func analyzeAuthenticated(
+        payload: AnalysisRequestPayload,
+        expectedCatalogVersion: Int,
+        baseURL: URL,
+        token: @escaping () async throws -> String = FirebaseAPITokenProvider.token
+    ) async throws -> AnalysisResponsePayload {
+        let client = try AuthenticatedAPIClient(baseURL: baseURL, token: token)
+        return try await analyzeAuthenticated(payload: payload, expectedCatalogVersion: expectedCatalogVersion, client: client)
+    }
+
+    /// Uses the session-bound client supplied by AccountDataAPI.
+    @MainActor
+    static func analyzeAuthenticated(
+        payload: AnalysisRequestPayload,
+        expectedCatalogVersion: Int,
+        client: AuthenticatedAPIClient
+    ) async throws -> AnalysisResponsePayload {
+        let result = try await client.post(
+            ["api", "v1", "analyses"], body: payload, as: AnalysisResponsePayload.self
+        )
+        try AccountDataAPI.validate(result, for: payload, catalogVersion: expectedCatalogVersion)
+        return result
+    }
+
     func baseURL() throws -> URL {
         let configured = Bundle.main.object(forInfoDictionaryKey: "AesthelityAPIBaseURL") as? String
             ?? "http://127.0.0.1:8765"
-        guard let url = URL(string: configured), url.scheme != nil, url.host != nil else {
+        guard let url = URL(string: configured), url.scheme == "http",
+              ["127.0.0.1", "localhost", "[::1]"].contains(url.host ?? ""),
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
             throw BackendAnalysisAPIError.badURL
         }
         return url

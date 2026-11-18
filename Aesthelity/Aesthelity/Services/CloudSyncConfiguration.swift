@@ -9,7 +9,8 @@
 
 import Foundation
 
-/// Controls whether the app may start Firestore listeners or write routines/profiles.
+/// Controls automatic Firestore listeners and writes. Explicit, user-initiated
+/// protected HTTP account transfers use AccountDataAPI independently.
 public enum CloudSyncConfiguration {
     /// Cloud routine and profile sync is intentionally off for this release path.
     public static let isEnabled: Bool = false

@@ -8,6 +8,7 @@
 import SwiftUI
 
 public struct ProfileView: View {
+    @State private var showAccountStorage = false
     @EnvironmentObject private var profileStore: SkinProfileStore
     // MARK: - Properties & Callbacks
     public var productsCount: Int
@@ -96,6 +97,8 @@ public struct ProfileView: View {
                     
                     // 4. Skin Type Section
                     skinTypeSection
+                    Button("Profile account storage") { showAccountStorage = true }
+                        .accessibilityIdentifier("profile-account-storage")
                     
                     // 5. Skin Journal Section
                     skinJournalSection
@@ -117,6 +120,7 @@ public struct ProfileView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Constants.semanticSurfaceBase)
             .accessibilityIdentifier("profile-summary-scroll")
+            .sheet(isPresented: $showAccountStorage) { AccountDataView(scope: .profile) }
         }
     }
     

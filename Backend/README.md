@@ -333,7 +333,7 @@ AESTHELITY_DEMO_MODE=1 python Backend/analysis_api.py
 
 The server binds to `127.0.0.1:8765`. The Xcode app target is configured to use
 that local address. Demo mode skips Firebase ID-token verification for the
-analysis request because the current app has no Firebase sign-in flow. It is
+fictional analysis request; the demo app transport sends no Firebase token. It is
 restricted to loopback and must not be exposed or deployed.
 
 The app's Analysis sheet offers four real API scenarios:
@@ -364,3 +364,29 @@ profile.
 Outside local demo mode, analysis requests require a valid Firebase ID token.
 Production hosting, app sign-in, and user-specific data access need deployment
 configuration and security review.
+
+
+## Authenticated iOS account operations (#29)
+
+The protected client has a separate configuration from the demo server:
+`AesthelityProtectedAPIBaseURL` in the app's Info.plist is expanded from the
+`AESTHELITY_PROTECTED_API_BASE_URL` Xcode build setting. Leave it unset until
+an HTTPS backend exists. Set it in a developer's build configuration or pass it
+to xcodebuild, for example `AESTHELITY_PROTECTED_API_BASE_URL=https://your-host`.
+An optional URL path prefix is supported; do not include `/api/v1` in the base.
+The Firebase project and `ogdb` database configuration stay as documented above.
+
+The checked-in Python service serves HTTP locally. A real deployment must
+provide valid HTTPS, use Admin credentials outside the repository, and run
+without `AESTHELITY_DEMO_MODE`. Choosing and provisioning that host is separate
+from configuring this client. Do not weaken the client's HTTPS checks for testing.
+
+Protected private-record routes are
+`GET/PUT/DELETE /api/v1/users/{uid}/{kind}/{recordID}`. The server derives identity
+from the verified token, checks revocation, and rejects a different URL owner.
+The PUT envelope is `{ "contractVersion": 1, "data": { ... } }`; responses carry
+`contractVersion` and a `record` with `id`, `ownerUID`, `data`, and `updatedAt`.
+Private record data is limited to 100,000 UTF-8 JSON bytes.
+
+See `acceptance/be03/README.md` for the iOS screen mapping, transfer formats,
+validation commands, and live-deployment acceptance checklist.

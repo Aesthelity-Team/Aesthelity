@@ -201,6 +201,10 @@ class APIHandler(BaseHTTPRequestHandler):
             code = error.code if isinstance(error, AnalysisInputError) else "INVALID_REQUEST"
             self._send(400, _error_body(code, str(error)))
             return
+        except Exception as error:
+            print(f"Analysis engine execution failed: {type(error).__name__}: {error}")
+            self._send(500, _error_body("INTERNAL_ERROR", "The analysis could not be completed."))
+            return
         self._send(200, {
             "contractVersion": 1,
             "ruleVersion": RULE_VERSION,
@@ -262,9 +266,14 @@ class APIHandler(BaseHTTPRequestHandler):
         if self.server.demo_mode:
             return True
 
+        # Use an injected verifier when present so tests can run without real
+        # Firebase Admin credentials.  Production always falls through to the
+        # real SDK with check_revoked=True, matching the stricter policy already
+        # used by _private_route so that explicitly-revoked tokens are rejected
+        # even before they expire.
         verifier = getattr(self.server, "token_verifier", None)
         if verifier is None:
-            def verifier(token: str) -> dict[str, Any]:
+            def verifier(token: str) -> dict[str, Any]:  # type: ignore[misc]
                 from firebase_admin import auth
                 return auth.verify_id_token(
                     token, app=self.server.firebase_app, check_revoked=True

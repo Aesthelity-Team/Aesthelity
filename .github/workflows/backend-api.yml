@@ -1,0 +1,40 @@
+name: Backend API checks
+
+on:
+  pull_request:
+    paths:
+      - 'Backend/**'
+      - 'analysis_engine/**'
+      - 'tests/**'
+      - 'docs/fixtures/**'
+      - 'Aesthelity/Aesthelity/Resources/**'
+      - '.github/workflows/backend-api.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'Backend/**'
+      - 'analysis_engine/**'
+      - 'tests/**'
+      - 'docs/fixtures/**'
+      - 'Aesthelity/Aesthelity/Resources/**'
+      - '.github/workflows/backend-api.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  authenticated-api:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: Backend/requirements.txt
+      - run: python -m pip install -r Backend/requirements.txt
+      - run: python -m unittest discover -s tests -v
+      - run: python -m unittest discover -s tests/backend -p 'test_auth*.py' -v
+      - run: python -m unittest discover -s tests/backend -p 'test_private_data.py' -v
+      - run: python -m unittest discover -s tests/backend -p 'test_demo_catalog.py' -v

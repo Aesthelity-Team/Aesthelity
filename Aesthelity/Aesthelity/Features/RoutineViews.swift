@@ -106,6 +106,16 @@ public struct RoutineRecord: Identifiable, Equatable, Codable {
 
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if decoder.userInfo[.protectedAPI] as? Bool == true {
+            let required: [CodingKeys] = [.id, .name, .period, .status, .frequency, .reminderTime, .activeDays, .steps, .pushRemindersEnabled, .leadTime, .quietHoursEnabled]
+            for key in required {
+                guard container.contains(key), try !container.decodeNil(forKey: key) else {
+                    throw DecodingError.keyNotFound(key, .init(codingPath: decoder.codingPath,
+                                                             debugDescription: "Incomplete account record"))
+                }
+            }
+        }
+
         self.id = try container.decodeIfPresent(UUID.self, forKey: .id) ?? UUID()
         self.name = try container.decode(String.self, forKey: .name)
         self.period = try container.decodeIfPresent(RoutinePeriod.self, forKey: .period) ?? .am

@@ -91,6 +91,30 @@ final class Sprint1DemoUITests: XCTestCase {
         }
     }
 
+    @MainActor
+    func testProfileAccountStorageReportsUnavailableBackendAndPreservesLocalProfile() throws {
+        let app = enterWithoutSetup()
+        openProfile(app)
+        let storage = app.buttons["profile-account-storage"]
+        scrollTo(storage, in: app)
+        storage.tap()
+        XCTAssertTrue(app.buttons["account-save"].waitForExistence(timeout: 5))
+        app.buttons["account-save"].tap()
+        XCTAssertTrue(app.staticTexts["account-transfer-message"].waitForExistence(timeout: 5))
+        let message = app.staticTexts["account-transfer-message"].label
+        if message.contains("sign in again") {
+            XCTAssertTrue(app.buttons["account-sign-in"].exists)
+        } else {
+            XCTAssertTrue(message.contains("has not been configured"))
+        }
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Profile account storage with unavailable backend"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(app.staticTexts["Skin Profile"].waitForExistence(timeout: 5))
+    }
+
     // MARK: - Home routines and analysis
 
     @MainActor
@@ -124,7 +148,7 @@ final class Sprint1DemoUITests: XCTestCase {
         scrollTo(viewAnalysis, in: app)
         viewAnalysis.tap()
 
-        XCTAssertTrue(text(app, "Personal routine analysis is not yet available").waitForExistence(timeout: 5))
+        XCTAssertTrue(text(app, "No compatibility assessment has been generated for this routine.").waitForExistence(timeout: 5))
         XCTAssertFalse(app.buttons["run-backend-analysis"].exists)
         let openDemo = app.buttons["open-analysis-demo"]
         scrollTo(openDemo, in: app)
@@ -144,7 +168,7 @@ final class Sprint1DemoUITests: XCTestCase {
         XCTAssertTrue(text(app, "Why this finding was generated").exists, "The caution sample should explain why it was generated.")
 
         app.buttons["Back"].firstMatch.tap()
-        XCTAssertTrue(text(app, "Personal routine analysis is not yet available").waitForExistence(timeout: 5))
+        XCTAssertTrue(text(app, "No compatibility assessment has been generated for this routine.").waitForExistence(timeout: 5))
         app.buttons["Back"].firstMatch.tap()
         assertOnHome(app, "Back should return to Home.")
     }

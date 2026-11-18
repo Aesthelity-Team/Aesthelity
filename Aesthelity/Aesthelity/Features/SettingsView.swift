@@ -362,7 +362,7 @@ public struct SettingsView: View {
                     
                     Text(CloudSyncConfiguration.isEnabled
                          ? "Cloud sync is enabled"
-                         : "Routines and skin profile stay on this device. Cloud sync is not enabled.")
+                         : "Automatic cloud sync is off. Use account storage in Profile or My Routines to transfer a copy when a secure backend is configured.")
                         .font(.system(size: 13, weight: .regular))
                         .foregroundStyle(Constants.semanticInkAccent)
                         .fixedSize(horizontal: false, vertical: true)
