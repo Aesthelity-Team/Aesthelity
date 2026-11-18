@@ -1,8 +1,8 @@
 # PL-04 API and Data Contract
 
-**Status:** Draft for review
+**Status:** Contract version 1. The `POST /api/v1/analyses` section below is the #114 body Najih should decode. Until that switch, the live server still returns the AN-02 body (`ruleVersion` `AN-02-v1`, no `coverage` object, response `outcome` only `noFindings` or `findings`).
 **Contract version:** 1
-**Implementation:** The endpoints below are proposed; this document does not implement them.
+**Scope:** #26 layering is out of this response. There is no recommended order field.
 
 ## Proposed architecture
 
@@ -54,7 +54,9 @@ All API payloads use UTF-8 JSON and camelCase keys. The backend maps Firestore s
 
 ## Analysis endpoint
 
-`POST /api/v1/analyses` requires a Firebase ID token. The request is:
+`POST /api/v1/analyses` requires `Authorization: Bearer <Firebase ID token>`, `Content-Type: application/json`, and a UTF-8 JSON object. `contractVersion` must be the number `1`. The body must be from 1 to 1,000,000 bytes. The wired endpoint accepts at most 50 products and 200 ingredient rows. Over those limits, or any malformed field, the response is `400` `INVALID_REQUEST`. Missing, invalid, or revoked tokens are `401`. Another user's private data is `403`. Provider and reference-store failures are `500` or `503` with a generic message and no provider text.
+
+The request the iOS client sends today (`NormalizedIngredient.encode`) is:
 
     {
       "contractVersion": 1,
@@ -63,46 +65,156 @@ All API payloads use UTF-8 JSON and camelCase keys. The backend maps Firestore s
         "status": "known",
         "ingredientIDs": ["limonene"]
       },
-      "coapplication": "unknown",
       "products": [
         {
-          "productID": "retinol_product",
+          "productID": "fictional_retinol_serum",
           "listStatus": "complete",
-          "catalogVersion": 2,
+          "catalogVersion": 3,
           "ingredients": [
             {
               "originalText": "Retinol",
-              "status": {
-                "matched": {
-                  "ingredientID": "retinol"
-                }
-              }
+              "mapping": "confirmed",
+              "ingredientID": "retinol"
             }
           ]
         }
       ]
     }
 
-Each product contains a stable `productID`, `listStatus` (`complete`, `partial`, or `unavailable`), the `catalogVersion` used for normalization (or `null`), and normalized ingredient rows in original order.
+`period` is exactly `am` or `pm`. Any other string, including `AM` or `PM`, is `400`. The response `period` is that same string.
 
-A row preserves `originalText`. Its `status` is exactly one of:
+`recordedAllergies.status` is `known` or `unknown`.
+
+- `known` requires `ingredientIDs`, an array of unique canonical slugs. `[]` means no allergies are recorded.
+- `unknown` must omit `ingredientIDs`. A present key, including `[]` or `null`, is `400`. Unknown is not an empty allergy list.
+
+`coapplication` is optional. Allowed values are `mixed`, `not-mixed`, and `unknown`. Omitting the key or sending `null` means `unknown`. Formulation is included only when the source provides it. The server does not guess it.
+
+Each product requires:
+
+| Field | Type | Required | Values |
+|---|---|---|---|
+| `productID` | string | yes | Non-empty, unique in `products` |
+| `listStatus` | string | yes | `complete`, `partial`, `unavailable` |
+| `catalogVersion` | integer or `null` | no | Omitted and `null` are the same. A present number must be an integer `>= 0`, not a boolean or string. |
+| `ingredients` | array | yes | Original order. `unavailable` must be `[]`. `complete` and `partial` must be non-empty. |
+
+A row needs `originalText` (string). It uses either `mapping` or the legacy `status` object, never both.
+
+`mapping` values:
+
+| `mapping` | Required sibling | Forbidden siblings |
+|---|---|---|
+| `confirmed` | `ingredientID` string | `suggestedID`, `candidateIDs` |
+| `uncertain` | `suggestedID` string | `ingredientID`, `candidateIDs` |
+| `ambiguous` | `candidateIDs` string array, at least one | `ingredientID`, `suggestedID` |
+| `unmatched` | none | `ingredientID`, `suggestedID`, `candidateIDs` |
+
+Only `confirmed` with an ID in the active catalog is eligible for a supported finding. `suggestedID` and `candidateIDs` are not confirmed matches.
+
+The legacy `status` object is still accepted, and it is not what the current Swift encoder writes:
 
     {"matched": {"ingredientID": "retinol"}}
     {"uncertain": {"suggestedID": "retinol"}}
     {"ambiguous": {"candidateIDs": ["retinol", "tretinoin"]}}
     {"unmatched": {}}
 
-Only `matched` provides an ingredient ID eligible for rule matching. Suggested and candidate IDs are not confirmed matches. This is intended to match the Swift `NormalizedIngredient.Status` encoding.
+### Request echo
 
-`recordedAllergies` is either `{"status": "known", "ingredientIDs": []}` or `{"status": "unknown"}`. A known empty list means no allergies are recorded. Unknown must not be treated as an empty list.
+| Validated request | Response | Rule |
+|---|---|---|
+| `period` | `period` | Exact `am` or `pm` from the request. |
+| `products[].productID`, in order | `productIDs` | Same IDs, same order, same count. |
+| `products[].catalogVersion` | `activeCatalogVersion` | Not copied from the client. This is the approved alias-catalog version the server loaded, an integer, never `null`. |
 
-`coapplication` may be `mixed`, `not-mixed`, or `unknown`; omission means unknown. Formulation details may be included when available and must not be guessed.
+A product whose `catalogVersion` is omitted, `null`, or a different integer is not eligible. That response is `unknown` or `findings` with `completeness` `incomplete`. It is never `noFindings`. The client already requires `activeCatalogVersion` to equal the catalog version it normalized with.
 
-A `200` response contains `contractVersion`, `ruleVersion`, `period`, `activeCatalogVersion`, `outcome`, `completeness`, `productIDs`, `findings`, and `limitations`. Findings preserve affected product and ingredient IDs. Caution and conflict findings include severity and an explanation; unknown findings have no severity.
+### `200` response
 
-If there are no findings and the analysis is complete, the response uses `outcome: "noFindings"` and `displayLabel: "No recorded conflicts"`. This is not a safety guarantee. Recommended layering sequence belongs to AN-06.
+Every successful body keeps these public fields:
 
-The v1 endpoint returns analysis results but does not save analysis history.
+| Field | Type | Null | Required | Values |
+|---|---|---|---|---|
+| `contractVersion` | integer | no | yes | `1` |
+| `ruleVersion` | string | no | yes | `ai-analysis-v1` after the switch. Live AN-02 responses still send `AN-02-v1`. |
+| `catalogSource` | string | no | yes | `firestore` or `bundled-fallback`. The current Swift decoder ignores it. |
+| `period` | string | no | yes | Echo of `am` or `pm`. |
+| `activeCatalogVersion` | integer | no | yes | Server catalog version. |
+| `outcome` | string | no | yes | `noFindings`, `findings`, or `unknown`. |
+| `completeness` | string | no | yes | `complete` or `incomplete`. |
+| `productIDs` | string array | no | yes | Echoed request IDs. |
+| `findings` | array | no | yes | May be empty only for `noFindings`. |
+| `limitations` | string array | no | yes | Always present. Not a safety guarantee. |
+| `displayLabel` | string | no | only for a clean result | The string `No recorded conflicts`, and only when `outcome` is `noFindings` and `completeness` is `complete`. Otherwise the key is omitted. |
+
+`noFindings` means no supported finding and `completeness` `complete`. It is not a safety guarantee. `findings` means at least one finding whose `outcome` is `caution`, `conflict`, or `allergen`. `completeness` may still be `incomplete` when a coverage gap sits beside that finding. `unknown` means fail closed: partial, unresolved, unverified, or stale input; allergy status `unknown`; no usable approved reference; a provider error; or model output that fails server validation. `completeness` is `incomplete`, `findings` is non-empty, every finding `outcome` is `unknown`, and `displayLabel` is omitted. The server never turns that case into `noFindings`.
+
+Older AN-02 fixtures in `docs/fixtures/an02/` still use response `outcome` `findings` when every finding is a coverage gap. #114 responses use `unknown` for that case. `docs/fixtures/analyses/` is the body to decode.
+
+The model does not supply trusted IDs, severity, category, or source URLs. The server copies those from the validated request and the approved reference records.
+
+Fields added by the wired engine, all ignored by today's decoder:
+
+| Field | Type | Null | When |
+|---|---|---|---|
+| `analysisVersion` | string | no | Always. Same value as `ruleVersion` (`ai-analysis-v1`). |
+| `normalizationID` | string | no | Always. Server-generated. Not a stable client key. |
+| `normalization` | object | no | Always. See below. |
+| `canonicalDataVersion` | integer | yes | The shared request catalog version, or `null` when the products do not agree. |
+| `referenceVersion` | integer | yes | Approved reference set version, or `null` when the server has no single version. |
+| `analysisProviderStatus` | string | no | Sanitized code. `ok` does not mean the routine is clear. |
+| `summary` | string | no | Always. Not a safety claim. |
+| `coverage` | object | no | Always after the switch. Absent on current AN-02 responses. |
+
+`analysisProviderStatus` is one of `ok`, `normalization_unavailable`, `no_relevant_references`, `not_configured`, `rate_limited`, `refused`, `invalid_response`, `unavailable`, `unsupported_outcome`, `reference_conditions_not_met`, `conflicting_reference_metadata`, `unsupported_ingredient_link`, `unsupported_product_link`, `unsupported_claim`. Any other string is still a failure. The value is a code, not provider response text.
+
+`coverage`:
+
+| Field | Type | Null | Values |
+|---|---|---|---|
+| `status` | string | no | `complete` or `incomplete`. Same value as top-level `completeness`. |
+| `unknownIngredientCount` | integer | no | `>= 0`. Rows that could not be resolved. |
+| `missingReferenceCount` | integer | no | `0`, or `1` when no approved reference applied. |
+| `limitations` | string array | no | Non-empty. |
+
+`normalization` carries `contractVersion` (`1`), `promptVersion` (string), `providerStatus` (string), `model` (string or `null`), and `products`. Each product has `productID`, `listStatus`, and `ingredients`. Each ingredient has `index` (integer), `originalText` (string), `status` (`matched`, `uncertain`, or `unknown`), `canonicalName` (string or `null`), `proposedName` (string or `null`), and `reason` (string or `null`). The client does not need to decode this object.
+
+### Finding object
+
+| Field | Type | Null | Required | Values |
+|---|---|---|---|---|
+| `ruleID` | string | no | yes | Server-chosen. For a supported finding, the approved reference ID. |
+| `ruleStatus` | string | no | yes | `ai-assisted` or `system-coverage` after the switch. Saved AN-02 results use `approved`. |
+| `outcome` | string | no | yes | `caution`, `conflict`, `allergen`, or `unknown`. |
+| `categoryID` | string | no | yes | Server-derived. Coverage findings use `coverage-gap`. |
+| `severity` | string | no | only for supported findings | `low`, `moderate`, or `high`. Omitted when `outcome` is `unknown`. |
+| `productIDs` | string array | no | yes | Subset of the response `productIDs`. May be `[]` for an allergy ID that is not on a product. |
+| `ingredientIDs` | string array | no | yes | Canonical IDs the server accepted. May be `[]`. |
+| `explanation` | string | no | yes | Server-held text. |
+| `reason` | string | no | yes | Server-held text or a coverage reason code. |
+| `limitations` | string array | no | yes | Always an array. |
+| `matchedClassIDs` | string array | no | no | Omitted when the server has no class IDs to attach. |
+| `reasonCode` | string | no | no | Present for coverage rows that have a code. |
+| `originalText` | string | no | no | Present for an unresolved ingredient row. |
+| `rowIndex` | integer | no | no | Zero-based index in that product. Present with `originalText`. |
+| `findingID` | string | no | after the switch | Server-generated. Not stable across calls. Today's decoder ignores it. |
+| `evidence` | array | no | on supported and reference-backed coverage findings | Today's decoder ignores it. |
+
+`evidence` items are server copies of approved references, not model output:
+
+| Field | Type | Null |
+|---|---|---|
+| `referenceID` | string | no |
+| `referenceVersion` | integer `>= 1` | no |
+| `claim` | string | no |
+| `source.title` | string | no |
+| `source.publisher` | string | no |
+| `source.url` | string, `https://` | no |
+| `source.accessedOn` | string, `YYYY-MM-DD` | no |
+
+Supported findings use `ruleStatus` `ai-assisted` and include `severity`. Coverage findings use `ruleStatus` `system-coverage`, `outcome` `unknown`, and `categoryID` `coverage-gap`, and they omit `severity`.
+
+The v1 endpoint returns the result and does not save analysis history.
 
 ## Data mapping and validation
 
@@ -140,7 +252,8 @@ Errors use this shape:
 | 401 | `UNAUTHENTICATED` | Missing or invalid Firebase ID token |
 | 403 | `FORBIDDEN` | Authenticated user is not allowed to access the resource |
 | 404 | `PRODUCT_NOT_FOUND` | Requested product does not exist |
-| 500 | `INTERNAL_ERROR` | Unexpected server error; response contains no secrets |
+| 500 | `INTERNAL_ERROR` | Unexpected server error; response contains no secrets or provider text |
+| 503 | `SERVICE_UNAVAILABLE` | Analysis provider or approved reference data is unavailable; message is generic |
 
 ## Review required before approval
 
@@ -186,11 +299,34 @@ The `steps` array preserves routine order. A `productPath` identifies either a s
 
 ## Analysis result fields
 
-The response `outcome` is `noFindings` or `findings`; `completeness` is `complete` or `incomplete`. Each finding contains `ruleID`, `ruleStatus`, `outcome`, `categoryID`, `productIDs`, `ingredientIDs`, `explanation`, `reason`, and `limitations`.
+Shape, enums, and nullability for `POST /api/v1/analyses` are in the Analysis endpoint section. Short form: response `outcome` is `noFindings`, `findings`, or `unknown`; `completeness` and `coverage.status` are `complete` or `incomplete`. A finding `outcome` is `caution`, `conflict`, `allergen`, or `unknown`. `severity` is `low`, `moderate`, or `high` and is omitted for `unknown`. `ruleStatus` after the switch is `ai-assisted` or `system-coverage`.
 
-Finding `outcome` is `caution`, `conflict`, `allergen`, or `unknown`. `severity` is present for caution, conflict, and allergen findings; unknown findings omit it. `matchedClassIDs`, `reasonCode`, `originalText`, and `rowIndex` are included only when applicable. The API layer supplies `ruleVersion` so results identify the rules used.
+`docs/fixtures/analyses/supported_finding.json` and `docs/fixtures/analyses/incomplete_unknown.json` are exact `200` bodies. Decode the file itself. IDs, URLs, and finding IDs in those files are fictional and fixed for the fixture.
 
-Product-list endpoints are proposed as public, read-only access to shared catalog data only. They return no profile or routine data.
+Product-list endpoints are public, read-only shared catalog data. They return no profile or routine data.
+
+## Swift compatibility
+
+Checked against the client on `5699bd9`. No Swift file is changed in the #114 backend branch.
+
+`JSONDecoder` in `AuthenticatedAPIClient` (`Aesthelity/Aesthelity/Services/AuthenticatedAPIClient.swift`, decode at lines 101-106) and `BackendAnalysisAPI` (line 144) uses the default strategy. Unknown keys are ignored. A missing required key, a `null` required key, or a wrong JSON type fails the decode.
+
+`AnalysisResponsePayload` (`BackendAnalysisAPI.swift` lines 30-41) requires `contractVersion`, `ruleVersion`, `period`, `activeCatalogVersion`, `outcome`, `completeness`, `productIDs`, `findings`, and `limitations`. `displayLabel` is optional. `AnalysisFindingPayload` (lines 43-55) requires `ruleID`, `ruleStatus`, `outcome`, `categoryID`, `productIDs`, `ingredientIDs`, `explanation`, `reason`, and `limitations`. `severity` and `matchedClassIDs` are optional. `coverage`, `summary`, `analysisVersion`, `normalization`, `evidence`, `findingID`, `reasonCode`, `originalText`, and `rowIndex` are ignored.
+
+What the current client does with the new body:
+
+- The signed-in path decodes it, then `AccountDataAPI.validate` (`AccountDataAPI.swift` lines 104-113) throws `APIClientError.invalidResponse` when `outcome` is `unknown`. The unknown result never reaches the screen. `RoutineAnalysisView` analyzes through that path (line 142) and validates again on load (line 157).
+- The loopback demo path (`BackendAnalysisAPI.analyze`, lines 189-196) does not call `validate`. It checks `contractVersion == 1` and `activeCatalogVersion` against the catalog it loaded. An `unknown` body would decode, and `LiveAnalysisView` (lines 143-161) would show one card per finding.
+- `PersonalAnalysisResultView` (`RoutineAnalysisView.swift` lines 189-203) titles the screen from `completeness` and, when `findings` is empty, prints `displayLabel` or "No findings under the current rules". An `unknown` body must not arrive with an empty `findings` array.
+
+Must land in the app before the backend switch:
+
+1. `AccountDataAPI.validate` must accept `outcome` `unknown` only with `completeness` `incomplete`, a non-empty `findings` array, every finding `outcome` equal to `unknown`, and no `displayLabel`. Keep rejecting every other outcome string.
+2. The results UI must show that `unknown` case as not checked. Do not reuse the empty-findings "No findings" copy.
+3. Do not add required JSON keys. `ruleVersion` and `activeCatalogVersion` stay required. `ruleVersion` changes from `AN-02-v1` to `ai-analysis-v1`; the type stays `String`.
+4. Keep ignoring `coverage`, `evidence`, and `normalization`. Read them only after a decoder is added on purpose.
+
+Both fixtures decode as `AnalysisResponsePayload` on the current types. `supported_finding.json` also passes `AccountDataAPI.validate` for period `pm`, those two product IDs, and catalog version `3`. `incomplete_unknown.json` decodes and then fails `validate` until change 1 ships.
 
 ## Optional formulation context
 

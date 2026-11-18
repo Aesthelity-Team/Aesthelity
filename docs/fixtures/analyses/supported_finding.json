@@ -1,0 +1,104 @@
+{
+  "contractVersion": 1,
+  "ruleVersion": "ai-analysis-v1",
+  "catalogSource": "firestore",
+  "analysisVersion": "ai-analysis-v1",
+  "normalizationID": "fixture-normalization-supported",
+  "normalization": {
+    "contractVersion": 1,
+    "promptVersion": "ingredient-resolve-v1",
+    "providerStatus": "ok",
+    "model": null,
+    "products": [
+      {
+        "productID": "fictional_retinol_serum",
+        "listStatus": "complete",
+        "ingredients": [
+          {
+            "index": 0,
+            "originalText": "Retinol",
+            "status": "matched",
+            "canonicalName": "Retinol",
+            "proposedName": null,
+            "reason": null,
+            "ingredientID": "retinol"
+          }
+        ]
+      },
+      {
+        "productID": "fictional_glycolic_toner",
+        "listStatus": "complete",
+        "ingredients": [
+          {
+            "index": 0,
+            "originalText": "Glycolic Acid",
+            "status": "matched",
+            "canonicalName": "Glycolic Acid",
+            "proposedName": null,
+            "reason": null,
+            "ingredientID": "glycolic-acid"
+          }
+        ]
+      }
+    ]
+  },
+  "canonicalDataVersion": 3,
+  "referenceVersion": 1,
+  "analysisProviderStatus": "ok",
+  "period": "pm",
+  "activeCatalogVersion": 3,
+  "outcome": "findings",
+  "completeness": "complete",
+  "productIDs": [
+    "fictional_retinol_serum",
+    "fictional_glycolic_toner"
+  ],
+  "findings": [
+    {
+      "findingID": "fixture-finding-retinol-glycolic",
+      "ruleID": "ref.retinol-with-exfoliant",
+      "ruleStatus": "ai-assisted",
+      "outcome": "caution",
+      "severity": "moderate",
+      "categoryID": "ingredient-combination",
+      "productIDs": [
+        "fictional_retinol_serum",
+        "fictional_glycolic_toner"
+      ],
+      "ingredientIDs": [
+        "retinol",
+        "glycolic-acid"
+      ],
+      "explanation": "Confirmed retinol and confirmed glycolic acid are both in this fictional routine. The approved reference supports a moderate caution.",
+      "reason": "The server copied this finding from approved reference ref.retinol-with-exfoliant. The model did not supply the IDs, severity, or category.",
+      "limitations": [
+        "Informational only. This fixture is not a diagnosis or a safety guarantee."
+      ],
+      "evidence": [
+        {
+          "referenceID": "ref.retinol-with-exfoliant",
+          "referenceVersion": 1,
+          "source": {
+            "title": "Fictional reference: retinol with an exfoliant",
+            "publisher": "Aesthelity Fixture",
+            "url": "https://example.invalid/references/retinol-exfoliant",
+            "accessedOn": "2026-11-18"
+          },
+          "claim": "A fictional approved reference supports a moderate caution when confirmed retinol and a confirmed exfoliant are in the same routine."
+        }
+      ]
+    }
+  ],
+  "coverage": {
+    "status": "complete",
+    "unknownIngredientCount": 0,
+    "missingReferenceCount": 0,
+    "limitations": [
+      "Only currently approved reference records were considered."
+    ]
+  },
+  "limitations": [
+    "Informational only. This is not a diagnosis or a safety guarantee."
+  ],
+  "summary": "One evidence-backed caution was returned. This is not a safety guarantee."
+}
