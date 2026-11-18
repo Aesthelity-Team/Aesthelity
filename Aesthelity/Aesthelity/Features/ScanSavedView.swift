@@ -35,32 +35,28 @@ public struct SavedRibbonIcon: View {
 // MARK: - Scan Saved View
 
 public struct ScanSavedView: View {
+    public static let routinePreviewTitle = ScanResultSheet.routinePreviewTitle
+
     public var productTitle: String = "Vitamin C Serum"
     public var brand: String = "CeraVe"
-    public var isAddedToRoutine: Bool = false
     public var showsTabBar: Bool = false
     public var onSelectTab: ((Int) -> Void)?
     public var onViewProductDetail: () -> Void
-    public var onToggleRoutine: () -> Void
     public var onScanAnother: () -> Void
     
     public init(
         productTitle: String = "Vitamin C Serum",
         brand: String = "CeraVe",
-        isAddedToRoutine: Bool = false,
         showsTabBar: Bool = false,
         onSelectTab: ((Int) -> Void)? = nil,
         onViewProductDetail: @escaping () -> Void = {},
-        onToggleRoutine: @escaping () -> Void = {},
         onScanAnother: @escaping () -> Void = {}
     ) {
         self.productTitle = productTitle
         self.brand = brand
-        self.isAddedToRoutine = isAddedToRoutine
         self.showsTabBar = showsTabBar
         self.onSelectTab = onSelectTab
         self.onViewProductDetail = onViewProductDetail
-        self.onToggleRoutine = onToggleRoutine
         self.onScanAnother = onScanAnother
     }
     
@@ -129,14 +125,13 @@ public struct ScanSavedView: View {
                             onViewProductDetail()
                         }
                         
-                        // Secondary Button: Add to PM Routine (Secondary)
+                        // Preview only. This control does not add a product to a routine.
                         LabeledButton(
-                            isAddedToRoutine ? "Preview only · not added" : "Sample · does not add to a routine",
-                            systemImage: isAddedToRoutine ? "eye" : nil,
+                            Self.routinePreviewTitle,
                             variant: .secondary
-                        ) {
-                            onToggleRoutine()
-                        }
+                        ) {}
+                        .disabled(true)
+                        .accessibilityIdentifier("sample-saved-does-not-add")
                         
                         // Text Button: Scan another product (Tertiary)
                         LabeledButton(

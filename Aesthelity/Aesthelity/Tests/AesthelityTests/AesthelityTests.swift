@@ -310,6 +310,12 @@ struct AesthelityTests {
         #expect(resultSheet.scannedBrand == "The Ordinary")
         #expect(resultSheet.compatibilityScore == 96)
         #expect(resultSheet.actives.count == 3)
+        #expect(ScanResultSheet.routinePreviewTitle == "Sample · does not add to a routine")
+        #expect(ScanResultSheet.libraryPreviewTitle == "Sample · does not save to Library")
+        #expect(ScanSavedView.routinePreviewTitle == ScanResultSheet.routinePreviewTitle)
+        let saved = ScanSavedView()
+        #expect(saved.productTitle == "Vitamin C Serum")
+        #expect(saved.brand == "CeraVe")
     }
     
     @Test func profileViewInitializationAndDefaults() throws {

@@ -566,15 +566,15 @@ public struct RecentScanRowCard: View {
 // MARK: - Scan Analysis Result Sheet
 
 public struct ScanResultSheet: View {
+    public static let routinePreviewTitle = "Sample · does not add to a routine"
+    public static let libraryPreviewTitle = "Sample · does not save to Library"
+
     public let scannedTitle: String
     public let scannedBrand: String
     public let compatibilityScore: Int
     public let actives: [ScannedActiveIngredient]
     public let routineSummary: String
     public var onDismiss: () -> Void
-    
-    @State private var isSavedToLibrary: Bool = false
-    @State private var isAddedToRoutine: Bool = false
     
     public init(
         scannedTitle: String = "Niacinamide 10% + Zinc 1%",
@@ -737,15 +737,11 @@ public struct ScanResultSheet: View {
                     }
                     
                     VStack(spacing: 12) {
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isAddedToRoutine.toggle()
-                            }
-                        }) {
+                        Button(action: {}) {
                             HStack {
-                                Image(systemName: isAddedToRoutine ? "eye" : "plus.circle")
+                                Image(systemName: "plus.circle")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text(isAddedToRoutine ? "Preview only · not added" : "Sample · does not add to a routine")
+                                Text(Self.routinePreviewTitle)
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundStyle(Color.white)
@@ -755,16 +751,14 @@ public struct ScanResultSheet: View {
                             .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                         }
                         .buttonStyle(.plain)
+                        .disabled(true)
+                        .accessibilityIdentifier("sample-scan-does-not-add")
                         
-                        Button(action: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isSavedToLibrary.toggle()
-                            }
-                        }) {
+                        Button(action: {}) {
                             HStack {
                                 Image(systemName: "bookmark")
                                     .font(.system(size: 16, weight: .semibold))
-                                Text(isSavedToLibrary ? "Preview only · not saved" : "Sample · does not save to Library")
+                                Text(Self.libraryPreviewTitle)
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundStyle(Color(red: 0.31, green: 0.34, blue: 0.56))
@@ -778,6 +772,8 @@ public struct ScanResultSheet: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        .disabled(true)
+                        .accessibilityIdentifier("sample-scan-does-not-save")
                     }
                     .padding(.top, 8)
                 }
@@ -812,7 +808,6 @@ public struct ScanView: View {
     @State private var showScanResultSheet: Bool = false
     @State private var selectedHistoryItem: ScanHistoryItem?
     @State private var showProductDetailSheet: Bool = false
-    @State private var isAddedToPMRoutine: Bool = false
     
     // Photo Picker State
     @State private var selectedPickerItem: PhotosPickerItem?
@@ -878,16 +873,10 @@ public struct ScanView: View {
                     ScanSavedView(
                         productTitle: "Vitamin C Serum",
                         brand: "CeraVe",
-                        isAddedToRoutine: isAddedToPMRoutine,
                         showsTabBar: false,
                         onSelectTab: onSelectTab,
                         onViewProductDetail: {
                             showProductDetailSheet = true
-                        },
-                        onToggleRoutine: {
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isAddedToPMRoutine.toggle()
-                            }
                         },
                         onScanAnother: {
                             withAnimation(.easeInOut(duration: 0.35)) {
