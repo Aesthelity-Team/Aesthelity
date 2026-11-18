@@ -165,6 +165,8 @@ def _validate_inputs(
     product_rows = normalization.get("products")
     if not isinstance(product_rows, list) or not product_rows:
         raise AIAnalysisInputError("normalization.products must be a non-empty array.")
+    if len(product_rows) > 50:
+        raise AIAnalysisInputError("normalization.products cannot exceed 50.")
 
     canonical_by_name: dict[str, list[dict[str, Any]]] = {}
     canonical_by_id: dict[str, dict[str, Any]] = {}
@@ -180,6 +182,7 @@ def _validate_inputs(
     clean_products: list[dict[str, Any]] = []
     unresolved: list[dict[str, Any]] = []
     seen_products: set[str] = set()
+    ingredient_row_count = 0
     for product in product_rows:
         if not isinstance(product, Mapping):
             raise AIAnalysisInputError("each normalized product must be an object.")
@@ -192,6 +195,9 @@ def _validate_inputs(
         rows = product.get("ingredients")
         if not isinstance(rows, list) or (list_status == "unavailable" and rows):
             raise AIAnalysisInputError("ingredients must be an array; unavailable lists must be empty.")
+        ingredient_row_count += len(rows)
+        if ingredient_row_count > 200:
+            raise AIAnalysisInputError("normalization cannot exceed 200 ingredient rows.")
         resolved_rows = []
         preserved_rows = []
         if list_status in {"complete", "partial"} and not rows:

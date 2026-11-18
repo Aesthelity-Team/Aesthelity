@@ -6,6 +6,7 @@ import copy
 import unittest
 
 from analysis_engine.ai_analysis import (
+    AIAnalysisInputError,
     AIAnalysisProviderError,
     analyze_normalized_routine,
 )
@@ -222,6 +223,45 @@ class AIAnalysisTests(unittest.TestCase):
         )
         self.assertEqual(result["analysisProviderStatus"], "unsupported_claim")
         self.assertTrue(any(item["outcome"] == "unknown" for item in result["findings"]))
+    def test_rejects_more_than_50_products_before_provider_call(self):
+        provider = FakeProvider()
+        other_products = [
+            {"productID": f"product-{index}", "listStatus": "unavailable", "ingredients": []}
+            for index in range(1, 51)
+        ]
+
+        with self.assertRaises(AIAnalysisInputError):
+            analyze_normalized_routine(
+                normalization(
+                    list_status="unavailable",
+                    product_id="product-0",
+                    other_products=other_products,
+                ),
+                context(),
+                CANONICAL,
+                REFERENCES,
+                provider,
+            )
+
+        self.assertEqual(provider.contexts, [])
+
+    def test_rejects_more_than_200_ingredient_rows_before_provider_call(self):
+        provider = FakeProvider()
+        rows = [
+            row(index, f"mystery-{index}", None, status="unknown")
+            for index in range(201)
+        ]
+
+        with self.assertRaises(AIAnalysisInputError):
+            analyze_normalized_routine(
+                normalization(*rows),
+                context(),
+                CANONICAL,
+                REFERENCES,
+                provider,
+            )
+
+        self.assertEqual(provider.contexts, [])
 
 
 if __name__ == "__main__":
