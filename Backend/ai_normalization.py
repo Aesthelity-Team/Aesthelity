@@ -510,6 +510,114 @@ class OpenRouterNormalizationProvider:
                 raise ProviderError("provider_schema_unsupported") from None
             raise ProviderError("provider_unavailable") from None
 
+    def complete_messages(
+        self,
+        messages: Sequence[Mapping[str, str]],
+        *,
+        schema: Mapping[str, Any],
+        schema_name: str,
+        model: str | None = None,
+    ) -> Any:
+        """Run a structured chat request using this provider's shared transport."""
+        if not self.api_key:
+            raise ProviderError("provider_unconfigured")
+        if not messages:
+            raise ProviderError("provider_invalid_request")
+
+        models = [model or self.model]
+        if self.fallback_model and self.fallback_model not in models:
+            models.append(self.fallback_model)
+
+        last_error: ProviderError | None = None
+        for selected_model in models:
+            for response_format in self._formats():
+                request_messages = [dict(message) for message in messages]
+
+                if response_format != "json_schema":
+                    system_index = next(
+                        (i for i, message in enumerate(request_messages)
+                         if message.get("role") == "system"),
+                        None,
+                    )
+                    schema_instruction = (
+                        "\nReturn only a JSON object matching this schema: "
+                        + json.dumps(schema, ensure_ascii=False)
+                    )
+                    if system_index is None:
+                        request_messages.insert(
+                            0, {"role": "system", "content": schema_instruction}
+                        )
+                    else:
+                        request_messages[system_index]["content"] += schema_instruction
+
+                body: dict[str, Any] = {
+                    "model": selected_model,
+                    "messages": request_messages,
+                    "temperature": 0,
+                }
+                if self._is_openai_host():
+                    body["store"] = False
+
+                elif "openrouter.ai" in self.base_url.lower():
+                    body["provider"] = {
+                        "data_collection": "deny",
+                        "zdr": True,
+                    }
+
+                if response_format == "json_schema":
+                    body["response_format"] = {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": schema_name,
+                            "strict": True,
+                            "schema": dict(schema),
+                        },
+                    }
+                elif response_format == "json_object":
+                    body["response_format"] = {"type": "json_object"}
+
+                try:
+                    url = f"{self.base_url}/chat/completions"
+                    status, raw = self._transport(
+                        url, body, self._headers(), self.timeout
+                    )
+                    if not 200 <= status < 300 or len(raw) > MAX_RESPONSE_BYTES:
+                        raise ProviderError("provider_invalid_response")
+
+                    envelope = json.loads(raw)
+                    choice = envelope["choices"][0]
+                    message = choice["message"]
+                    if (
+                        choice.get("finish_reason") not in {"stop", "end_turn", None}
+                        or message.get("refusal")
+                    ):
+                        raise ProviderError("provider_incomplete_or_refused")
+
+                    content = message.get("content")
+                    if isinstance(content, list):
+                        content = "".join(
+                            part.get("text", "") if isinstance(part, dict) else str(part)
+                            for part in content
+                        )
+
+                    result = _extract_json(content)
+                    self.last_model = selected_model
+                    return result
+                except ProviderError as error:
+                    last_error = error
+                    if str(error) in {
+                        "provider_rate_limited",
+                        "provider_unavailable",
+                    }:
+                        break
+                except (URLError, TimeoutError, OSError):
+                    last_error = ProviderError("provider_unavailable")
+                    break
+                except (ValueError, KeyError, IndexError, TypeError, AttributeError):
+                    last_error = ProviderError("provider_invalid_response")
+
+        raise last_error or ProviderError("provider_unavailable")
+
     def _complete(self, texts: Sequence[str], model: str, fmt: str) -> Any:
         system = PROMPT
         if fmt != "json_schema":

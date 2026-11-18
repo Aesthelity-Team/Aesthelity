@@ -10,11 +10,12 @@ from unittest.mock import patch
 
 from analysis_engine.ai_feedback import (
     FeedbackProviderError,
-    OpenAIFeedbackProvider,
+    OpenRouterFeedbackProvider,
     add_ai_feedback,
 )
 from analysis_engine.demo import CATALOG, demo_input
 from analysis_engine.evaluate import evaluate_routine
+from Backend.ai_normalization import OpenRouterNormalizationProvider
 
 
 class FakeFeedbackProvider:
@@ -101,24 +102,40 @@ class AIFeedbackTests(unittest.TestCase):
         self.assertIn("productIDs", encoded)
         self.assertIn("ingredientIDs", encoded)
 
-    @patch("analysis_engine.ai_feedback.urlopen")
-    def test_openai_provider_uses_strict_output_and_does_not_store(self, urlopen_mock):
+    @patch("Backend.ai_normalization.urlopen")
+    def test_openrouter_provider_uses_shared_client_and_strict_output(self, urlopen_mock):
         response_data = {
             "choices": [{
                 "finish_reason": "stop",
                 "message": {
-                    "content": json.dumps({"summary": "Summary", "findingExplanations": []})
+                    "content": json.dumps({
+                        "summary": "Summary",
+                        "findingExplanations": [],
+                    })
                 },
             }]
         }
-        urlopen_mock.return_value.__enter__.return_value = BytesIO(
-            json.dumps(response_data).encode("utf-8")
+        response = urlopen_mock.return_value.__enter__.return_value
+        response.status = 200
+        response.read.return_value = json.dumps(response_data).encode("utf-8")
+
+        client = OpenRouterNormalizationProvider(
+            api_key="test-key",
+            model="test-model",
+            fallback_model=None,
         )
-        provider = OpenAIFeedbackProvider(api_key="test-key", model="test-model")
+        provider = OpenRouterFeedbackProvider(client)
         parsed = provider.generate({"findings": []})
+
         self.assertEqual(parsed["summary"], "Summary")
-        request_body = json.loads(urlopen_mock.call_args.args[0].data)
-        self.assertFalse(request_body["store"])
+        request = urlopen_mock.call_args.args[0]
+        request_body = json.loads(request.data)
+        self.assertEqual(
+            request.full_url,
+            "https://openrouter.ai/api/v1/chat/completions",
+        )
+        self.assertEqual(request_body["model"], "test-model")
+        self.assertNotIn("store", request_body)
         self.assertTrue(request_body["response_format"]["json_schema"]["strict"])
         self.assertEqual(urlopen_mock.call_args.kwargs["timeout"], 30.0)
 

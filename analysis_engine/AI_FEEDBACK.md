@@ -10,13 +10,13 @@ or change any engine field.
 
 ```python
 from analysis_engine import evaluate_routine
-from analysis_engine.ai_feedback import OpenAIFeedbackProvider, add_ai_feedback
+from analysis_engine.ai_feedback import OpenRouterFeedbackProvider, add_ai_feedback
 
 result = evaluate_routine(routine, active_catalog)
 response = add_ai_feedback(
     result,
     active_catalog,
-    OpenAIFeedbackProvider.from_environment(),
+    OpenRouterFeedbackProvider.from_environment(),
 )
 ```
 
@@ -39,8 +39,9 @@ does not label the routine safe.
 The integration layer should configure these variables on the backend only:
 
 ```sh
-export OPENAI_API_KEY='your-key'
+export OPENROUTER_API_KEY='your-key'
 export AESTHELITY_ANALYSIS_MODEL='model-id-enabled-for-your-project'
+export AESTHELITY_ANALYSIS_FALLBACK_MODEL='fallback-model-id'
 ```
 
 Never put the key in iOS code or a committed file. The provider sends structured

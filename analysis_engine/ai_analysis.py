@@ -13,10 +13,12 @@ import os
 import re
 from collections.abc import Mapping
 from typing import Any, Protocol
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 from uuid import uuid4
 
+from Backend.ai_normalization import (
+    OpenRouterNormalizationProvider,
+    ProviderError,
+)
 
 PROMPT_VERSION = "ai-analysis-v1"
 MAX_RESPONSE_BYTES = 128_000
@@ -81,60 +83,47 @@ class AIAnalysisProvider(Protocol):
     def generate(self, context: dict[str, Any]) -> Any: ...
 
 
-class OpenAIAnalysisProvider:
-    """Server-side OpenAI client using strict structured output."""
+class OpenRouterAnalysisProvider:
+    """Evidence-analysis provider using the shared OpenRouter client."""
 
-    def __init__(self, *, api_key: str, model: str, timeout: float = 30.0):
-        self.api_key = api_key
-        self.model = model
-        self.timeout = timeout
+    def __init__(self, client: OpenRouterNormalizationProvider):
+        self.client = client
+        self.model = client.model
 
     @classmethod
-    def from_environment(cls) -> "OpenAIAnalysisProvider":
-        return cls(
-            api_key=os.environ.get("OPENAI_API_KEY", ""),
-            model=os.environ.get("AESTHELITY_ANALYSIS_MODEL", ""),
+    def from_environment(cls) -> "OpenRouterAnalysisProvider":
+        client = OpenRouterNormalizationProvider.from_environment()
+        analysis_model = os.environ.get("AESTHELITY_ANALYSIS_MODEL")
+        if analysis_model:
+            client.model = analysis_model
+        client.fallback_model = (
+            os.environ.get("AESTHELITY_ANALYSIS_FALLBACK_MODEL") or None
         )
+        return cls(client)
 
     def generate(self, context: dict[str, Any]) -> Any:
-        if not self.api_key or not self.model:
-            raise AIAnalysisProviderError("not_configured")
-        body = {
-            "model": self.model,
-            "store": False,
-            "messages": [
-                {"role": "system", "content": PROMPT},
-                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {"name": "routine_analysis", "strict": True, "schema": _SCHEMA},
-            },
-        }
-        request = Request(
-            "https://api.openai.com/v1/chat/completions",
-            data=json.dumps(body, ensure_ascii=False).encode("utf-8"),
-            method="POST",
-            headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
-        )
         try:
-            with urlopen(request, timeout=self.timeout) as response:
-                raw = response.read(MAX_RESPONSE_BYTES + 1)
-            if len(raw) > MAX_RESPONSE_BYTES:
-                raise AIAnalysisProviderError("invalid_response")
-            envelope = json.loads(raw)
-            choice = envelope["choices"][0]
-            message = choice["message"]
-            if choice.get("finish_reason") != "stop" or message.get("refusal"):
-                raise AIAnalysisProviderError("refused")
-            return json.loads(message["content"])
-        except HTTPError as error:
-            raise AIAnalysisProviderError("rate_limited" if error.code == 429 else "unavailable") from None
-        except (URLError, TimeoutError, OSError):
-            raise AIAnalysisProviderError("unavailable") from None
-        except (ValueError, KeyError, IndexError, TypeError, AttributeError):
-            raise AIAnalysisProviderError("invalid_response") from None
-
+            return self.client.complete_messages(
+                [
+                    {"role": "system", "content": PROMPT},
+                    {
+                        "role": "user",
+                        "content": json.dumps(context, ensure_ascii=False),
+                    },
+                ],
+                schema=_SCHEMA,
+                schema_name="routine_analysis",
+                model=self.model,
+            )
+        except ProviderError as error:
+            code = str(error)
+            mapped_code = {
+                "provider_unconfigured": "not_configured",
+                "provider_rate_limited": "rate_limited",
+                "provider_incomplete_or_refused": "refused",
+                "provider_invalid_response": "invalid_response",
+            }.get(code, "unavailable")
+            raise AIAnalysisProviderError(mapped_code) from None
 
 def _canonical_key(value: str) -> str:
     return " ".join(value.casefold().split())
