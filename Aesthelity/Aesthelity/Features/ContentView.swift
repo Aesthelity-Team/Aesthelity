@@ -923,27 +923,7 @@ struct ContentView: View {
     
     // MARK: - 6. Why This Order? Card
     private var whyThisOrderCard: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("Why this order?")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Constants.semanticInkAccent)
-            
-            Text(selectedPeriod == .am
-                 ? "AM order: cleanse → serum → moisturize → sunscreen. You can still reorder steps anytime."
-                 : "PM order: oil cleanse → cleanse → serum → moisturize → eye balm. You can still reorder steps anytime.")
-                .font(.system(size: 12, weight: .regular))
-                .foregroundStyle(Constants.semanticInkSecondary)
-                .lineSpacing(2)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Constants.semanticSurfaceRaised)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Constants.semanticLineHairline, lineWidth: 1)
-        )
+        LayeringGuidanceView(steps: currentSteps, period: selectedPeriod)
     }
     
     // MARK: - 7. Demo Banner (Peach)

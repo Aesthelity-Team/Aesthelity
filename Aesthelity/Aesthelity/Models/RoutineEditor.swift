@@ -13,8 +13,12 @@ public struct RoutineProductSnapshot: Equatable, Codable {
     public let ingredientNames: [String]
     public let listStatus: String
     let normalizedIngredients: [NormalizedIngredient]
+    let category: DemoProductCategory?
+    let isFictional: Bool?
 
     init(_ product: DemoProduct) {
+        category = product.category
+        isFictional = product.isFictional
         reference = .catalog(product.id)
         name = product.name
         brand = product.brand
@@ -24,6 +28,8 @@ public struct RoutineProductSnapshot: Equatable, Codable {
     }
 
     init(_ product: ManualProduct) {
+        category = product.category
+        isFictional = false
         reference = .manual(product.id)
         name = product.name
         brand = product.brand
@@ -32,9 +38,16 @@ public struct RoutineProductSnapshot: Equatable, Codable {
         normalizedIngredients = product.ingredients
     }
 
+    private static let bundledFictionalIDs: Set<String> = {
+        guard let catalog = try? DemoCatalog.load() else { return [] }
+        return Set(catalog.products.filter(\.isFictional).map(\.id))
+    }()
+
     var provenance: String {
         switch reference {
-        case .catalog: return "Fictional demo catalog"
+        case .catalog(let id):
+            let fictional = isFictional ?? Self.bundledFictionalIDs.contains(id)
+            return fictional ? "Fictional demo catalog" : "Catalog product"
         case .manual: return "Manually entered"
         }
     }

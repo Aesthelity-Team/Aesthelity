@@ -6,6 +6,7 @@ struct RoutineProductPicker: View {
     @State private var query = ""
     let steps: [RoutineStepItem]
     let onSelect: (RoutineStepItem) -> Void
+    @StateObject private var liveCatalog = ProductCatalogStore()
     private let catalog = Result { try DemoCatalog.load() }
 
     private func matches(_ product: RoutineProductSnapshot) -> Bool {
@@ -29,14 +30,22 @@ struct RoutineProductPicker: View {
     var body: some View {
         NavigationStack {
             List {
-                Section("Bundled catalog") {
-                    switch catalog {
-                    case .success(let catalog):
-                        let products = catalog.products.map(RoutineProductSnapshot.init).filter(matches)
-                        if products.isEmpty { Text("No catalog products match your search.") }
-                        ForEach(products, id: \.reference) { row($0) }
-                    case .failure:
-                        Text("The catalog could not be loaded. Close this picker and try again.")
+                Section(liveCatalog.products == nil ? "Bundled fictional catalog" : "Live catalog") {
+                    if liveCatalog.isLoading { ProgressView("Loading catalog…") }
+                    if let message = liveCatalog.message { Text(message).font(.caption) }
+                    if let products = liveCatalog.products {
+                        let matches = products.map(RoutineProductSnapshot.init).filter(matches)
+                        if matches.isEmpty { Text("No catalog products match your search.") }
+                        ForEach(matches, id: \.reference) { row($0) }
+                    } else {
+                        switch catalog {
+                        case .success(let catalog):
+                            let products = catalog.products.map(RoutineProductSnapshot.init).filter(matches)
+                            if products.isEmpty { Text("No catalog products match your search.") }
+                            ForEach(products, id: \.reference) { row($0) }
+                        case .failure:
+                            Text("The catalog could not be loaded. Close this picker and try again.")
+                        }
                     }
                 }
                 Section("Manual products on this device") {
@@ -45,6 +54,12 @@ struct RoutineProductPicker: View {
                     if products.isEmpty { Text("No saved manual products match your search.") }
                     ForEach(products, id: \.reference) { row($0) }
                 }
+            }
+            .task {
+                if !ProductCatalogStore.usesBundledCatalogForTests { await liveCatalog.load() }
+            }
+            .refreshable {
+                if !ProductCatalogStore.usesBundledCatalogForTests { await liveCatalog.load() }
             }
             .searchable(text: $query, prompt: "Product name or brand")
             .navigationTitle("Add a product")

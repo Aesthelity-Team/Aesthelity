@@ -172,4 +172,24 @@ final class Sprint1DemoUITests: XCTestCase {
         app.buttons["Back"].firstMatch.tap()
         assertOnHome(app, "Back should return to Home.")
     }
+    @MainActor
+    func testLayeringGuidanceShowsUncertaintyForLegacyRoutine() {
+        let app = enterWithoutSetup()
+        let uncertain = text(app, "Layering order is uncertain")
+        scrollTo(uncertain, in: app)
+        XCTAssertTrue(uncertain.exists)
+        let disclaimer = text(app, "General guidance only. Follow product directions and your clinician’s advice. Application order does not establish compatibility or guarantee safety.")
+        scrollTo(disclaimer, in: app)
+        XCTAssertTrue(disclaimer.exists)
+        let analysis = app.buttons[">> View analysis"]
+        scrollTo(analysis, in: app)
+        analysis.tap()
+        XCTAssertTrue(uncertain.waitForExistence(timeout: 5))
+        XCTAssertFalse(text(app, "Suggested layering order").exists)
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Layering guidance for incomplete routine"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
 }

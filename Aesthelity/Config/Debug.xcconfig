@@ -1,0 +1,2 @@
+// Local HTTPS settings are optional and remain on the developer's machine.
+#include? "ManualTesting.local.xcconfig"

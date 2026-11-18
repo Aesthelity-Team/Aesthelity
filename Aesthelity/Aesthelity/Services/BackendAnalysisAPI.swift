@@ -373,20 +373,26 @@ struct BackendAnalysisAPI {
         self.session = session
     }
 
-    func analyze(scenario: AnalysisDemoScenario) async throws -> LiveAnalysisResult {
-        let root = try baseURL()
-        let productURL = root.appendingPathComponent("api").appendingPathComponent("v1").appendingPathComponent("products")
-        var listRequest = URLRequest(url: productURL)
-        listRequest.httpMethod = "GET"
-        let (listData, listResponse) = try await session.data(for: listRequest)
-        try requireSuccess(listResponse, data: listData)
-
-        let catalogResponse = try decoder.decode(ProductListResponse.self, from: listData)
-        guard catalogResponse.contractVersion == 1 else {
+    func loadProducts() async throws -> [DemoProduct] {
+        let url = try baseURL().appendingPathComponent("api/v1/products")
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 20
+        let (data, response) = try await session.data(for: request)
+        try requireSuccess(response, data: data)
+        let catalog = try decoder.decode(ProductListResponse.self, from: data)
+        guard catalog.contractVersion == 1,
+              Set(catalog.products.map(\.id)).count == catalog.products.count,
+              catalog.products.allSatisfy({ !$0.id.isEmpty && !$0.name.isEmpty }) else {
             throw BackendAnalysisAPIError.invalidResponse
         }
+        return catalog.products
+    }
+
+    func analyze(scenario: AnalysisDemoScenario) async throws -> LiveAnalysisResult {
+        let root = try baseURL()
+        let products = try await loadProducts()
         let selectedProducts = try scenario.productIDs.map { productID in
-            guard let product = catalogResponse.products.first(where: { $0.id == productID }) else {
+            guard let product = products.first(where: { $0.id == productID }) else {
                 throw BackendAnalysisAPIError.missingProduct(productID)
             }
             return product

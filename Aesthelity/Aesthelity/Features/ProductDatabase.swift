@@ -332,9 +332,6 @@ public class ProductDatabase {
     }
     
     public func detail(forDemoProduct demoProduct: DemoProduct) -> ProductDetailItem {
-        if let existing = demoDatabase[demoProduct.id] {
-            return existing
-        }
         let item = ProductDetailItem(demoProduct: demoProduct)
         demoDatabase[demoProduct.id] = item
         return item
