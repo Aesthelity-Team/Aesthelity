@@ -129,9 +129,10 @@ struct LiveAnalysisView: View {
                 Spacer()
                 Text(response.checkStatusLabel)
                     .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.Semantic.inkPrimary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(response.hasIncompleteAssessment ? Color.orange.opacity(0.16) : Color.green.opacity(0.12))
+                    .background(response.hasIncompleteAssessment ? Color.orange.opacity(0.16) : AppTheme.Semantic.inkBrand.opacity(0.12))
                     .clipShape(Capsule())
             }
 
@@ -208,6 +209,7 @@ struct LiveAnalysisView: View {
                     detailRow(finding.affectedProductTitle, value: products)
                 }
                 AnalysisFindingDetails(finding: finding)
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
             }
         }
         .padding(14)

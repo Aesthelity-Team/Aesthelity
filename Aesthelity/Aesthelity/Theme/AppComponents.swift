@@ -632,7 +632,9 @@ struct AnalysisIncompleteCard: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(AppTheme.Semantic.inkPrimary)
         .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .background(AppTheme.Semantic.surfaceBase, in: RoundedRectangle(cornerRadius: 12))
     }
 }
 
