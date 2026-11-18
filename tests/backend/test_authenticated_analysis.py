@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import sys
 import threading
 import unittest
@@ -21,7 +22,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from Backend.analysis_api import AnalysisHTTPServer  # noqa: E402
+from Backend.analysis_api import AnalysisHTTPServer, _public_analysis_body  # noqa: E402
 from analysis_engine.product_input import load_alias_catalog  # noqa: E402
 
 CATALOG_PATH = (
@@ -116,7 +117,58 @@ def _make_server(demo_mode: bool = False) -> AnalysisHTTPServer:
         raise ValueError("expired or invalid token")
 
     server.token_verifier = fake_verifier  # type: ignore[attr-defined]
+    server.analysis_provider = _FakeAnalysisProvider()  # type: ignore[attr-defined]
     return server
+
+
+class _FakeAnalysisProvider:
+    """Returns one valid caution when retinol and glycolic acid are both confirmed. No network."""
+
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        products = context.get("products", [])
+        ingredient_ids = {
+            row["ingredientID"]
+            for product in products
+            for row in product.get("ingredients", [])
+        }
+        if {"retinol", "glycolic-acid"} <= ingredient_ids:
+            return {
+                "assessment": "findings",
+                "findings": [
+                    {
+                        "referenceIDs": ["irritation.retinol-benzoyl-peroxide-with-exfoliant"],
+                        "outcome": "caution",
+                        "productIDs": [product["productID"] for product in products],
+                        "ingredientIDs": ["retinol", "glycolic-acid"],
+                        "explanation": "Confirmed retinol and glycolic acid are both in this routine.",
+                        "reason": "The approved reference supports a moderate caution.",
+                    }
+                ],
+            }
+        return {"assessment": "no_findings", "findings": []}
+
+
+class _NoFindingsProvider:
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        return {"assessment": "no_findings", "findings": []}
+
+
+class _RaisingProvider:
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        raise RuntimeError("provider exploded with secret detail")
+
+
+class _InvalidOutputProvider:
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        return {"assessment": "findings", "findings": []}
 
 
 def _request(
@@ -177,15 +229,31 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         """
         STEP 2a — Happy path, no findings.
 
-        A signed-in user sends a valid routine that has no conflicts.
-        The server should return 200 with contractVersion=1, ruleVersion,
-        period matching the request, and outcome="noFindings".
+        A signed-in user sends a valid routine that has approved-reference coverage
+        and no conflicts. The server should return 200 with contractVersion=1,
+        ruleVersion, period matching the request, and outcome="noFindings".
         """
-        status, body = _request(self.server, "POST", body=VALID_NORMAL_PAYLOAD)
+        payload = {
+            "contractVersion": 1,
+            "period": "am",
+            "recordedAllergies": {"status": "known", "ingredientIDs": []},
+            "products": [
+                {
+                    "productID": "serum_hydrating",
+                    "listStatus": "complete",
+                    "catalogVersion": 3,
+                    "ingredients": [
+                        {"originalText": "Retinol", "mapping": "confirmed", "ingredientID": "retinol"},
+                        {"originalText": "Water", "mapping": "confirmed", "ingredientID": "water"},
+                    ],
+                }
+            ],
+        }
+        status, body = _request(self.server, "POST", body=payload)
 
         self.assertEqual(status, 200)
         self.assertEqual(body["contractVersion"], 1)
-        self.assertIn("ruleVersion", body)         # e.g. "AN-02-v1"
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
         self.assertEqual(body["period"], "am")
         self.assertEqual(body["outcome"], "noFindings")
         self.assertEqual(body["completeness"], "complete")
@@ -203,11 +271,13 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         status, body = _request(self.server, "POST", body=VALID_CAUTION_PAYLOAD)
 
         self.assertEqual(status, 200)
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
         self.assertEqual(body["outcome"], "findings")
         self.assertEqual(body["period"], "pm")
         self.assertEqual(len(body["findings"]), 1)
         finding = body["findings"][0]
         self.assertEqual(finding["outcome"], "caution")
+        self.assertEqual(finding["ruleStatus"], "ai-assisted")
         self.assertEqual(finding["ruleID"], "irritation.retinol-benzoyl-peroxide-with-exfoliant")
         self.assertIn("retinol", finding["ingredientIDs"])
         self.assertIn("glycolic-acid", finding["ingredientIDs"])
@@ -498,7 +568,7 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         Unexpected engine or internal errors must return 500 INTERNAL_ERROR
         without leaking server details or secrets in the response.
         """
-        with patch("Backend.analysis_api.evaluate_routine", side_effect=RuntimeError("internal crash detail")):
+        with patch("Backend.analysis_api.analyze_normalized_routine", side_effect=RuntimeError("internal crash detail")):
             status, body = _request(self.server, "POST", body=VALID_NORMAL_PAYLOAD)
             self.assertEqual(status, 500)
             self.assertEqual(body["error"]["code"], "INTERNAL_ERROR")
@@ -533,6 +603,379 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
             prod_server.shutdown()
             prod_server.server_close()
             t.join()
+
+
+def _supported_request() -> dict:
+    return {
+        "contractVersion": 1,
+        "period": "pm",
+        "recordedAllergies": {"status": "known", "ingredientIDs": []},
+        "products": [
+            {
+                "productID": "fictional_retinol_serum",
+                "listStatus": "complete",
+                "catalogVersion": 3,
+                "ingredients": [
+                    {"originalText": "Retinol", "mapping": "confirmed", "ingredientID": "retinol"},
+                ],
+            },
+            {
+                "productID": "fictional_glycolic_toner",
+                "listStatus": "complete",
+                "catalogVersion": 3,
+                "ingredients": [
+                    {"originalText": "Glycolic Acid", "mapping": "confirmed", "ingredientID": "glycolic-acid"},
+                ],
+            },
+        ],
+    }
+
+
+class AIAnalysisEndpointTests(unittest.TestCase):
+    """POST /api/v1/analyses always uses the AI analysis engine and fails closed."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.server = _make_server(demo_mode=False)
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join()
+
+    def setUp(self) -> None:
+        self.server.analysis_provider = _FakeAnalysisProvider()
+
+    def test_supported_finding_matches_fixture_shape_and_echoes_request(self) -> None:
+        fixture = json.loads((ROOT / "docs" / "fixtures" / "analyses" / "supported_finding.json").read_text())
+        status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(set(body), set(fixture))
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertEqual(body["outcome"], "findings")
+        self.assertEqual(body["completeness"], "complete")
+        self.assertEqual(body["period"], "pm")
+        self.assertEqual(body["activeCatalogVersion"], 3)
+        self.assertEqual(body["productIDs"], ["fictional_retinol_serum", "fictional_glycolic_toner"])
+        self.assertNotIn("displayLabel", body)
+        self.assertEqual(len(body["findings"]), 1)
+        finding = body["findings"][0]
+        self.assertEqual(set(finding), set(fixture["findings"][0]))
+        self.assertEqual(finding["outcome"], "caution")
+        self.assertEqual(finding["ruleStatus"], "ai-assisted")
+        self.assertEqual(finding["severity"], "moderate")
+        self.assertEqual(finding["categoryID"], "ingredient-combination")
+        self.assertEqual(finding["productIDs"], body["productIDs"])
+        self.assertEqual(finding["ingredientIDs"], ["retinol", "glycolic-acid"])
+        self.assertTrue(finding["evidence"][0]["source"]["url"].startswith("https://"))
+        self.assertEqual(set(body["coverage"]), set(fixture["coverage"]))
+        self.assertEqual(body["coverage"]["status"], "complete")
+
+    def test_complete_input_with_no_model_finding(self) -> None:
+        self.server.analysis_provider = _NoFindingsProvider()
+        status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "noFindings")
+        self.assertEqual(body["completeness"], "complete")
+        self.assertEqual(body["displayLabel"], "No recorded conflicts")
+        self.assertEqual(body["findings"], [])
+        self.assertEqual(body["coverage"]["status"], "complete")
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertEqual(body["period"], "pm")
+        self.assertEqual(body["productIDs"], ["fictional_retinol_serum", "fictional_glycolic_toner"])
+        self.assertEqual(body["activeCatalogVersion"], 3)
+
+    def test_unverified_catalog_names_stay_incomplete(self) -> None:
+        """A recognized label must not turn an unverified row into a clear result."""
+
+        self.server.analysis_provider = _NoFindingsProvider()
+        cases = {
+            "uncertain": {
+                "originalText": "Retinol",
+                "mapping": "uncertain",
+                "suggestedID": "retinol",
+                "status": "uncertain",
+            },
+            "unmatched": {
+                "originalText": "Glycolic Acid",
+                "mapping": "unmatched",
+                "status": "unknown",
+            },
+        }
+        for name, row in cases.items():
+            with self.subTest(mapping=name):
+                payload = {
+                    "contractVersion": 1,
+                    "period": "pm",
+                    "recordedAllergies": {"status": "known", "ingredientIDs": []},
+                    "products": [
+                        {
+                            "productID": "fictional_unverified_serum",
+                            "listStatus": "complete",
+                            "catalogVersion": 3,
+                            "ingredients": [
+                                {key: value for key, value in row.items() if key != "status"}
+                            ],
+                        }
+                    ],
+                }
+                status, body = _request(self.server, "POST", body=payload)
+
+                self.assertEqual(status, 200)
+                self.assertEqual(body["outcome"], "unknown")
+                self.assertEqual(body["completeness"], "incomplete")
+                self.assertNotIn("displayLabel", body)
+                self.assertNotIn("No recorded conflicts", json.dumps(body))
+                self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+                self.assertEqual(body["productIDs"], ["fictional_unverified_serum"])
+                normalized = body["normalization"]["products"][0]["ingredients"][0]
+                self.assertEqual(normalized["originalText"], row["originalText"])
+                self.assertEqual(normalized["status"], row["status"])
+                self.assertIsNone(normalized["canonicalName"])
+                self.assertTrue(body["findings"])
+                self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+
+    def test_conflicting_confirmed_id_stays_incomplete(self) -> None:
+        """A confirmed ID that disagrees with the label is not used as either identity."""
+
+        self.server.analysis_provider = _NoFindingsProvider()
+        payload = {
+            "contractVersion": 1,
+            "period": "pm",
+            "recordedAllergies": {"status": "known", "ingredientIDs": []},
+            "products": [
+                {
+                    "productID": "fictional_conflict_serum",
+                    "listStatus": "complete",
+                    "catalogVersion": 3,
+                    "ingredients": [
+                        {
+                            "originalText": "Retinol",
+                            "mapping": "confirmed",
+                            "ingredientID": "water",
+                        }
+                    ],
+                }
+            ],
+        }
+        status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        self.assertNotIn("No recorded conflicts", json.dumps(body))
+        normalized = body["normalization"]["products"][0]["ingredients"][0]
+        self.assertEqual(normalized["originalText"], "Retinol")
+        self.assertEqual(normalized["status"], "unknown")
+        self.assertEqual(normalized["reason"], "conflicting-confirmed-id")
+        self.assertIsNone(normalized["canonicalName"])
+        for finding in body["findings"]:
+            self.assertEqual(finding["outcome"], "unknown")
+            self.assertNotIn("retinol", finding["ingredientIDs"])
+            self.assertNotIn("water", finding["ingredientIDs"])
+
+    def test_confirmed_id_without_the_same_label_resolution_stays_incomplete(self) -> None:
+        self.server.analysis_provider = _NoFindingsProvider()
+        payload = {
+            "contractVersion": 1,
+            "period": "pm",
+            "recordedAllergies": {"status": "known", "ingredientIDs": []},
+            "products": [
+                {
+                    "productID": "fictional_unconfirmed_serum",
+                    "listStatus": "complete",
+                    "catalogVersion": 3,
+                    "ingredients": [
+                        {
+                            "originalText": "Not a catalog ingredient",
+                            "mapping": "confirmed",
+                            "ingredientID": "water",
+                        }
+                    ],
+                }
+            ],
+        }
+        status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        normalized = body["normalization"]["products"][0]["ingredients"][0]
+        self.assertEqual(normalized["status"], "unknown")
+        self.assertEqual(normalized["reason"], "unconfirmed-ingredient-id")
+        self.assertIsNone(normalized["canonicalName"])
+
+    def test_confirmed_alias_that_resolves_to_the_same_id_stays_complete(self) -> None:
+        self.server.analysis_provider = _NoFindingsProvider()
+        payload = {
+            "contractVersion": 1,
+            "period": "am",
+            "recordedAllergies": {"status": "known", "ingredientIDs": []},
+            "products": [
+                {
+                    "productID": "fictional_alias_toner",
+                    "listStatus": "complete",
+                    "catalogVersion": 3,
+                    "ingredients": [
+                        {"originalText": "Retinol", "mapping": "confirmed", "ingredientID": "retinol"},
+                        {
+                            "originalText": "Hydroxyacetic Acid",
+                            "mapping": "confirmed",
+                            "ingredientID": "glycolic-acid",
+                        },
+                    ],
+                }
+            ],
+        }
+        status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "noFindings")
+        self.assertEqual(body["completeness"], "complete")
+        self.assertEqual(body["displayLabel"], "No recorded conflicts")
+        names = [row["canonicalName"] for row in body["normalization"]["products"][0]["ingredients"]]
+        self.assertEqual(names, ["Retinol", "Glycolic Acid"])
+
+    def test_complete_lists_with_allergy_unknown_and_no_model_finding_returns_unknown_coverage_finding(self) -> None:
+        self.server.analysis_provider = _NoFindingsProvider()
+        fixture = json.loads((ROOT / "docs" / "fixtures" / "analyses" / "incomplete_unknown.json").read_text())
+        fixture_allergy = next(
+            item for item in fixture["findings"] if item.get("ruleID") == "coverage.allergy-input-unknown"
+        )
+        payload = _supported_request()
+        payload["recordedAllergies"] = {"status": "unknown"}
+        status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        self.assertEqual(body["coverage"]["status"], "incomplete")
+        self.assertTrue(body["findings"])
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+        self.assertEqual(len(body["findings"]), 1)
+        finding = body["findings"][0]
+        self.assertEqual(set(finding), set(fixture_allergy))
+        self.assertEqual(finding["ruleID"], "coverage.allergy-input-unknown")
+        self.assertEqual(finding["reasonCode"], "allergy-status-unknown")
+        self.assertEqual(finding["ruleStatus"], "system-coverage")
+        self.assertEqual(finding["outcome"], "unknown")
+        self.assertEqual(finding["categoryID"], "coverage-gap")
+        self.assertEqual(finding["productIDs"], body["productIDs"])
+        self.assertEqual(finding["ingredientIDs"], [])
+
+    def test_incomplete_result_without_findings_gets_generic_coverage_finding(self) -> None:
+        body = _public_analysis_body(
+            {
+                "period": "pm",
+                "productIDs": ["fictional_retinol_serum"],
+                "completeness": "incomplete",
+                "findings": [],
+                "coverage": {"unknownIngredientCount": 0, "missingReferenceCount": 0, "limitations": []},
+                "limitations": ["Informational only."],
+            },
+            catalog_version=3,
+            catalog_source="firestore",
+            allergy_status="known",
+        )
+
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        self.assertTrue(body["findings"])
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+        finding = body["findings"][0]
+        self.assertEqual(finding["ruleID"], "coverage.analysis-incomplete")
+        self.assertEqual(finding["ruleStatus"], "system-coverage")
+        self.assertEqual(finding["outcome"], "unknown")
+        self.assertEqual(finding["categoryID"], "coverage-gap")
+        self.assertEqual(finding["productIDs"], ["fictional_retinol_serum"])
+        self.assertEqual(finding["ingredientIDs"], [])
+
+    def test_allergy_unknown_and_partial_list_fail_closed(self) -> None:
+        payload = {
+            "contractVersion": 1,
+            "period": "am",
+            "recordedAllergies": {"status": "unknown"},
+            "products": [
+                {
+                    "productID": "fictional_partial_serum",
+                    "listStatus": "partial",
+                    "catalogVersion": 3,
+                    "ingredients": [
+                        {"originalText": "Mystery Extract", "mapping": "unmatched"},
+                    ],
+                }
+            ],
+        }
+        status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        self.assertEqual(body["period"], "am")
+        self.assertEqual(body["productIDs"], ["fictional_partial_serum"])
+        self.assertEqual(body["activeCatalogVersion"], 3)
+        self.assertEqual(body["coverage"]["status"], "incomplete")
+        self.assertTrue(body["findings"])
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+
+    def test_stale_catalog_version_fails_closed_and_echoes_server_version(self) -> None:
+        payload = _supported_request()
+        for product in payload["products"]:
+            product["catalogVersion"] = 2
+        status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        self.assertEqual(body["period"], "pm")
+        self.assertEqual(body["productIDs"], ["fictional_retinol_serum", "fictional_glycolic_toner"])
+        self.assertEqual(body["activeCatalogVersion"], 3)
+        self.assertTrue(body["findings"])
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+
+    def test_provider_raise_fails_closed_without_falling_through(self) -> None:
+        self.server.analysis_provider = _RaisingProvider()
+        status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertNotIn("displayLabel", body)
+        encoded = json.dumps(body)
+        self.assertNotIn("secret detail", encoded)
+        self.assertNotIn("provider exploded", encoded)
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+
+    def test_invalid_model_output_fails_closed_without_falling_through(self) -> None:
+        self.server.analysis_provider = _InvalidOutputProvider()
+        status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertNotIn("displayLabel", body)
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+        self.assertNotIn("approved", {item["ruleStatus"] for item in body["findings"]})
+
+    def test_missing_and_revoked_tokens_stay_401(self) -> None:
+        for token in (None, "revoked-token", "not-json"):
+            with self.subTest(token=token):
+                status, body = _request(self.server, "POST", body=_supported_request(), token=token)
+                self.assertEqual(status, 401)
+                self.assertEqual(body["error"]["code"], "UNAUTHENTICATED")
 
 
 if __name__ == "__main__":
