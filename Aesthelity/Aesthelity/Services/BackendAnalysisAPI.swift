@@ -27,62 +27,271 @@ struct AnalysisRequestPayload: Codable, Equatable {
     let products: [NormalizedProductIngredients]
 }
 
+/// Keep new server values round-trippable in saved analyses while letting the
+/// UI handle them conservatively. A recognized wire "unknown" is distinct.
+enum AnalysisValue<Value: RawRepresentable & Equatable>: Codable, Equatable where Value.RawValue == String {
+    case known(Value)
+    case unknown(String)
 
-struct AnalysisCoveragePayload: Codable, Equatable {
-    let status: String
-    let unknownIngredientCount: Int
-    let missingReferenceCount: Int
-    let limitations: [String]
+    init(from decoder: Decoder) throws {
+        let rawValue = try decoder.singleValueContainer().decode(String.self)
+        if let value = Value(rawValue: rawValue) {
+            self = .known(value)
+        } else {
+            self = .unknown(rawValue)
+        }
+    }
 
-    var isComplete: Bool {
-        status == "complete"
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .known(let value): try container.encode(value.rawValue)
+        case .unknown(let rawValue): try container.encode(rawValue)
+        }
     }
 }
 
-struct AnalysisResponsePayload: Codable, Equatable {
+enum AnalysisOutcome: String {
+    case noFindings, findings, unknown
+}
 
+enum AnalysisCompleteness: String {
+    case complete, incomplete
+}
+
+enum AnalysisFindingOutcome: String {
+    case caution, conflict, allergen, unknown
+
+    var isSupported: Bool { self != .unknown }
+}
+
+enum AnalysisRuleStatus: String {
+    case approved
+    case aiAssisted = "ai-assisted"
+    case systemCoverage = "system-coverage"
+}
+
+enum AnalysisSeverity: String {
+    case low, moderate, high
+}
+
+struct AnalysisResponsePayload: Codable {
     let contractVersion: Int
     let ruleVersion: String
     let period: String
     let activeCatalogVersion: Int
-    let outcome: String
-    let completeness: String
+    let outcome: AnalysisValue<AnalysisOutcome>
+    let completeness: AnalysisValue<AnalysisCompleteness>
     let productIDs: [String]
     let findings: [AnalysisFindingPayload]
     let limitations: [String]
     let displayLabel: String?
-    let coverage: AnalysisCoveragePayload?
+    var coverage: AnalysisCoveragePayload? = nil
     let summary: String?
 
+    fileprivate enum CodingKeys: String, CodingKey {
+        case contractVersion, ruleVersion, period, activeCatalogVersion, outcome
+        case completeness, productIDs, findings, limitations, displayLabel, coverage, summary
+    }
+
     var hasCompleteCoverage: Bool {
-        if let coverage {
-            return coverage.isComplete
-        }
-        return completeness == "complete"
+        coverage.map { $0.status == .known(.complete) }
+            ?? (completeness == .known(.complete))
     }
 
     var isLimitedCoverage: Bool {
         !hasCompleteCoverage
     }
+
+    var hasIncompleteAssessment: Bool {
+        completeness != .known(.complete)
+            || (coverage.map { $0.status != .known(.complete) } ?? false)
+            || findings.contains { !$0.isSupported }
+            || (outcome != .known(.noFindings) && outcome != .known(.findings))
+    }
+
+    var checkStatusLabel: String {
+        hasIncompleteAssessment ? "Incomplete check" : "Complete check"
+    }
+
+    var showsNoFindings: Bool {
+        outcome == .known(.noFindings) && findings.isEmpty && !hasIncompleteAssessment
+    }
+
+    static let noFindingsTitle = "No recorded conflicts"
+    static let noFindingsExplanation = "The available evidence did not identify a conflict in this routine. This is not a safety guarantee."
+    static let incompleteTitle = "We couldn’t fully check this routine"
+}
+
+extension AnalysisResponsePayload {
+    init(from decoder: Decoder) throws {
+        let values = try decoder.container(keyedBy: CodingKeys.self)
+        contractVersion = try values.decode(Int.self, forKey: .contractVersion)
+        ruleVersion = try values.decode(String.self, forKey: .ruleVersion)
+        period = try values.decode(String.self, forKey: .period)
+        activeCatalogVersion = try values.decode(Int.self, forKey: .activeCatalogVersion)
+        outcome = try values.decode(AnalysisValue<AnalysisOutcome>.self, forKey: .outcome)
+        completeness = try values.decode(AnalysisValue<AnalysisCompleteness>.self, forKey: .completeness)
+        productIDs = try values.decode([String].self, forKey: .productIDs)
+        findings = try values.decode([AnalysisFindingPayload].self, forKey: .findings)
+        limitations = try values.decode([String].self, forKey: .limitations)
+        coverage = try values.decodeIfPresent(AnalysisCoveragePayload.self, forKey: .coverage)
+        if outcome == .known(.unknown), values.contains(.displayLabel), try values.decodeNil(forKey: .displayLabel) {
+            throw DecodingError.dataCorruptedError(
+                forKey: .displayLabel, in: values, debugDescription: "Unknown results must omit displayLabel."
+            )
+        }
+        displayLabel = try values.decodeIfPresent(String.self, forKey: .displayLabel)
+        summary = try values.decodeIfPresent(String.self, forKey: .summary)
+    }
 }
 
 struct AnalysisFindingPayload: Codable, Equatable {
     let ruleID: String
-    let ruleStatus: String
-    let outcome: String
+    let ruleStatus: AnalysisValue<AnalysisRuleStatus>
+    let outcome: AnalysisValue<AnalysisFindingOutcome>
     let categoryID: String
-    let severity: String?
+    let severity: AnalysisValue<AnalysisSeverity>?
     let productIDs: [String]
     let ingredientIDs: [String]
     let matchedClassIDs: [String]?
     let explanation: String
     let reason: String
     let limitations: [String]
+
+    let findingID: String?
+    let evidence: [AnalysisEvidencePayload]?
+    let reasonCode: String?
     let originalText: String?
     let rowIndex: Int?
 
+    private enum CodingKeys: String, CodingKey {
+        case ruleID, ruleStatus, outcome, categoryID, severity, productIDs, ingredientIDs
+        case matchedClassIDs, explanation, reason, limitations, findingID, evidence
+        case reasonCode, originalText, rowIndex
+    }
+
     var isUnknownOrCoverageGap: Bool {
-        outcome == "unknown" || categoryID == "coverage-gap"
+        outcome == .known(.unknown) || categoryID == "coverage-gap"
+    }
+
+    var isSupported: Bool {
+        guard case .known(let value) = outcome else { return false }
+        return value.isSupported
+    }
+
+    var outcomeTitle: String {
+        guard case .known(let value) = outcome else { return "Unknown" }
+        return value.rawValue.capitalized
+    }
+
+    var severityLabel: String? {
+        guard let severity else { return nil }
+        guard case .known(let value) = severity else { return "Unknown severity" }
+        return value.rawValue.capitalized
+    }
+
+    var badgeLabel: String? {
+        isSupported ? severityLabel : "Unknown"
+    }
+
+    func affectedProductNames(_ names: [String: String]) -> String {
+        productIDs.map { names[$0] ?? "Product" }.joined(separator: " · ")
+    }
+
+    var affectedProductTitle: String {
+        productIDs.count == 1 ? "Affected product" : "Affected products"
+    }
+
+    var plainLanguageReason: String? {
+        let internalCodes: Set<String> = [
+            "coverage.ai-analysis-unavailable",
+            "coverage.reference-context-incomplete",
+            "coverage.reference-evidence-insufficient"
+        ]
+        guard !internalCodes.contains(ruleID),
+              !internalCodes.contains(reasonCode ?? reason),
+              !internalCodes.contains(reason) else { return nil }
+
+        if isSupported {
+            // AI responses put reference-processing details in reason. The card already has the explanation and evidence.
+            return ruleStatus == .known(.aiAssisted) ? nil : reason
+        }
+
+        switch reasonCode ?? reason {
+        case "allergy-status-unknown":
+            return "We don’t know which allergies are recorded for this routine."
+        case "analysis-incomplete":
+            return "Some information or references needed to check this routine were unavailable."
+        case "partial-list":
+            return "The product’s ingredient list is incomplete."
+        case "unavailable-list":
+            return "The product’s ingredient list is unavailable."
+        case "empty-ingredient-list":
+            return "No ingredients are listed for this product."
+        case "normalization-uncertain":
+            return "We couldn’t confirm which ingredient this label refers to."
+        case "normalization-unknown", "canonical-name-not-found":
+            return "We couldn’t match this ingredient to a verified record."
+        case "canonical-name-ambiguous":
+            return "This ingredient name matches more than one record."
+        case "allergy-id-not-in-canonical-records":
+            return "We couldn’t match a recorded allergy to a verified ingredient."
+        default:
+            return outcome == .known(.unknown) && ruleStatus == .known(.approved) ? reason : nil
+        }
+    }
+
+    private static let bundledIngredientNames: [String: String] = {
+        guard let catalog = try? IngredientAliasCatalog.loadBundled() else { return [:] }
+        return Dictionary(uniqueKeysWithValues: catalog.ingredients.map { ($0.id, $0.name) })
+    }()
+
+    var affectedIngredientText: String? {
+        let names = ingredientLabel
+        guard !names.isEmpty else { return nil }
+        let title = originalText != nil || ingredientIDs.count == 1 ? "Affected ingredient" : "Affected ingredients"
+        return "\(title): \(names)"
+    }
+
+    var ingredientLabel: String {
+        if let originalText { return originalText }
+        return ingredientIDs.map { id in
+            Self.bundledIngredientNames[id] ?? id.replacingOccurrences(of: "-", with: " ").capitalized
+        }.joined(separator: " · ")
+    }
+}
+
+struct AnalysisCoveragePayload: Codable {
+    let status: AnalysisValue<AnalysisCompleteness>
+    let unknownIngredientCount: Int
+    let missingReferenceCount: Int
+    let limitations: [String]
+
+    private enum CodingKeys: String, CodingKey {
+        case status, unknownIngredientCount, missingReferenceCount, limitations
+    }
+}
+
+struct AnalysisEvidencePayload: Codable, Equatable {
+    let referenceID: String
+    let referenceVersion: Int
+    let source: Source
+    let claim: String
+
+    private enum CodingKeys: String, CodingKey {
+        case referenceID, referenceVersion, source, claim
+    }
+
+    struct Source: Codable, Equatable {
+        let title: String
+        let publisher: String
+        let url: String
+        let accessedOn: String
+
+        private enum CodingKeys: String, CodingKey {
+            case title, publisher, url, accessedOn
+        }
     }
 }
 
@@ -231,7 +440,8 @@ struct BackendAnalysisAPI {
                 received: result.activeCatalogVersion
             )
         }
-        let names = Dictionary(uniqueKeysWithValues: selectedProducts.map { ($0.id, $0.name) } as [(String, String)])
+        try AccountDataAPI.validate(result, for: payload, catalogVersion: aliasCatalog.version)
+        let names = Dictionary(uniqueKeysWithValues: selectedProducts.map { ($0.id, $0.name) })
         return LiveAnalysisResult(response: result, productNames: names)
     }
 

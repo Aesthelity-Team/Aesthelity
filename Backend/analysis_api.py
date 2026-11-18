@@ -19,12 +19,17 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from analysis_engine import AnalysisInputError, evaluate_routine  # noqa: E402
-from analysis_engine.product_input import ProductInputError, load_alias_catalog  # noqa: E402
-from analysis_engine.ai_analysis import (
+from analysis_engine import AnalysisInputError  # noqa: E402
+from analysis_engine.ai_analysis import (  # noqa: E402
     AIAnalysisInputError,
     OpenRouterAnalysisProvider,
+    PROMPT_VERSION as ANALYSIS_VERSION,
     analyze_normalized_routine,
+)
+from analysis_engine.evaluate import _validate_routine  # noqa: E402
+from analysis_engine.product_input import (  # noqa: E402
+    _catalog_members,
+    load_alias_catalog,
 )
 from Backend.private_data import PrivateDataStore, PrivateDataError
 from Backend.authentication import verified_firebase_claims, verified_firebase_uid  # noqa: E402
@@ -34,9 +39,10 @@ from Backend.analysis_engine_input import (  # noqa: E402
     AnalysisInputAdapterError,
     analysis_normalization,
     analysis_product,
+    analysis_routine_normalization,
     canonical_records,
 )
-from Backend.analysis_reference_store import (
+from Backend.analysis_reference_store import (  # noqa: E402
     AnalysisReferenceStoreError,
     load_approved_analysis_records,
 )
@@ -60,7 +66,9 @@ from Backend.ingredient_persistence import (  # noqa: E402
 
 CATALOG_PATH = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" / "ingredient-aliases.json"
 MAX_BODY_BYTES = 1_000_000
-RULE_VERSION = "AN-02-v1"
+MAX_ANALYSIS_PRODUCTS = 50
+MAX_ANALYSIS_ROWS = 200
+_SUPPORTED_FINDING_OUTCOMES = {"caution", "conflict", "allergen"}
 
 
 def _valid_firestore_document_id(value: Any) -> bool:
@@ -133,6 +141,255 @@ def _error_body(code: str, message: str, request_id: str | None = None) -> dict[
     }
 
 
+def _analysis_provider(server: Any) -> Any:
+    """Use an injected provider in tests. Production builds OpenRouter from the environment once."""
+
+    provider = getattr(server, "analysis_provider", None)
+    if provider is not None:
+        return provider
+    provider = OpenRouterAnalysisProvider.from_environment()
+    server.analysis_provider = provider
+    return provider
+
+
+def _reject_oversized_routine(products: list[dict[str, Any]]) -> None:
+    if len(products) > MAX_ANALYSIS_PRODUCTS:
+        raise AnalysisInputError("too-many-products", "products cannot exceed 50.")
+    row_count = sum(len(product["ingredients"]) for product in products)
+    if row_count > MAX_ANALYSIS_ROWS:
+        raise AnalysisInputError("too-many-rows", "ingredients cannot exceed 200.")
+
+
+def _recorded_allergies(allergies: Mapping[str, Any]) -> dict[str, Any]:
+    if allergies["status"] == "unknown":
+        return {"status": "unknown"}
+    return {"status": "known", "ingredientIDs": list(allergies["ingredientIDs"])}
+
+
+def _mark_unresolved(rows: list[dict[str, Any]], reason: str) -> None:
+    for row in rows:
+        row["mapping"] = "unmatched"
+        row["status"] = "unknown"
+        row["ingredientID"] = None
+        row["suggestedID"] = None
+        row["candidateIDs"] = []
+        row["analysisEligible"] = False
+        row["reason"] = reason
+
+
+def _unverified_analysis_row(
+    text: str,
+    mapping: str,
+    *,
+    suggested_id: str | None = None,
+    candidate_ids: tuple[str, ...] | list[str] = (),
+    reason: str = "unverified-ingredient",
+) -> dict[str, Any]:
+    """A stored row the server will not treat as a confirmed identity."""
+
+    row: dict[str, Any] = {
+        "originalText": text,
+        "mapping": "unmatched",
+        "status": "unknown",
+        "ingredientID": None,
+        "suggestedID": None,
+        "candidateIDs": [],
+        "canonicalName": None,
+        "analysisEligible": False,
+        "tier": None,
+        "reason": reason,
+    }
+    if mapping == "uncertain":
+        row.update(mapping="uncertain", status="uncertain", suggestedID=suggested_id)
+    elif mapping == "ambiguous":
+        row.update(mapping="ambiguous", status="ambiguous", candidateIDs=list(candidate_ids))
+    return row
+
+
+def _row_for_stored_mapping(
+    incoming: Mapping[str, Any], resolved: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Keep the stored mapping. Re-resolving the label must not replace it.
+
+    Uncertain, ambiguous, and unmatched rows stay unverified even when the
+    label is a catalog name. A confirmed ID is kept only when the active
+    catalog resolves that same label to the same ID. Any other confirmed ID
+    is flagged and is not analyzed as either identity.
+    """
+
+    text = incoming["original_text"]
+    mapping = incoming["mapping"]
+    if mapping != "confirmed":
+        return _unverified_analysis_row(
+            text,
+            mapping,
+            suggested_id=incoming.get("suggested_id"),
+            candidate_ids=incoming.get("candidate_ids") or (),
+        )
+    resolved_id = resolved.get("ingredientID") if resolved.get("mapping") == "confirmed" else None
+    if resolved_id is not None and resolved_id == incoming["ingredient_id"]:
+        return dict(resolved)
+    reason = "conflicting-confirmed-id" if resolved_id is not None else "unconfirmed-ingredient-id"
+    return _unverified_analysis_row(text, "unmatched", reason=reason)
+
+
+def _formulation_entries(
+    product: Mapping[str, Any], resolved: list[Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for request_row, resolved_row in zip(product["ingredients"], resolved):
+        formulation = request_row.get("formulation")
+        if not isinstance(formulation, Mapping) or resolved_row.get("mapping") != "confirmed":
+            continue
+        ingredient_id = resolved_row.get("ingredientID")
+        if not isinstance(ingredient_id, str):
+            continue
+        vehicle = formulation.get("vehicle")
+        concentration = formulation.get("concentrationPercent")
+        entries.append({
+            "productID": product["productID"],
+            "ingredientID": ingredient_id,
+            "vehicle": vehicle,
+            "concentrationPercent": concentration,
+            "formulation": {"vehicle": vehicle, "concentrationPercent": concentration},
+        })
+    return entries
+
+
+def _normalization_for_products(
+    products: list[dict[str, Any]],
+    catalog: Mapping[str, Any],
+    reference: Any,
+    catalog_version: int,
+    db: Any,
+) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    converted: list[dict[str, Any]] = []
+    formulations: list[dict[str, Any]] = []
+    versions_match: list[bool] = []
+    for product in products:
+        texts = [row["original_text"] for row in product["ingredients"]]
+        resolved = resolve_ingredient_texts(texts, catalog, reference, db=db)
+        rows = [
+            _row_for_stored_mapping(incoming, resolved_row)
+            for incoming, resolved_row in zip(product["ingredients"], resolved, strict=True)
+        ]
+        matches = type(product["catalogVersion"]) is int and product["catalogVersion"] == catalog_version
+        versions_match.append(matches)
+        if not matches:
+            _mark_unresolved(rows, "stale-or-missing-catalog-version")
+        else:
+            formulations.extend(_formulation_entries(product, rows))
+        converted.append(analysis_product(
+            product["productID"],
+            rows,
+            catalog,
+            list_status=product["listStatus"],
+        ))
+    envelope = analysis_normalization(
+        converted,
+        catalog_version=catalog_version if versions_match and all(versions_match) else None,
+        reference_catalog_version=getattr(reference, "version", None),
+        provider_status="ok",
+    )
+    return analysis_routine_normalization([envelope]), formulations
+
+
+def _public_analysis_body(
+    result: Mapping[str, Any],
+    *,
+    catalog_version: int,
+    catalog_source: str,
+    allergy_status: str | None = None,
+) -> dict[str, Any]:
+    """Map the engine result onto the #114 response. Coverage-only results are unknown."""
+
+    product_ids = list(result.get("productIDs") or [])
+    findings = list(result.get("findings") or [])
+    completeness = result.get("completeness")
+    supported = any(item.get("outcome") in _SUPPORTED_FINDING_OUTCOMES for item in findings)
+    if supported:
+        outcome = "findings"
+    elif findings or completeness != "complete":
+        outcome = "unknown"
+        completeness = "incomplete"
+    else:
+        outcome = "noFindings"
+        completeness = "complete"
+    if outcome == "unknown":
+        if (
+            allergy_status == "unknown"
+            and not any(item.get("ruleID") == "coverage.allergy-input-unknown" for item in findings)
+        ):
+            findings.append({
+                "findingID": str(uuid4()),
+                "ruleID": "coverage.allergy-input-unknown",
+                "ruleStatus": "system-coverage",
+                "outcome": "unknown",
+                "categoryID": "coverage-gap",
+                "productIDs": product_ids,
+                "ingredientIDs": [],
+                "explanation": (
+                    "The routine does not say whether allergies were recorded, "
+                    "so no allergen result is produced."
+                ),
+                "reason": "status unknown is not an empty allergy list.",
+                "reasonCode": "allergy-status-unknown",
+                "limitations": ["Unknown allergy status is not a known empty allergy list."],
+            })
+        if not findings:
+            findings.append({
+                "findingID": str(uuid4()),
+                "ruleID": "coverage.analysis-incomplete",
+                "ruleStatus": "system-coverage",
+                "outcome": "unknown",
+                "categoryID": "coverage-gap",
+                "productIDs": product_ids,
+                "ingredientIDs": [],
+                "explanation": (
+                    "The routine assessment is incomplete, so no conflict-free result is produced."
+                ),
+                "reason": "The assessment could not be completed with the supplied inputs or references.",
+                "reasonCode": "analysis-incomplete",
+                "limitations": ["An incomplete assessment is not treated as safe or conflict-free."],
+            })
+    coverage = dict(result.get("coverage") or {})
+    coverage["status"] = completeness
+    if outcome == "unknown":
+        summary = "The assessment is incomplete. Review the coverage details. This is not a safety result."
+    elif outcome == "noFindings":
+        summary = (
+            "No evidence-backed findings were returned from the approved references. "
+            "This is not a safety guarantee."
+        )
+    else:
+        summary = result.get("summary") or (
+            "The assessment is incomplete or includes findings. Review the evidence and coverage details."
+        )
+    body: dict[str, Any] = {
+        "contractVersion": 1,
+        "ruleVersion": result.get("analysisVersion") or ANALYSIS_VERSION,
+        "catalogSource": catalog_source,
+        "analysisVersion": result.get("analysisVersion") or ANALYSIS_VERSION,
+        "normalizationID": result.get("normalizationID"),
+        "normalization": result.get("normalization"),
+        "canonicalDataVersion": result.get("canonicalDataVersion"),
+        "referenceVersion": result.get("referenceVersion"),
+        "analysisProviderStatus": result.get("analysisProviderStatus"),
+        "period": result["period"],
+        "activeCatalogVersion": catalog_version,
+        "outcome": outcome,
+        "completeness": completeness,
+        "productIDs": list(result.get("productIDs") or []),
+        "findings": findings,
+        "coverage": coverage,
+        "limitations": list(result.get("limitations") or []),
+        "summary": summary,
+    }
+    if outcome == "noFindings" and completeness == "complete":
+        body["displayLabel"] = "No recorded conflicts"
+    return body
+
+
 class APIHandler(BaseHTTPRequestHandler):
     server_version = "AesthelityAnalysis/1.0"
 
@@ -202,9 +459,9 @@ class APIHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/ingredients/resolve":
             self._resolve_ingredients(payload)
             return
-        self._analyze_personal_routine(payload)
+        self._analyze_posted_routine(payload)
 
-    def _analyze_personal_routine(self, payload: dict[str, Any]) -> None:
+    def _analyze_posted_routine(self, payload: dict[str, Any]) -> None:
         try:
             raw_products = payload.get("products")
             if not isinstance(raw_products, list) or not raw_products:
@@ -263,103 +520,50 @@ class APIHandler(BaseHTTPRequestHandler):
             catalog, catalog_source = load_approved_alias_catalog(
                 self.server.db, self.server.catalog
             )
+            catalog_version, catalog_ids = _catalog_members(catalog)
+            period, allergies, coapplication, products = _validate_routine(payload, catalog_ids)
+            _reject_oversized_routine(products)
             reference = self._reference_index()
-            contract, reference_records = load_approved_analysis_records(
-                self.server.db, 1
+            normalization, formulations = _normalization_for_products(
+                products, catalog, reference, catalog_version, self.server.db
             )
-            rule_version = contract.get("ruleSetVersion")
-            if not isinstance(rule_version, str) or not rule_version.strip():
-                raise AnalysisReferenceStoreError(
-                    "approved_analysis_contract_unavailable"
-                )
-
-            # Validate text lengths and shapes before making an AI request.
-            resolve_ingredient_texts(all_texts, catalog, reference, db=None)
-
-            normalization_provider = (
-                getattr(self.server, "normalization_provider", None)
-                or OpenRouterNormalizationProvider.from_environment()
-            )
-            resolved_rows, provider_status, model, _run_status = match_ingredients(
-                all_texts,
-                catalog,
-                reference,
-                provider=normalization_provider,
-                db=self.server.db,
-            )
-
-            engine_products = []
-            row_offset = 0
-            for product_id, list_status, texts in product_specs:
-                rows = resolved_rows[row_offset : row_offset + len(texts)]
-                row_offset += len(texts)
-                engine_products.append(
-                    analysis_product(
-                        product_id,
-                        rows,
-                        catalog,
-                        list_status=list_status,
-                    )
-                )
-
-            normalization = analysis_normalization(
-                engine_products,
-                catalog_version=catalog.get("version"),
-                reference_catalog_version=getattr(reference, "version", None),
-                provider_status=provider_status or "provider_unavailable",
-                model=model,
-                prompt_version=AI_PROMPT_VERSION,
-            )
-
-            routine_context = {
-                "period": payload.get("period"),
-                "recordedAllergies": payload.get("recordedAllergies"),
-            }
-            for key in ("coapplication", "formulationContext"):
-                if key in payload:
-                    routine_context[key] = payload[key]
-
-            analysis_provider = (
-                getattr(self.server, "analysis_provider", None)
-                or OpenRouterAnalysisProvider.from_environment()
-            )
+            records = canonical_records(catalog)
+            _contract, references = load_approved_analysis_records(self.server.db, 1)
             result = analyze_normalized_routine(
                 normalization,
-                routine_context,
-                canonical_records(catalog),
-                reference_records,
-                analysis_provider,
+                {
+                    "period": period,
+                    "recordedAllergies": _recorded_allergies(allergies),
+                    "coapplication": coapplication or "unknown",
+                    "formulationContext": formulations,
+                },
+                records,
+                references,
+                _analysis_provider(self.server),
             )
-
-            self._send(200, {
-                "contractVersion": 1,
-                "ruleVersion": rule_version,
-                "activeCatalogVersion": catalog["version"],
-                "catalogSource": catalog_source,
-                **result,
-            })
         except (
+            AnalysisInputError,
             AnalysisInputAdapterError,
-            AIAnalysisInputError,
             IngredientCatalogError,
-            TypeError,
-            ValueError,
+            AIAnalysisInputError,
         ) as error:
-            self._send(400, _error_body("INVALID_REQUEST", str(error)))
+            code = error.code if isinstance(error, AnalysisInputError) else "INVALID_REQUEST"
+            self._send(400, _error_body(code, str(error)))
+            return
         except AnalysisReferenceStoreError:
-            self._send(
-                503,
-                _error_body(
-                    "ANALYSIS_DATA_UNAVAILABLE",
-                    "Approved analysis data is unavailable.",
-                ),
-            )
-        except Exception as error:
-            print(f"Analysis engine execution failed: {type(error).__name__}: {error}")
-            self._send(
-                500,
-                _error_body("INTERNAL_ERROR", "The analysis could not be completed."),
-            )
+            print("Analysis references unavailable")
+            self._send(503, _error_body("SERVICE_UNAVAILABLE", "Analysis is temporarily unavailable."))
+            return
+        except Exception:
+            print("Analysis failed")
+            self._send(500, _error_body("INTERNAL_ERROR", "The analysis could not be completed."))
+            return
+        self._send(200, _public_analysis_body(
+            result,
+            catalog_version=catalog_version,
+            catalog_source=catalog_source,
+            allergy_status=allergies["status"],
+        ))
 
     def do_PUT(self) -> None:
         if not self._private_route():
@@ -745,7 +949,7 @@ def main() -> None:
     print(
         f"Bundled alias fallback version: {catalog['version']}; "
         "active alias source: ingredientAliasCatalogs/active; "
-        f"analysis rules: {RULE_VERSION}"
+        f"analysis engine: {ANALYSIS_VERSION}"
     )
     if reference_index is None:
         print("Full ingredient catalog: unavailable (Backend/data/cosing_ingredients.json.gz missing or invalid)")

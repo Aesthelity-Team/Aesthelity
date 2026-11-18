@@ -173,9 +173,15 @@ struct DemoAnalysisRequestStateTests {
     private func response(_ name: String) -> LiveAnalysisResult {
         LiveAnalysisResult(response: AnalysisResponsePayload(
             contractVersion: 1, ruleVersion: "test", period: "pm",
-            activeCatalogVersion: 1, outcome: "unknown", completeness: "incomplete",
-            productIDs: [name], findings: [], limitations: [], displayLabel: name,
-            coverage: nil, summary: nil
+            activeCatalogVersion: 1,
+            outcome: .known(.unknown),
+            completeness: .known(.incomplete),
+            productIDs: [name],
+            findings: [],
+            limitations: [],
+            displayLabel: name,
+            coverage: nil,
+            summary: nil
         ), productNames: [:])
     }
 

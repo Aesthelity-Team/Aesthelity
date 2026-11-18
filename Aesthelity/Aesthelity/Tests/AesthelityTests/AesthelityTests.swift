@@ -1882,8 +1882,8 @@ struct AccountDataAPITests {
             ruleVersion: "AN-02-v1",
             period: "am",
             activeCatalogVersion: normalizer.catalogVersion,
-            outcome: "noFindings",
-            completeness: "incomplete",
+            outcome: .known(.noFindings),
+            completeness: .known(.incomplete),
             productIDs: [step.id.uuidString],
             findings: [],
             limitations: ["Missing ingredient list"],
@@ -1905,7 +1905,7 @@ struct AccountDataAPITests {
             return try reply(request, envelope(saved, id: routineID.uuidString))
         })
         let evaluated = try await api.analyze(payload, catalogVersion: normalizer.catalogVersion)
-        #expect(evaluated.completeness == "incomplete")
+        #expect(evaluated.completeness == .known(.incomplete))
         try await api.save(saved, kind: "analyses", id: routineID.uuidString)
         let loaded = try await api.load("analyses", id: routineID.uuidString, as: SavedPersonalAnalysis.self)
         #expect(loaded.request == payload)

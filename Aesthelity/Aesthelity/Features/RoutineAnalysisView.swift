@@ -186,23 +186,37 @@ private struct PersonalAnalysisResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(result.completeness == "complete" ? "Assessment" : "Incomplete assessment").font(.headline)
-            if result.findings.isEmpty {
-                Text(result.displayLabel ?? "No findings under the current rules")
-                Text("No rule matched the available data. This is not a safety guarantee.")
+            if result.hasIncompleteAssessment {
+                AnalysisIncompleteCard(coverage: result.coverage)
+            } else {
+                Text("Assessment").font(.headline)
             }
-            ForEach(Array(result.findings.enumerated()), id: \.offset) { _, finding in
+            if result.showsNoFindings {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(finding.outcome.capitalized).font(.headline)
-                    Text(finding.productIDs.map { names[$0] ?? "Product" }.joined(separator: " · "))
-                        .font(.subheadline)
-                    Text(finding.explanation)
-                    Text(finding.reason).font(.caption).foregroundStyle(.secondary)
-                    ForEach(finding.limitations, id: \.self) { Text($0).font(.caption) }
+                    Text(AnalysisResponsePayload.noFindingsTitle).font(.headline)
+                    Text(AnalysisResponsePayload.noFindingsExplanation)
                 }
                 .padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
-            ForEach(result.limitations, id: \.self) { Text($0).font(.caption) }
+            ForEach(Array(result.findings.enumerated()), id: \.offset) { _, finding in
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        Text(finding.outcomeTitle).font(.headline)
+                        Spacer()
+                        AnalysisFindingBadge(finding: finding)
+                    }
+                    if !finding.productIDs.isEmpty {
+                        Text("\(finding.affectedProductTitle): \(finding.affectedProductNames(names))")
+                            .font(.subheadline)
+                    }
+                    Text(finding.explanation)
+                    AnalysisFindingDetails(finding: finding)
+                }
+                .padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
+            }
+            ForEach(Array((result.limitations + (result.coverage?.limitations ?? [])).enumerated()), id: \.offset) { _, limitation in
+                Text(limitation).font(.caption)
+            }
             Text("Rules \(result.ruleVersion) · Ingredient reference v\(result.activeCatalogVersion)")
                 .font(.caption).foregroundStyle(.secondary)
         }

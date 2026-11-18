@@ -127,7 +127,13 @@ struct LiveAnalysisView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
-                coverageBadge(isComplete: response.hasCompleteCoverage)
+                Text(response.checkStatusLabel)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(AppTheme.Semantic.inkPrimary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(response.hasIncompleteAssessment ? Color.orange.opacity(0.16) : AppTheme.Semantic.inkBrand.opacity(0.12))
+                    .clipShape(Capsule())
             }
 
             coverageCard(response: response)
@@ -137,22 +143,26 @@ struct LiveAnalysisView: View {
                 .foregroundStyle(AppTheme.Semantic.inkBrand)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if response.findings.isEmpty {
+            if response.hasIncompleteAssessment {
+                AnalysisIncompleteCard(coverage: response.coverage)
+            }
+
+            if response.showsNoFindings {
                 findingCard(
-                    title: response.displayLabel ?? "No findings",
-                    category: "No rule matched",
-                    severity: nil,
-                    explanation: response.hasCompleteCoverage
-                        ? "No approved v1 rule matched these demo products. This is not a safety guarantee."
-                        : "No approved rule matched the confirmed data, but the assessment is incomplete. Do not treat it as safe."
+                    title: AnalysisResponsePayload.noFindingsTitle,
+                    category: "Routine check",
+                    explanation: AnalysisResponsePayload.noFindingsExplanation
                 )
-            } else {
-                ForEach(Array(response.findings.enumerated()), id: \.offset) { _, finding in
-                    findingCard(
-                        finding: finding,
-                        productNames: live.productNames
-                    )
-                }
+            }
+
+            ForEach(Array(response.findings.enumerated()), id: \.offset) { _, finding in
+                findingCard(
+                    title: finding.outcomeTitle,
+                    category: finding.categoryID,
+                    explanation: finding.explanation,
+                    products: finding.affectedProductNames(live.productNames),
+                    finding: finding
+                )
             }
 
             VStack(alignment: .leading, spacing: 5) {
@@ -162,7 +172,7 @@ struct LiveAnalysisView: View {
                     Text(summary)
                         .font(.system(size: 11))
                 }
-                ForEach(response.limitations, id: \.self) { limitation in
+                ForEach(Array((response.limitations + (response.coverage?.limitations ?? [])).enumerated()), id: \.offset) { _, limitation in
                     Text(limitation)
                         .font(.system(size: 11))
                 }
@@ -251,7 +261,7 @@ struct LiveAnalysisView: View {
             if isUnknown {
                 return "Unknown / Coverage Gap"
             }
-            return finding.outcome.capitalized
+            return finding.outcomeTitle
         }()
 
         let productsText = finding.productIDs.map { productNames[$0] ?? $0 }.joined(separator: " · ")
@@ -292,8 +302,8 @@ struct LiveAnalysisView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
-                if let severity = finding.severity {
-                    Text(severity.capitalized)
+                if let severity = finding.severityLabel {
+                    Text(severity)
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(AppTheme.Semantic.inkBrand)
                 } else if isUnknown {
@@ -348,10 +358,9 @@ struct LiveAnalysisView: View {
     private func findingCard(
         title: String,
         category: String,
-        severity: String?,
         explanation: String,
         products: String? = nil,
-        reason: String? = nil
+        finding: AnalysisFindingPayload? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -359,10 +368,8 @@ struct LiveAnalysisView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
-                if let severity {
-                    Text(severity.capitalized)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.Semantic.inkBrand)
+                if let finding {
+                    AnalysisFindingBadge(finding: finding)
                 }
             }
             Text(category.replacingOccurrences(of: "-", with: " ").capitalized)
@@ -372,11 +379,12 @@ struct LiveAnalysisView: View {
                 .font(.system(size: 14))
                 .foregroundStyle(AppTheme.Semantic.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
-            if let products, !products.isEmpty {
-                detailRow("Affected products", value: products)
-            }
-            if let reason, !reason.isEmpty {
-                detailRow("Why this finding was generated", value: reason)
+            if let finding {
+                if let products, !products.isEmpty {
+                    detailRow(finding.affectedProductTitle, value: products)
+                }
+                AnalysisFindingDetails(finding: finding)
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
             }
         }
         .padding(14)

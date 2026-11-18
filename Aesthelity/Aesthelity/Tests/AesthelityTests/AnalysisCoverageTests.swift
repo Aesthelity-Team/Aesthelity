@@ -41,12 +41,11 @@ struct AnalysisCoverageTests {
         let payload = try JSONDecoder().decode(AnalysisResponsePayload.self, from: data)
 
         #expect(payload.contractVersion == 1)
-        #expect(payload.completeness == "complete")
+        #expect(payload.completeness == .known(.complete))
         #expect(payload.hasCompleteCoverage == true)
         #expect(payload.isLimitedCoverage == false)
         #expect(payload.coverage != nil)
-        #expect(payload.coverage?.status == "complete")
-        #expect(payload.coverage?.isComplete == true)
+        #expect(payload.coverage?.status == .known(.complete))
         #expect(payload.coverage?.unknownIngredientCount == 0)
         #expect(payload.coverage?.missingReferenceCount == 0)
         #expect(payload.findings.isEmpty)
@@ -99,14 +98,13 @@ struct AnalysisCoverageTests {
 
         #expect(payload.hasCompleteCoverage == false)
         #expect(payload.isLimitedCoverage == true)
-        #expect(payload.coverage?.status == "incomplete")
-        #expect(payload.coverage?.isComplete == false)
+        #expect(payload.coverage?.status == .known(.incomplete))
         #expect(payload.findings.count == 1)
 
         let finding = try #require(payload.findings.first)
         #expect(finding.productIDs == ["mask_partial"])
         #expect(finding.reason == "partial-list")
-        #expect(finding.outcome == "unknown")
+        #expect(finding.outcome == .known(.unknown))
         #expect(finding.categoryID == "coverage-gap")
         #expect(finding.isUnknownOrCoverageGap == true)
     }
@@ -211,7 +209,7 @@ struct AnalysisCoverageTests {
         #expect(payload.coverage?.unknownIngredientCount == 1)
 
         let finding = try #require(payload.findings.first)
-        #expect(finding.outcome == "unknown")
+        #expect(finding.outcome == .known(.unknown))
         #expect(finding.categoryID == "coverage-gap")
         #expect(finding.isUnknownOrCoverageGap == true)
         #expect(finding.productIDs == ["custom_moisturizer"])

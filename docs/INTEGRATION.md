@@ -39,3 +39,22 @@ assert findings == scenario['expected_findings']
 | unknown_mask | Mask with partial list | Assessment incomplete |
 
 Use the documented fixture order for deterministic findings. The sample routine order is a demo input, not evidence of validated layering advice. No live Firebase database import is required by this package. Add persistence separately only if another ticket or your app integration needs it.
+
+### Linalool reference readiness
+
+The bundled fictional products do not list Linalool. The live **Recorded allergy** scenario uses the existing Limonene reference. To verify the manual entry path locally, use **Library → Your manual products → Add product**, enter a fictional product name and a label such as `Water, Linalool`, review the ingredients, and verify Linalool resolves to `linalool`. Save while signed out, then add it from **Manual products on this device** in the routine editor. Personal analysis currently sends unknown allergy status, so this path can demonstrate ingredient confirmation and incomplete coverage.
+
+The offline authenticated endpoint test demonstrates the recorded-Linalool result with confirmed `linalool`, a known recorded allergy, and the demo reference loaded explicitly. It also covers a Limonene-only recorded allergy and unknown allergy status.
+
+```sh
+.venv/bin/python -m unittest tests.test_demo_references -v
+.venv/bin/python -m unittest discover -s tests/backend -p test_authenticated_analysis.py -k test_linalool_reference_requires_exact_recorded_allergy -v
+```
+
+With Application Default Credentials configured, preview the shared reference before the demo. The command only reads the document.
+
+```sh
+FIREBASE_PROJECT_ID=aesthelity-2026 FIRESTORE_DATABASE_ID=ogdb .venv/bin/python Backend/seed_demo_references.py
+```
+
+Ask Gaurav and Mia to approve the deployment route before changing the shared analysis reference or the bundled fallback.
