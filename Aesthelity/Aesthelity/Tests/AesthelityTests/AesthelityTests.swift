@@ -1690,9 +1690,21 @@ struct AuthenticatedAPIClientTests {
         }
     }
 
+    @Test(arguments: ["127.0.0.1", "localhost", "[::1]"])
+    func loopbackHTTPIsRestrictedToDebugDemos(host: String) throws {
+        let loopback = try #require(URL(string: "http://\(host):8765"))
+        #if DEBUG
+        _ = try AuthenticatedAPIClient(baseURL: loopback, token: { "token" })
+        #else
+        #expect(throws: APIClientError.configuration) {
+            try AuthenticatedAPIClient(baseURL: loopback, token: { "token" })
+        }
+        #endif
+    }
+
     @Test func rejectsInsecureConfigurationAndPreservesCancellation() async throws {
         #expect(throws: APIClientError.configuration) {
-            try AuthenticatedAPIClient(baseURL: URL(string: "http://127.0.0.1:8765")!, token: { "token" })
+            try AuthenticatedAPIClient(baseURL: URL(string: "http://api.example.com")!, token: { "token" })
         }
         let client = try AuthenticatedAPIClient(baseURL: url, token: { "token" }, transport: { _ in throw URLError(.cancelled) })
         await #expect(throws: CancellationError.self) {

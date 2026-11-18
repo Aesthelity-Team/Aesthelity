@@ -88,66 +88,6 @@ VALID_CAUTION_PAYLOAD = {
 # Test helpers
 # ---------------------------------------------------------------------------
 
-class _FakeNormalizationProvider:
-    model = "test-normalizer"
-    last_model = model
-
-    def resolve(self, texts):
-        return {
-            "ingredients": [
-                {
-                    "index": index,
-                    "status": "identified",
-                    "normalizedName": text,
-                    "bestGuess": None,
-                    "explanation": "Test match.",
-                }
-                for index, text in enumerate(texts)
-            ]
-        }
-
-
-class _FakeAnalysisProvider:
-    model = "test-analysis"
-
-    def generate(self, context):
-        references = context.get("approvedReferences", [])
-        if not references:
-            return {"assessment": "no_findings", "findings": []}
-
-        reference = references[0]
-        criteria = reference.get("matchCriteria", {})
-        allowed_ids = set(criteria.get("allIngredientIDs", []))
-        allowed_ids.update(criteria.get("anyIngredientIDs", []))
-        allowed_classes = set(criteria.get("allIngredientClasses", []))
-
-        product_ids = []
-        ingredient_ids = []
-        for product in context["products"]:
-            product_matches = [
-                row["ingredientID"]
-                for row in product["ingredients"]
-                if row["ingredientID"] in allowed_ids
-                or allowed_classes.intersection(row.get("classes", []))
-            ]
-            if product_matches:
-                product_ids.append(product["productID"])
-                for ingredient_id in product_matches:
-                    if ingredient_id not in ingredient_ids:
-                        ingredient_ids.append(ingredient_id)
-
-        return {
-            "assessment": "findings",
-            "findings": [{
-                "referenceIDs": [reference["referenceID"]],
-                "outcome": reference["allowedOutcome"],
-                "productIDs": product_ids,
-                "ingredientIDs": ingredient_ids,
-                "explanation": "Test explanation based on the supplied reference.",
-                "reason": "The test routine matches the reference conditions.",
-            }],
-        }
-
 def _make_server(demo_mode: bool = False) -> AnalysisHTTPServer:
     """Spin up an AnalysisHTTPServer on a random loopback port.
 
@@ -527,6 +467,7 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         }
         status, body = _request(self.server, "POST", body=payload)
         self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "empty-products")
 
     def test_duplicate_product_ids_returns_400(self):
         """Duplicate productIDs in a single request must be rejected."""
@@ -544,6 +485,7 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         }
         status, body = _request(self.server, "POST", body=payload)
         self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "duplicate-product-id")
 
     # ------------------------------------------------------------------
     # Demo-mode bypass is NOT available for the analysis endpoint itself

@@ -342,6 +342,25 @@ class ProviderTransportTests(unittest.TestCase):
         self.assertIn(DEFAULT_MODEL, calls)
         self.assertIn(DEFAULT_FALLBACK_MODEL, calls)
 
+    def test_openrouter_chat_disables_collection_and_requires_zero_retention(self):
+        def transport(url, payload, headers, timeout):
+            self.assertEqual(
+                payload["provider"], {"data_collection": "deny", "zdr": True}
+            )
+            return 200, b'{"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}'
+
+        provider = OpenRouterNormalizationProvider(
+            api_key="test-key", model=DEFAULT_MODEL,
+            base_url="https://openrouter.ai/api/v1", transport=transport,
+        )
+        self.assertEqual(
+            provider.complete_messages(
+                [{"role": "user", "content": "Fictional test"}],
+                schema={"type": "object"}, schema_name="test",
+            ),
+            {},
+        )
+
     def test_unconfigured_provider(self):
         provider = OpenRouterNormalizationProvider(api_key="", model=DEFAULT_MODEL)
         with self.assertRaises(ProviderError) as caught:
@@ -353,11 +372,7 @@ class ProviderTransportTests(unittest.TestCase):
             "OPENROUTER_API_KEY": "sk-test-not-real",
             "OPENAI_API_KEY": "",
         }
-        with patch.dict(os.environ, env, clear=False):
-            os.environ.pop("AESTHELITY_NORMALIZATION_MODEL", None)
-            os.environ.pop("AESTHELITY_NORMALIZATION_FALLBACK_MODEL", None)
-            os.environ.pop("OPENROUTER_BASE_URL", None)
-            os.environ.pop("OPENAI_BASE_URL", None)
+        with patch.dict(os.environ, env, clear=True), patch("Backend.ai_normalization.load_backend_env"):
             provider = OpenRouterNormalizationProvider.from_environment()
         self.assertEqual(provider.model, DEFAULT_MODEL)
         self.assertEqual(provider.fallback_model, DEFAULT_FALLBACK_MODEL)

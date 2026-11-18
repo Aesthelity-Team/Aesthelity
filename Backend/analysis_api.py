@@ -463,60 +463,6 @@ class APIHandler(BaseHTTPRequestHandler):
 
     def _analyze_posted_routine(self, payload: dict[str, Any]) -> None:
         try:
-            raw_products = payload.get("products")
-            if not isinstance(raw_products, list) or not raw_products:
-                raise AnalysisInputAdapterError("products must be a non-empty array.")
-            if len(raw_products) > 50:
-                raise AnalysisInputAdapterError("products cannot exceed 50.")
-
-            product_specs: list[tuple[str, str, list[str]]] = []
-            seen_product_ids: set[str] = set()
-            all_texts: list[str] = []
-
-            for product in raw_products:
-                if not isinstance(product, Mapping):
-                    raise AnalysisInputAdapterError("Each product must be an object.")
-
-                product_id = product.get("productID")
-                if (
-                    not isinstance(product_id, str)
-                    or not product_id.strip()
-                    or product_id in seen_product_ids
-                ):
-                    raise AnalysisInputAdapterError("productID must be unique and non-empty.")
-                seen_product_ids.add(product_id)
-
-                list_status = product.get("listStatus")
-                if list_status not in LIST_STATUSES:
-                    raise AnalysisInputAdapterError(
-                        "listStatus must be complete, partial, or unavailable."
-                    )
-
-                ingredient_rows = product.get("ingredients")
-                if not isinstance(ingredient_rows, list):
-                    raise AnalysisInputAdapterError("ingredients must be an array.")
-                if list_status == "unavailable" and ingredient_rows:
-                    raise AnalysisInputAdapterError(
-                        "An unavailable ingredient list cannot have rows."
-                    )
-
-                texts = []
-                for row in ingredient_rows:
-                    if not isinstance(row, Mapping) or not isinstance(
-                        row.get("originalText"), str
-                    ):
-                        raise AnalysisInputAdapterError(
-                            "Each ingredient row needs originalText."
-                        )
-                    texts.append(row["originalText"])
-
-                all_texts.extend(texts)
-                if len(all_texts) > 200:
-                    raise AnalysisInputAdapterError(
-                        "A routine cannot exceed 200 ingredient rows."
-                    )
-                product_specs.append((product_id, list_status, texts))
-
             catalog, catalog_source = load_approved_alias_catalog(
                 self.server.db, self.server.catalog
             )

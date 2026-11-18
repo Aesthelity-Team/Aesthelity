@@ -88,8 +88,7 @@ struct AnalysisCoverageTests {
                 "limitations": ["One or more products have incomplete ingredient lists."]
             },
             "summary": "Analysis coverage is limited due to incomplete ingredient data.",
-            "limitations": ["Informational only. This is not a diagnosis or a safety guarantee."],
-            "displayLabel": null
+            "limitations": ["Informational only. This is not a diagnosis or a safety guarantee."]
         }
         """
 
@@ -143,8 +142,7 @@ struct AnalysisCoverageTests {
                 "limitations": ["One or more products have unavailable ingredient lists."]
             },
             "summary": "Analysis coverage is limited.",
-            "limitations": ["Informational only. This is not a diagnosis or a safety guarantee."],
-            "displayLabel": null
+            "limitations": ["Informational only. This is not a diagnosis or a safety guarantee."]
         }
         """
 
@@ -197,8 +195,7 @@ struct AnalysisCoverageTests {
                 "limitations": ["Unresolved ingredients cannot be checked against safety rules."]
             },
             "summary": "1 ingredient could not be verified against approved references.",
-            "limitations": ["Informational only. This is not a diagnosis or a safety guarantee."],
-            "displayLabel": null
+            "limitations": ["Informational only. This is not a diagnosis or a safety guarantee."]
         }
         """
 
@@ -279,8 +276,7 @@ struct AnalysisCoverageTests {
             "completeness": "incomplete",
             "productIDs": ["mask_partial"],
             "findings": [],
-            "limitations": [],
-            "displayLabel": null
+            "limitations": []
         }
         """
 
