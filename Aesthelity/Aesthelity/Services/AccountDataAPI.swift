@@ -101,14 +101,44 @@ struct AccountDataAPI {
         return response
     }
 
-    static func validate(_ response: AnalysisResponsePayload, for payload: AnalysisRequestPayload, catalogVersion: Int) throws {
-        guard response.contractVersion == 1, response.activeCatalogVersion == catalogVersion,
-              response.period == payload.period,
-              response.productIDs.count == payload.products.count,
-              Set(response.productIDs) == Set(payload.products.map(\.productID)),
-              ["noFindings", "findings"].contains(response.outcome),
-              ["complete", "incomplete"].contains(response.completeness),
+    nonisolated static func validate(_ response: AnalysisResponsePayload, for payload: AnalysisRequestPayload, catalogVersion: Int) throws {
+        let expectedIDs = payload.products.map(\.productID)
+        guard response.contractVersion == 1, response.contractVersion == payload.contractVersion,
+              response.activeCatalogVersion == catalogVersion, response.period == payload.period,
+              response.productIDs.count == expectedIDs.count,
+              Set(response.productIDs) == Set(expectedIDs),
+              response.completeness == .known(.complete) || response.completeness == .known(.incomplete),
               response.findings.allSatisfy({ Set($0.productIDs).isSubset(of: Set(response.productIDs)) }) else {
+            throw APIClientError.invalidResponse
+        }
+
+        let usesAIContract = response.ruleVersion == "ai-analysis-v1"
+        if usesAIContract, response.productIDs != expectedIDs {
+            throw APIClientError.invalidResponse
+        }
+
+        switch response.outcome {
+        case .known(.unknown):
+            guard response.completeness == .known(.incomplete), !response.findings.isEmpty,
+                  response.displayLabel == nil,
+                  response.findings.allSatisfy({ $0.outcome == .known(.unknown) }) else {
+                throw APIClientError.invalidResponse
+            }
+        case .known(.findings):
+            // AN-02 used "findings" for coverage-only results. Preserve those saved records.
+            if usesAIContract {
+                // A future finding value remains visible as incomplete. Only the
+                // literal coverage-only shape belongs under the "unknown" outcome.
+                guard response.displayLabel == nil,
+                      response.findings.contains(where: { $0.outcome != .known(.unknown) }) else {
+                    throw APIClientError.invalidResponse
+                }
+            }
+        case .known(.noFindings):
+            if usesAIContract, !response.showsNoFindings {
+                throw APIClientError.invalidResponse
+            }
+        case .unknown:
             throw APIClientError.invalidResponse
         }
     }

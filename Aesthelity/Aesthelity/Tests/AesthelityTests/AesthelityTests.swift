@@ -1878,7 +1878,7 @@ struct AccountDataAPITests {
         let step = RoutineStepItem(stepNumber: 1, title: "Unknown product", subtitle: "", state: .incomplete)
         let payload = PersonalAnalysisInput.make(steps: [step], period: .am, normalizer: normalizer)
         let response = AnalysisResponsePayload(contractVersion: 1, ruleVersion: "AN-02-v1", period: "am", activeCatalogVersion: normalizer.catalogVersion,
-                                               outcome: "noFindings", completeness: "incomplete", productIDs: [step.id.uuidString], findings: [], limitations: ["Missing ingredient list"], displayLabel: nil)
+                                               outcome: .known(.noFindings), completeness: .known(.incomplete), productIDs: [step.id.uuidString], findings: [], limitations: ["Missing ingredient list"], displayLabel: nil)
         let routineID = UUID()
         let saved = SavedPersonalAnalysis(schemaVersion: 1, routineID: routineID, request: payload, response: response,
                                           productNames: [step.id.uuidString: step.title], savedAt: Date())
@@ -1893,7 +1893,7 @@ struct AccountDataAPITests {
             return try reply(request, envelope(saved, id: routineID.uuidString))
         })
         let evaluated = try await api.analyze(payload, catalogVersion: normalizer.catalogVersion)
-        #expect(evaluated.completeness == "incomplete")
+        #expect(evaluated.completeness == .known(.incomplete))
         try await api.save(saved, kind: "analyses", id: routineID.uuidString)
         let loaded = try await api.load("analyses", id: routineID.uuidString, as: SavedPersonalAnalysis.self)
         #expect(loaded.request == payload)

@@ -127,11 +127,11 @@ struct LiveAnalysisView: View {
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
-                Text(response.completeness == "complete" ? "Complete input" : "Incomplete input")
+                Text(response.hasIncompleteAssessment ? "Incomplete input" : "Complete input")
                     .font(.system(size: 11, weight: .semibold))
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
-                    .background(response.completeness == "complete" ? Color.green.opacity(0.12) : Color.orange.opacity(0.16))
+                    .background(response.hasIncompleteAssessment ? Color.orange.opacity(0.16) : Color.green.opacity(0.12))
                     .clipShape(Capsule())
             }
 
@@ -140,32 +140,40 @@ struct LiveAnalysisView: View {
                 .foregroundStyle(AppTheme.Semantic.inkBrand)
                 .fixedSize(horizontal: false, vertical: true)
 
-            if response.findings.isEmpty {
+            if response.hasIncompleteAssessment {
+                Text(AnalysisResponsePayload.incompleteTitle)
+                    .font(.headline)
+                if response.findings.isEmpty {
+                    Text("Some information needed for the assessment was unavailable.")
+                        .font(.subheadline)
+                }
+            }
+
+            if response.showsNoFindings {
                 findingCard(
                     title: response.displayLabel ?? "No findings",
                     category: "No rule matched",
                     severity: nil,
-                    explanation: response.completeness == "complete"
-                        ? "No approved v1 rule matched these demo products. This is not a safety guarantee."
-                        : "No approved rule matched the confirmed data, but the assessment is incomplete. Do not treat it as safe."
+                    explanation: "No approved rule matched these demo products. This is not a safety guarantee."
                 )
-            } else {
-                ForEach(Array(response.findings.enumerated()), id: \.offset) { _, finding in
-                    findingCard(
-                        title: finding.outcome.capitalized,
-                        category: finding.categoryID,
-                        severity: finding.severity,
-                        explanation: finding.explanation,
-                        products: finding.productIDs.map { live.productNames[$0] ?? $0 }.joined(separator: " · "),
-                        reason: finding.reason
-                    )
-                }
+            }
+
+            ForEach(Array(response.findings.enumerated()), id: \.offset) { _, finding in
+                findingCard(
+                    title: finding.outcomeTitle,
+                    category: finding.categoryID,
+                    severity: finding.severityLabel,
+                    explanation: finding.explanation,
+                    products: finding.productIDs.map { live.productNames[$0] ?? $0 }.joined(separator: " · "),
+                    reason: finding.reason,
+                    finding: finding
+                )
             }
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("Rule version \(response.ruleVersion) · Ingredient catalog v\(response.activeCatalogVersion)")
                     .font(.system(size: 11, weight: .medium))
-                ForEach(response.limitations, id: \.self) { limitation in
+                ForEach(response.limitations + (response.coverage?.limitations ?? []), id: \.self) { limitation in
                     Text(limitation)
                         .font(.system(size: 11))
                 }
@@ -185,7 +193,8 @@ struct LiveAnalysisView: View {
         severity: String?,
         explanation: String,
         products: String? = nil,
-        reason: String? = nil
+        reason: String? = nil,
+        finding: AnalysisFindingPayload? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
@@ -211,6 +220,9 @@ struct LiveAnalysisView: View {
             }
             if let reason, !reason.isEmpty {
                 detailRow("Why this finding was generated", value: reason)
+            }
+            if let finding {
+                AnalysisFindingDetails(finding: finding)
             }
         }
         .padding(14)
