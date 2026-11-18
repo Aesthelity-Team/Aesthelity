@@ -161,7 +161,7 @@ struct AesthelityTests {
         
         let amFit = item.routineFits.first(where: { $0.routineName == "AM routine" })
         #expect(amFit?.note == "Works before SPF")
-        #expect(amFit?.badgeText == "Best")
+        #expect(amFit?.badgeText == "Reference")
         
         let pmFit = item.routineFits.first(where: { $0.routineName == "PM routine" })
         #expect(pmFit?.note == "Do not combine with retinol")

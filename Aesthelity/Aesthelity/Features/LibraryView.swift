@@ -58,7 +58,7 @@ public struct RecentSaveItem: Identifiable, Equatable {
     public let category: ProductCategory
     public let badgeText: String
     
-    public init(id: UUID = UUID(), title: String, subtitle: String, category: ProductCategory, badgeText: String = "Safe") {
+    public init(id: UUID = UUID(), title: String, subtitle: String, category: ProductCategory, badgeText: String = "Not analyzed") {
         self.id = id
         self.title = title
         self.subtitle = subtitle
@@ -223,17 +223,17 @@ public struct RecentSaveCard: View {
             
             Spacer()
             
-            // Safe pill badge
+            // Neutral status. Unknown saves are not a safety result.
             HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle")
+                Image(systemName: "circle.dashed")
                     .font(.system(size: 13, weight: .semibold))
                 Text(save.badgeText)
                     .font(.system(size: 13, weight: .semibold))
             }
-            .foregroundStyle(Color(red: 0.18, green: 0.32, blue: 0.14)) // #2E5224
+            .foregroundStyle(Color(red: 0.38, green: 0.33, blue: 0.47))
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
-            .background(Color(red: 0.62, green: 0.74, blue: 0.55)) // #9EBD8D
+            .background(Color(red: 0.93, green: 0.91, blue: 0.88))
             .clipShape(Capsule())
         }
         .padding(.horizontal, 16)
@@ -282,11 +282,11 @@ public struct LibraryView: View {
     ]
     
     @State public var recentSaves: [RecentSaveItem] = [
-        RecentSaveItem(id: ProductDatabase.vitaminCID, title: "Vitamin C Serum", subtitle: "Brightening · AM", category: .serum, badgeText: "Safe"),
-        RecentSaveItem(id: ProductDatabase.gentleFoamingCleanserID, title: "Gentle Foaming Cleanser", subtitle: "Purifying · AM/PM", category: .cleanser, badgeText: "Safe"),
-        RecentSaveItem(id: ProductDatabase.barrierBalanceTonerID, title: "Barrier Balance Toner", subtitle: "Hydrating · AM/PM", category: .toner, badgeText: "Safe"),
-        RecentSaveItem(id: ProductDatabase.dailyUVDefenseID, title: "Daily UV Defense SPF 50", subtitle: "Protection · AM", category: .spf, badgeText: "Safe"),
-        RecentSaveItem(id: ProductDatabase.niacinamideID, title: "Niacinamide 10% + Zinc 1%", subtitle: "Balancing · PM", category: .serum, badgeText: "Safe")
+        RecentSaveItem(id: ProductDatabase.vitaminCID, title: "Vitamin C Serum", subtitle: "Brightening · AM", category: .serum, badgeText: "Not analyzed"),
+        RecentSaveItem(id: ProductDatabase.gentleFoamingCleanserID, title: "Gentle Foaming Cleanser", subtitle: "Purifying · AM/PM", category: .cleanser, badgeText: "Not analyzed"),
+        RecentSaveItem(id: ProductDatabase.barrierBalanceTonerID, title: "Barrier Balance Toner", subtitle: "Hydrating · AM/PM", category: .toner, badgeText: "Not analyzed"),
+        RecentSaveItem(id: ProductDatabase.dailyUVDefenseID, title: "Daily UV Defense SPF 50", subtitle: "Protection · AM", category: .spf, badgeText: "Not analyzed"),
+        RecentSaveItem(id: ProductDatabase.niacinamideID, title: "Niacinamide 10% + Zinc 1%", subtitle: "Balancing · PM", category: .serum, badgeText: "Not analyzed")
     ]
     
     public init(

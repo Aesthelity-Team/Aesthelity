@@ -315,4 +315,26 @@ struct DemoCatalogTests {
             #expect(detail.ingredientListStatus == demo.ingredientListStatus)
         }
     }
+
+    @Test func librarySavesAndRoutineFitsDoNotClaimSafeOrBest() {
+        let saves = LibraryView().recentSaves
+        #expect(saves.count == 5)
+        #expect(saves.allSatisfy { $0.badgeText != "Safe" && $0.badgeText != "Best" })
+
+        let unlabeled = RecentSaveItem(title: "Example", subtitle: "Sample", category: .mist)
+        #expect(unlabeled.badgeText == "Not analyzed")
+
+        let fits = ProductDatabase.shared.allProducts.flatMap(\.routineFits)
+        #expect(!fits.isEmpty)
+        #expect(fits.allSatisfy { $0.badgeText != "Safe" && $0.badgeText != "Best" })
+
+        let generated = [
+            ProductDatabase.shared.detail(forTitle: "Unregistered Preview Product XYZ"),
+            ProductDatabase.shared.detail(for: LibraryProductItem(title: "Custom Hydrating Mist", brand: "Aura Botanicals", category: .toner)),
+            ProductDatabase.shared.detail(for: LibraryProductItem(title: "Mineral Shield SPF", brand: "SunGuard", category: .spf))
+        ]
+        for detail in generated {
+            #expect(detail.routineFits.allSatisfy { $0.badgeText != "Safe" && $0.badgeText != "Best" })
+        }
+    }
 }

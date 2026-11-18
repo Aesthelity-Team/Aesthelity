@@ -53,7 +53,7 @@ public class ProductDatabase {
             brand: "Misticore",
             category: .serum,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Works before SPF", badgeText: "Best"),
+                RoutineFitItem(routineName: "AM routine", note: "Works before SPF", badgeText: "Reference"),
                 RoutineFitItem(routineName: "PM routine", note: "Do not combine with retinol", badgeText: "Avoid")
             ],
             ingredients: [
@@ -73,8 +73,8 @@ public class ProductDatabase {
             brand: "Bioderma",
             category: .cleanser,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Removes night oils gently", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "First water-based step", badgeText: "Best")
+                RoutineFitItem(routineName: "AM routine", note: "Removes night oils gently", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "First water-based step", badgeText: "Reference")
             ],
             ingredients: ["Water", "Sodium Cocoyl Glycinate", "Glycerin", "Sodium Chloride", "Citric Acid"],
             ingredientListStatus: .complete
@@ -88,8 +88,8 @@ public class ProductDatabase {
             brand: "Bioderma",
             category: .cleanser,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Preserves skin hydration", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "Comfortable rinse-off formula", badgeText: "Best")
+                RoutineFitItem(routineName: "AM routine", note: "Preserves skin hydration", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "Comfortable rinse-off formula", badgeText: "Reference")
             ],
             ingredients: ["Water", "Glycerin", "Caprylic/Capric Triglyceride", "Cetearyl Alcohol", "Niacinamide"],
             ingredientListStatus: .complete
@@ -104,8 +104,8 @@ public class ProductDatabase {
             brand: "Paula's Choice",
             category: .toner,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Preps skin for active serums", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "Restores moisture barrier balance", badgeText: "Best")
+                RoutineFitItem(routineName: "AM routine", note: "Preps skin for active serums", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "Restores moisture barrier balance", badgeText: "Reference")
             ],
             ingredients: ["Water", "Propanediol", "Centella Asiatica Extract", "Panthenol", "Ceramide NP"],
             ingredientListStatus: .complete
@@ -120,8 +120,8 @@ public class ProductDatabase {
             brand: "Paula's Choice",
             category: .toner,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Controls excess mid-day oils", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "Calms post-cleanse skin", badgeText: "Safe")
+                RoutineFitItem(routineName: "AM routine", note: "Controls excess mid-day oils", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "Calms post-cleanse skin", badgeText: "Not analyzed")
             ],
             ingredients: ["Water", "Salicylic Acid", "Hamamelis Virginiana Extract", "Glycerin", "Zinc PCA"],
             ingredientListStatus: .complete,
@@ -137,8 +137,8 @@ public class ProductDatabase {
             brand: "Rhode",
             category: .toner,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Instant plumping under SPF", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "Deeply restorative base layer", badgeText: "Best")
+                RoutineFitItem(routineName: "AM routine", note: "Instant plumping under SPF", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "Deeply restorative base layer", badgeText: "Reference")
             ],
             ingredients: ["Water", "Glycerin", "Oryza Sativa (Rice) Bran Extract", "Ceramide NP", "Sodium Hyaluronate"],
             ingredientListStatus: .complete
@@ -154,7 +154,7 @@ public class ProductDatabase {
             brand: "HistoLab",
             category: .spf,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Crucial final step before sun exposure", badgeText: "Best"),
+                RoutineFitItem(routineName: "AM routine", note: "Crucial final step before sun exposure", badgeText: "Reference"),
                 RoutineFitItem(routineName: "PM routine", note: "Cleanse thoroughly before bed", badgeText: "Avoid")
             ],
             ingredients: ["Water", "Zinc Oxide", "Titanium Dioxide", "Glycerin", "Caprylic/Capric Triglyceride", "Silica"],
@@ -171,7 +171,7 @@ public class ProductDatabase {
             brand: "HistoLab",
             category: .spf,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Dermatologist shield against UV", badgeText: "Best"),
+                RoutineFitItem(routineName: "AM routine", note: "Dermatologist shield against UV", badgeText: "Reference"),
                 RoutineFitItem(routineName: "PM routine", note: "Not formulated for night wear", badgeText: "Avoid")
             ],
             ingredients: ["Water", "Homosalate", "Octocrylene", "Ethylhexyl Salicylate", "Centella Asiatica Extract"],
@@ -187,7 +187,7 @@ public class ProductDatabase {
             brand: "La Roche-Posay",
             category: .spf,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Fast-absorbing antioxidant shield", badgeText: "Best"),
+                RoutineFitItem(routineName: "AM routine", note: "Fast-absorbing antioxidant shield", badgeText: "Reference"),
                 RoutineFitItem(routineName: "PM routine", note: "Remove with evening double cleanse", badgeText: "Avoid")
             ],
             ingredients: ["Water", "Avobenzone", "Homosalate", "Octisalate", "Octocrylene", "Silica", "Glycerin"],
@@ -204,8 +204,8 @@ public class ProductDatabase {
             brand: "The Ordinary",
             category: .serum,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Compatible with daily moisturizer", badgeText: "Safe"),
-                RoutineFitItem(routineName: "PM routine", note: "Regulates sebum overnight", badgeText: "Best")
+                RoutineFitItem(routineName: "AM routine", note: "Compatible with daily moisturizer", badgeText: "Not analyzed"),
+                RoutineFitItem(routineName: "PM routine", note: "Regulates sebum overnight", badgeText: "Reference")
             ],
             ingredients: ["Aqua (Water)", "Niacinamide", "Pentylene Glycol", "Zinc PCA", "Dimethyl Isosorbide", "Tamarindus Indica Seed Gum", "Xanthan gum", "Isoceteth-20", "Ethoxydiglycol", "Phenoxyethanol", "Chlorphenesin"],
             ingredientListStatus: .complete,
@@ -222,8 +222,8 @@ public class ProductDatabase {
             brand: "The Ordinary",
             category: .serum,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Reduces puffiness and dark circles", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "Gentle hydration around eye contour", badgeText: "Safe")
+                RoutineFitItem(routineName: "AM routine", note: "Reduces puffiness and dark circles", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "Gentle hydration around eye contour", badgeText: "Not analyzed")
             ],
             ingredients: ["Aqua (Water)", "Caffeine", "Maltodextrin", "Glycerin", "Propanediol", "Epigallocatechin Gallatyl Glucoside", "G gallate", "Hyaluronic Acid"],
             ingredientListStatus: .complete,
@@ -239,8 +239,8 @@ public class ProductDatabase {
             brand: "Gisou",
             category: .serum,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Optional light veil under balm", badgeText: "Safe"),
-                RoutineFitItem(routineName: "PM routine", note: "Intense overnight peptide repair", badgeText: "Best")
+                RoutineFitItem(routineName: "AM routine", note: "Optional light veil under balm", badgeText: "Not analyzed"),
+                RoutineFitItem(routineName: "PM routine", note: "Intense overnight peptide repair", badgeText: "Reference")
             ],
             ingredients: ["Polybutene", "Mirsalehi Honey", "Hydrolyzed Collagen", "Sodium Hyaluronate", "Tocopherol"],
             ingredientListStatus: .complete
@@ -255,8 +255,8 @@ public class ProductDatabase {
             brand: "Besoma",
             category: .cleanser,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Calms redness and wakens skin", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "Gentle non-stripping second cleanse", badgeText: "Safe")
+                RoutineFitItem(routineName: "AM routine", note: "Calms redness and wakens skin", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "Gentle non-stripping second cleanse", badgeText: "Not analyzed")
             ],
             ingredients: ["Water", "Centella Asiatica Extract", "Spinacia Oleracea Leaf Extract", "Camellia Sinensis Leaf Extract", "Glycerin"],
             ingredientListStatus: .complete,
@@ -271,8 +271,8 @@ public class ProductDatabase {
             brand: "Alya Skin",
             category: .cleanser,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: "Refreshes delicate skin", badgeText: "Best"),
-                RoutineFitItem(routineName: "PM routine", note: "Water-based second cleanse step", badgeText: "Safe")
+                RoutineFitItem(routineName: "AM routine", note: "Refreshes delicate skin", badgeText: "Reference"),
+                RoutineFitItem(routineName: "PM routine", note: "Water-based second cleanse step", badgeText: "Not analyzed")
             ],
             ingredients: ["Water", "Decyl Glucoside", "Punica Granatum Fruit Extract", "Citric Acid"],
             ingredientListStatus: .complete
@@ -422,7 +422,7 @@ public class ProductDatabase {
         
         let amNote = isSpf ? "Works before direct UV exposure" : (isCleanser ? "Gentle morning cleanse" : (isToner ? "Preps skin for hydration" : "Works before SPF"))
         let pmNote = isSpf ? "Do not use overnight" : (isCleanser ? "Essential evening cleanse" : (isToner ? "Locks in evening moisture" : "Do not combine with retinol"))
-        let pmBadge = isSpf ? "Avoid" : (isCleanser ? "Best" : (isToner ? "Best" : "Avoid"))
+        let pmBadge = isSpf ? "Avoid" : (isCleanser ? "Reference" : (isToner ? "Reference" : "Avoid"))
         
         return ProductDetailItem(
             id: id,
@@ -431,7 +431,7 @@ public class ProductDatabase {
             brand: brand,
             category: category,
             routineFits: [
-                RoutineFitItem(routineName: "AM routine", note: amNote, badgeText: "Best"),
+                RoutineFitItem(routineName: "AM routine", note: amNote, badgeText: "Reference"),
                 RoutineFitItem(routineName: "PM routine", note: pmNote, badgeText: pmBadge)
             ]
         )
