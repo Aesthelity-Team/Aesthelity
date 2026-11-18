@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import http.client
 import json
+import os
 import sys
 import threading
 import unittest
@@ -116,7 +117,58 @@ def _make_server(demo_mode: bool = False) -> AnalysisHTTPServer:
         raise ValueError("expired or invalid token")
 
     server.token_verifier = fake_verifier  # type: ignore[attr-defined]
+    server.analysis_provider = _FakeAnalysisProvider()  # type: ignore[attr-defined]
     return server
+
+
+class _FakeAnalysisProvider:
+    """Returns one valid caution when retinol and glycolic acid are both confirmed. No network."""
+
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        products = context.get("products", [])
+        ingredient_ids = {
+            row["ingredientID"]
+            for product in products
+            for row in product.get("ingredients", [])
+        }
+        if {"retinol", "glycolic-acid"} <= ingredient_ids:
+            return {
+                "assessment": "findings",
+                "findings": [
+                    {
+                        "referenceIDs": ["irritation.retinol-benzoyl-peroxide-with-exfoliant"],
+                        "outcome": "caution",
+                        "productIDs": [product["productID"] for product in products],
+                        "ingredientIDs": ["retinol", "glycolic-acid"],
+                        "explanation": "Confirmed retinol and glycolic acid are both in this routine.",
+                        "reason": "The approved reference supports a moderate caution.",
+                    }
+                ],
+            }
+        return {"assessment": "no_findings", "findings": []}
+
+
+class _NoFindingsProvider:
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        return {"assessment": "no_findings", "findings": []}
+
+
+class _RaisingProvider:
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        raise RuntimeError("provider exploded with secret detail")
+
+
+class _InvalidOutputProvider:
+    model = "fake-analysis"
+
+    def generate(self, context: dict) -> dict:
+        return {"assessment": "findings", "findings": []}
 
 
 def _request(
@@ -173,6 +225,23 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
     # Happy-path: authenticated requests return correct analysis results
     # ------------------------------------------------------------------
 
+    def test_flag_defaults_off_and_uses_an02_rules(self):
+        """Unset AESTHELITY_AI_ANALYSIS keeps the AN-02 route and ruleVersion."""
+        self.assertFalse(self.server.ai_analysis)
+        status, body = _request(self.server, "POST", body=VALID_NORMAL_PAYLOAD)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["contractVersion"], 1)
+        self.assertEqual(body["ruleVersion"], "AN-02-v1")
+        self.assertEqual(body["period"], "am")
+        self.assertEqual(body["outcome"], "noFindings")
+        self.assertEqual(body["completeness"], "complete")
+        self.assertEqual(body["productIDs"], ["serum_hydrating"])
+        self.assertEqual(body["findings"], [])
+        self.assertEqual(body["displayLabel"], "No recorded conflicts")
+        self.assertNotIn("coverage", body)
+        self.assertIn("limitations", body)
+
     def test_valid_token_no_findings_returns_200_with_correct_contract(self):
         """
         STEP 2a — Happy path, no findings.
@@ -185,7 +254,7 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
 
         self.assertEqual(status, 200)
         self.assertEqual(body["contractVersion"], 1)
-        self.assertIn("ruleVersion", body)         # e.g. "AN-02-v1"
+        self.assertEqual(body["ruleVersion"], "AN-02-v1")
         self.assertEqual(body["period"], "am")
         self.assertEqual(body["outcome"], "noFindings")
         self.assertEqual(body["completeness"], "complete")
@@ -203,11 +272,13 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         status, body = _request(self.server, "POST", body=VALID_CAUTION_PAYLOAD)
 
         self.assertEqual(status, 200)
+        self.assertEqual(body["ruleVersion"], "AN-02-v1")
         self.assertEqual(body["outcome"], "findings")
         self.assertEqual(body["period"], "pm")
         self.assertEqual(len(body["findings"]), 1)
         finding = body["findings"][0]
         self.assertEqual(finding["outcome"], "caution")
+        self.assertEqual(finding["ruleStatus"], "approved")
         self.assertEqual(finding["ruleID"], "irritation.retinol-benzoyl-peroxide-with-exfoliant")
         self.assertIn("retinol", finding["ingredientIDs"])
         self.assertIn("glycolic-acid", finding["ingredientIDs"])
@@ -533,6 +604,209 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
             prod_server.shutdown()
             prod_server.server_close()
             t.join()
+
+
+def _supported_request() -> dict:
+    return {
+        "contractVersion": 1,
+        "period": "pm",
+        "recordedAllergies": {"status": "known", "ingredientIDs": []},
+        "products": [
+            {
+                "productID": "fictional_retinol_serum",
+                "listStatus": "complete",
+                "catalogVersion": 3,
+                "ingredients": [
+                    {"originalText": "Retinol", "mapping": "confirmed", "ingredientID": "retinol"},
+                ],
+            },
+            {
+                "productID": "fictional_glycolic_toner",
+                "listStatus": "complete",
+                "catalogVersion": 3,
+                "ingredients": [
+                    {"originalText": "Glycolic Acid", "mapping": "confirmed", "ingredientID": "glycolic-acid"},
+                ],
+            },
+        ],
+    }
+
+
+class AIAnalysisFlagTests(unittest.TestCase):
+    """AESTHELITY_AI_ANALYSIS=1. Provider failures stay unknown and do not call AN-02."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        previous = os.environ.get("AESTHELITY_AI_ANALYSIS")
+        os.environ["AESTHELITY_AI_ANALYSIS"] = "1"
+        try:
+            cls.server = _make_server(demo_mode=False)
+        finally:
+            if previous is None:
+                os.environ.pop("AESTHELITY_AI_ANALYSIS", None)
+            else:
+                os.environ["AESTHELITY_AI_ANALYSIS"] = previous
+        cls.thread = threading.Thread(target=cls.server.serve_forever, daemon=True)
+        cls.thread.start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls.server.shutdown()
+        cls.server.server_close()
+        cls.thread.join()
+
+    def setUp(self) -> None:
+        self.server.analysis_provider = _FakeAnalysisProvider()
+
+    def test_env_flag_values(self) -> None:
+        previous = os.environ.get("AESTHELITY_AI_ANALYSIS")
+        try:
+            for value, enabled in (
+                ("0", False),
+                ("false", False),
+                ("no", False),
+                ("", False),
+                ("1", True),
+                ("true", True),
+                ("YES", True),
+            ):
+                os.environ["AESTHELITY_AI_ANALYSIS"] = value
+                server = _make_server()
+                try:
+                    self.assertEqual(server.ai_analysis, enabled, value)
+                finally:
+                    server.server_close()
+        finally:
+            if previous is None:
+                os.environ.pop("AESTHELITY_AI_ANALYSIS", None)
+            else:
+                os.environ["AESTHELITY_AI_ANALYSIS"] = previous
+
+    def test_supported_finding_matches_fixture_shape_and_echoes_request(self) -> None:
+        fixture = json.loads((ROOT / "docs" / "fixtures" / "analyses" / "supported_finding.json").read_text())
+        with patch("Backend.analysis_api.evaluate_routine", side_effect=AssertionError("fell through")):
+            status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertTrue(self.server.ai_analysis)
+        self.assertEqual(status, 200)
+        self.assertEqual(set(body), set(fixture))
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertEqual(body["outcome"], "findings")
+        self.assertEqual(body["completeness"], "complete")
+        self.assertEqual(body["period"], "pm")
+        self.assertEqual(body["activeCatalogVersion"], 3)
+        self.assertEqual(body["productIDs"], ["fictional_retinol_serum", "fictional_glycolic_toner"])
+        self.assertNotIn("displayLabel", body)
+        self.assertEqual(len(body["findings"]), 1)
+        finding = body["findings"][0]
+        self.assertEqual(set(finding), set(fixture["findings"][0]))
+        self.assertEqual(finding["outcome"], "caution")
+        self.assertEqual(finding["ruleStatus"], "ai-assisted")
+        self.assertEqual(finding["severity"], "moderate")
+        self.assertEqual(finding["categoryID"], "ingredient-combination")
+        self.assertEqual(finding["productIDs"], body["productIDs"])
+        self.assertEqual(finding["ingredientIDs"], ["retinol", "glycolic-acid"])
+        self.assertTrue(finding["evidence"][0]["source"]["url"].startswith("https://"))
+        self.assertEqual(set(body["coverage"]), set(fixture["coverage"]))
+        self.assertEqual(body["coverage"]["status"], "complete")
+
+    def test_complete_input_with_no_model_finding(self) -> None:
+        self.server.analysis_provider = _NoFindingsProvider()
+        with patch("Backend.analysis_api.evaluate_routine", side_effect=AssertionError("fell through")):
+            status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "noFindings")
+        self.assertEqual(body["completeness"], "complete")
+        self.assertEqual(body["displayLabel"], "No recorded conflicts")
+        self.assertEqual(body["findings"], [])
+        self.assertEqual(body["coverage"]["status"], "complete")
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertEqual(body["period"], "pm")
+        self.assertEqual(body["productIDs"], ["fictional_retinol_serum", "fictional_glycolic_toner"])
+        self.assertEqual(body["activeCatalogVersion"], 3)
+
+    def test_allergy_unknown_and_partial_list_fail_closed(self) -> None:
+        payload = {
+            "contractVersion": 1,
+            "period": "am",
+            "recordedAllergies": {"status": "unknown"},
+            "products": [
+                {
+                    "productID": "fictional_partial_serum",
+                    "listStatus": "partial",
+                    "catalogVersion": 3,
+                    "ingredients": [
+                        {"originalText": "Mystery Extract", "mapping": "unmatched"},
+                    ],
+                }
+            ],
+        }
+        with patch("Backend.analysis_api.evaluate_routine", side_effect=AssertionError("fell through")):
+            status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        self.assertEqual(body["period"], "am")
+        self.assertEqual(body["productIDs"], ["fictional_partial_serum"])
+        self.assertEqual(body["activeCatalogVersion"], 3)
+        self.assertEqual(body["coverage"]["status"], "incomplete")
+        self.assertTrue(body["findings"])
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+
+    def test_stale_catalog_version_fails_closed_and_echoes_server_version(self) -> None:
+        payload = _supported_request()
+        for product in payload["products"]:
+            product["catalogVersion"] = 2
+        with patch("Backend.analysis_api.evaluate_routine", side_effect=AssertionError("fell through")):
+            status, body = _request(self.server, "POST", body=payload)
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertNotIn("displayLabel", body)
+        self.assertEqual(body["period"], "pm")
+        self.assertEqual(body["productIDs"], ["fictional_retinol_serum", "fictional_glycolic_toner"])
+        self.assertEqual(body["activeCatalogVersion"], 3)
+        self.assertTrue(body["findings"])
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+
+    def test_provider_raise_fails_closed_without_falling_through(self) -> None:
+        self.server.analysis_provider = _RaisingProvider()
+        with patch("Backend.analysis_api.evaluate_routine", side_effect=AssertionError("fell through")):
+            status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertNotIn("displayLabel", body)
+        encoded = json.dumps(body)
+        self.assertNotIn("secret detail", encoded)
+        self.assertNotIn("provider exploded", encoded)
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+
+    def test_invalid_model_output_fails_closed_without_falling_through(self) -> None:
+        self.server.analysis_provider = _InvalidOutputProvider()
+        with patch("Backend.analysis_api.evaluate_routine", side_effect=AssertionError("fell through")):
+            status, body = _request(self.server, "POST", body=_supported_request())
+
+        self.assertEqual(status, 200)
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertNotIn("displayLabel", body)
+        self.assertTrue(all(item["outcome"] == "unknown" for item in body["findings"]))
+        self.assertNotIn("approved", {item["ruleStatus"] for item in body["findings"]})
+
+    def test_missing_and_revoked_tokens_stay_401(self) -> None:
+        for token in (None, "revoked-token", "not-json"):
+            with self.subTest(token=token):
+                status, body = _request(self.server, "POST", body=_supported_request(), token=token)
+                self.assertEqual(status, 401)
+                self.assertEqual(body["error"]["code"], "UNAUTHENTICATED")
 
 
 if __name__ == "__main__":

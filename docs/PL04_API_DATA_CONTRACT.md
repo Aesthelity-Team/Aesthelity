@@ -1,6 +1,6 @@
 # PL-04 API and Data Contract
 
-**Status:** Contract version 1. The `POST /api/v1/analyses` section below is the #114 body Najih should decode. Until that switch, the live server still returns the AN-02 body (`ruleVersion` `AN-02-v1`, no `coverage` object, response `outcome` only `noFindings` or `findings`).
+**Status:** Contract version 1. The `POST /api/v1/analyses` section below is the #114 body Najih should decode. `AESTHELITY_AI_ANALYSIS` defaults off. Off, the live server returns the AN-02 body (`ruleVersion` `AN-02-v1`, no `coverage` object, response `outcome` only `noFindings` or `findings`). On, it returns the #114 body. An AI failure does not fall back to AN-02.
 **Contract version:** 1
 **Scope:** #26 layering is out of this response. There is no recommended order field.
 
@@ -107,7 +107,7 @@ A row needs `originalText` (string). It uses either `mapping` or the legacy `sta
 |---|---|---|
 | `confirmed` | `ingredientID` string | `suggestedID`, `candidateIDs` |
 | `uncertain` | `suggestedID` string | `ingredientID`, `candidateIDs` |
-| `ambiguous` | `candidateIDs` string array, at least one | `ingredientID`, `suggestedID` |
+| `ambiguous` | `candidateIDs` string array, at least two | `ingredientID`, `suggestedID` |
 | `unmatched` | none | `ingredientID`, `suggestedID`, `candidateIDs` |
 
 Only `confirmed` with an ID in the active catalog is eligible for a supported finding. `suggestedID` and `candidateIDs` are not confirmed matches.
