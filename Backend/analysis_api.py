@@ -19,7 +19,7 @@ from uuid import uuid4
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from analysis_engine import AnalysisInputError, evaluate_routine  # noqa: E402
+from analysis_engine import AnalysisInputError  # noqa: E402
 from analysis_engine.ai_analysis import (  # noqa: E402
     AIAnalysisInputError,
     OpenRouterAnalysisProvider,
@@ -28,7 +28,6 @@ from analysis_engine.ai_analysis import (  # noqa: E402
 )
 from analysis_engine.evaluate import _validate_routine  # noqa: E402
 from analysis_engine.product_input import (  # noqa: E402
-    ProductInputError,
     _catalog_members,
     load_alias_catalog,
 )
@@ -69,14 +68,7 @@ CATALOG_PATH = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" /
 MAX_BODY_BYTES = 1_000_000
 MAX_ANALYSIS_PRODUCTS = 50
 MAX_ANALYSIS_ROWS = 200
-RULE_VERSION = "AN-02-v1"
 _SUPPORTED_FINDING_OUTCOMES = {"caution", "conflict", "allergen"}
-
-
-def _ai_analysis_enabled() -> bool:
-    """AESTHELITY_AI_ANALYSIS defaults off. Accepted on values match demo mode."""
-
-    return os.environ.get("AESTHELITY_AI_ANALYSIS", "0").lower() in {"1", "true", "yes"}
 
 
 def _valid_firestore_document_id(value: Any) -> bool:
@@ -185,6 +177,62 @@ def _mark_unresolved(rows: list[dict[str, Any]], reason: str) -> None:
         row["reason"] = reason
 
 
+def _unverified_analysis_row(
+    text: str,
+    mapping: str,
+    *,
+    suggested_id: str | None = None,
+    candidate_ids: tuple[str, ...] | list[str] = (),
+    reason: str = "unverified-ingredient",
+) -> dict[str, Any]:
+    """A stored row the server will not treat as a confirmed identity."""
+
+    row: dict[str, Any] = {
+        "originalText": text,
+        "mapping": "unmatched",
+        "status": "unknown",
+        "ingredientID": None,
+        "suggestedID": None,
+        "candidateIDs": [],
+        "canonicalName": None,
+        "analysisEligible": False,
+        "tier": None,
+        "reason": reason,
+    }
+    if mapping == "uncertain":
+        row.update(mapping="uncertain", status="uncertain", suggestedID=suggested_id)
+    elif mapping == "ambiguous":
+        row.update(mapping="ambiguous", status="ambiguous", candidateIDs=list(candidate_ids))
+    return row
+
+
+def _row_for_stored_mapping(
+    incoming: Mapping[str, Any], resolved: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Keep the stored mapping. Re-resolving the label must not replace it.
+
+    Uncertain, ambiguous, and unmatched rows stay unverified even when the
+    label is a catalog name. A confirmed ID is kept only when the active
+    catalog resolves that same label to the same ID. Any other confirmed ID
+    is flagged and is not analyzed as either identity.
+    """
+
+    text = incoming["original_text"]
+    mapping = incoming["mapping"]
+    if mapping != "confirmed":
+        return _unverified_analysis_row(
+            text,
+            mapping,
+            suggested_id=incoming.get("suggested_id"),
+            candidate_ids=incoming.get("candidate_ids") or (),
+        )
+    resolved_id = resolved.get("ingredientID") if resolved.get("mapping") == "confirmed" else None
+    if resolved_id is not None and resolved_id == incoming["ingredient_id"]:
+        return dict(resolved)
+    reason = "conflicting-confirmed-id" if resolved_id is not None else "unconfirmed-ingredient-id"
+    return _unverified_analysis_row(text, "unmatched", reason=reason)
+
+
 def _formulation_entries(
     product: Mapping[str, Any], resolved: list[Mapping[str, Any]]
 ) -> list[dict[str, Any]]:
@@ -221,15 +269,19 @@ def _normalization_for_products(
     for product in products:
         texts = [row["original_text"] for row in product["ingredients"]]
         resolved = resolve_ingredient_texts(texts, catalog, reference, db=db)
+        rows = [
+            _row_for_stored_mapping(incoming, resolved_row)
+            for incoming, resolved_row in zip(product["ingredients"], resolved, strict=True)
+        ]
         matches = type(product["catalogVersion"]) is int and product["catalogVersion"] == catalog_version
         versions_match.append(matches)
         if not matches:
-            _mark_unresolved(resolved, "stale-or-missing-catalog-version")
+            _mark_unresolved(rows, "stale-or-missing-catalog-version")
         else:
-            formulations.extend(_formulation_entries(product, resolved))
+            formulations.extend(_formulation_entries(product, rows))
         converted.append(analysis_product(
             product["productID"],
-            resolved,
+            rows,
             catalog,
             list_status=product["listStatus"],
         ))
@@ -247,9 +299,11 @@ def _public_analysis_body(
     *,
     catalog_version: int,
     catalog_source: str,
+    allergy_status: str | None = None,
 ) -> dict[str, Any]:
     """Map the engine result onto the #114 response. Coverage-only results are unknown."""
 
+    product_ids = list(result.get("productIDs") or [])
     findings = list(result.get("findings") or [])
     completeness = result.get("completeness")
     supported = any(item.get("outcome") in _SUPPORTED_FINDING_OUTCOMES for item in findings)
@@ -261,6 +315,43 @@ def _public_analysis_body(
     else:
         outcome = "noFindings"
         completeness = "complete"
+    if outcome == "unknown":
+        if (
+            allergy_status == "unknown"
+            and not any(item.get("ruleID") == "coverage.allergy-input-unknown" for item in findings)
+        ):
+            findings.append({
+                "findingID": str(uuid4()),
+                "ruleID": "coverage.allergy-input-unknown",
+                "ruleStatus": "system-coverage",
+                "outcome": "unknown",
+                "categoryID": "coverage-gap",
+                "productIDs": product_ids,
+                "ingredientIDs": [],
+                "explanation": (
+                    "The routine does not say whether allergies were recorded, "
+                    "so no allergen result is produced."
+                ),
+                "reason": "status unknown is not an empty allergy list.",
+                "reasonCode": "allergy-status-unknown",
+                "limitations": ["Unknown allergy status is not a known empty allergy list."],
+            })
+        if not findings:
+            findings.append({
+                "findingID": str(uuid4()),
+                "ruleID": "coverage.analysis-incomplete",
+                "ruleStatus": "system-coverage",
+                "outcome": "unknown",
+                "categoryID": "coverage-gap",
+                "productIDs": product_ids,
+                "ingredientIDs": [],
+                "explanation": (
+                    "The routine assessment is incomplete, so no conflict-free result is produced."
+                ),
+                "reason": "The assessment could not be completed with the supplied inputs or references.",
+                "reasonCode": "analysis-incomplete",
+                "limitations": ["An incomplete assessment is not treated as safe or conflict-free."],
+            })
     coverage = dict(result.get("coverage") or {})
     coverage["status"] = completeness
     if outcome == "unknown":
@@ -368,32 +459,7 @@ class APIHandler(BaseHTTPRequestHandler):
         if path == "/api/v1/ingredients/resolve":
             self._resolve_ingredients(payload)
             return
-        if self.server.ai_analysis:
-            # AI failures stay on this path. They do not fall through to evaluate_routine.
-            self._analyze_posted_routine(payload)
-            return
-        self._analyze_with_rules(payload)
-
-    def _analyze_with_rules(self, payload: dict[str, Any]) -> None:
-        try:
-            catalog, catalog_source = load_approved_alias_catalog(
-                self.server.db, self.server.catalog
-            )
-            result = evaluate_routine(payload, catalog)
-        except (AnalysisInputError, ProductInputError, TypeError, ValueError) as error:
-            code = error.code if isinstance(error, AnalysisInputError) else "INVALID_REQUEST"
-            self._send(400, _error_body(code, str(error)))
-            return
-        except Exception as error:
-            print(f"Analysis engine execution failed: {type(error).__name__}: {error}")
-            self._send(500, _error_body("INTERNAL_ERROR", "The analysis could not be completed."))
-            return
-        self._send(200, {
-            "contractVersion": 1,
-            "ruleVersion": RULE_VERSION,
-            "catalogSource": catalog_source,
-            **result,
-        })
+        self._analyze_posted_routine(payload)
 
     def _analyze_posted_routine(self, payload: dict[str, Any]) -> None:
         try:
@@ -439,7 +505,10 @@ class APIHandler(BaseHTTPRequestHandler):
             self._send(500, _error_body("INTERNAL_ERROR", "The analysis could not be completed."))
             return
         self._send(200, _public_analysis_body(
-            result, catalog_version=catalog_version, catalog_source=catalog_source
+            result,
+            catalog_version=catalog_version,
+            catalog_source=catalog_source,
+            allergy_status=allergies["status"],
         ))
 
     def do_PUT(self) -> None:
@@ -791,7 +860,6 @@ class AnalysisHTTPServer(ThreadingHTTPServer):
         self.catalog = catalog
         self.database_id = database_id
         self.demo_mode = demo_mode
-        self.ai_analysis = _ai_analysis_enabled()
         self.reference_index = None
 
 
@@ -827,11 +895,7 @@ def main() -> None:
     print(
         f"Bundled alias fallback version: {catalog['version']}; "
         "active alias source: ingredientAliasCatalogs/active; "
-        + (
-            f"analysis engine: {ANALYSIS_VERSION}"
-            if server.ai_analysis
-            else f"analysis rules: {RULE_VERSION}"
-        )
+        f"analysis engine: {ANALYSIS_VERSION}"
     )
     if reference_index is None:
         print("Full ingredient catalog: unavailable (Backend/data/cosing_ingredients.json.gz missing or invalid)")

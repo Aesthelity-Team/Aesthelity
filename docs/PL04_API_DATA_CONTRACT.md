@@ -1,6 +1,6 @@
 # PL-04 API and Data Contract
 
-**Status:** Contract version 1. The `POST /api/v1/analyses` section below is the #114 body Najih should decode. `AESTHELITY_AI_ANALYSIS` defaults off. Off, the live server returns the AN-02 body (`ruleVersion` `AN-02-v1`, no `coverage` object, response `outcome` only `noFindings` or `findings`). On, it returns the #114 body. An AI failure does not fall back to AN-02.
+**Status:** Contract version 1. The `POST /api/v1/analyses` section below is the #114 body Najih should decode (`ruleVersion` `ai-analysis-v1`). An AI failure returns `outcome` `unknown` / `completeness` `incomplete` and does not fall back to AN-02.
 **Contract version:** 1
 **Scope:** #26 layering is out of this response. There is no recommended order field.
 
@@ -136,7 +136,7 @@ Every successful body keeps these public fields:
 | Field | Type | Null | Required | Values |
 |---|---|---|---|---|
 | `contractVersion` | integer | no | yes | `1` |
-| `ruleVersion` | string | no | yes | `ai-analysis-v1` after the switch. Live AN-02 responses still send `AN-02-v1`. |
+| `ruleVersion` | string | no | yes | `ai-analysis-v1` (historical saved AN-02 records use `AN-02-v1`). |
 | `catalogSource` | string | no | yes | `firestore` or `bundled-fallback`. The current Swift decoder ignores it. |
 | `period` | string | no | yes | Echo of `am` or `pm`. |
 | `activeCatalogVersion` | integer | no | yes | Server catalog version. |
@@ -164,7 +164,7 @@ Fields added by the wired engine, all ignored by today's decoder:
 | `referenceVersion` | integer | yes | Approved reference set version, or `null` when the server has no single version. |
 | `analysisProviderStatus` | string | no | Sanitized code. `ok` does not mean the routine is clear. |
 | `summary` | string | no | Always. Not a safety claim. |
-| `coverage` | object | no | Always after the switch. Absent on current AN-02 responses. |
+| `coverage` | object | no | Always. |
 
 `analysisProviderStatus` is one of `ok`, `normalization_unavailable`, `no_relevant_references`, `not_configured`, `rate_limited`, `refused`, `invalid_response`, `unavailable`, `unsupported_outcome`, `reference_conditions_not_met`, `conflicting_reference_metadata`, `unsupported_ingredient_link`, `unsupported_product_link`, `unsupported_claim`. Any other string is still a failure. The value is a code, not provider response text.
 
@@ -184,7 +184,7 @@ Fields added by the wired engine, all ignored by today's decoder:
 | Field | Type | Null | Required | Values |
 |---|---|---|---|---|
 | `ruleID` | string | no | yes | Server-chosen. For a supported finding, the approved reference ID. |
-| `ruleStatus` | string | no | yes | `ai-assisted` or `system-coverage` after the switch. Saved AN-02 results use `approved`. |
+| `ruleStatus` | string | no | yes | `ai-assisted` or `system-coverage`. Saved AN-02 results use `approved`. |
 | `outcome` | string | no | yes | `caution`, `conflict`, `allergen`, or `unknown`. |
 | `categoryID` | string | no | yes | Server-derived. Coverage findings use `coverage-gap`. |
 | `severity` | string | no | only for supported findings | `low`, `moderate`, or `high`. Omitted when `outcome` is `unknown`. |
@@ -197,7 +197,7 @@ Fields added by the wired engine, all ignored by today's decoder:
 | `reasonCode` | string | no | no | Present for coverage rows that have a code. |
 | `originalText` | string | no | no | Present for an unresolved ingredient row. |
 | `rowIndex` | integer | no | no | Zero-based index in that product. Present with `originalText`. |
-| `findingID` | string | no | after the switch | Server-generated. Not stable across calls. Today's decoder ignores it. |
+| `findingID` | string | no | yes | Server-generated. Not stable across calls. Today's decoder ignores it. |
 | `evidence` | array | no | on supported and reference-backed coverage findings | Today's decoder ignores it. |
 
 `evidence` items are server copies of approved references, not model output:
@@ -299,7 +299,7 @@ The `steps` array preserves routine order. A `productPath` identifies either a s
 
 ## Analysis result fields
 
-Shape, enums, and nullability for `POST /api/v1/analyses` are in the Analysis endpoint section. Short form: response `outcome` is `noFindings`, `findings`, or `unknown`; `completeness` and `coverage.status` are `complete` or `incomplete`. A finding `outcome` is `caution`, `conflict`, `allergen`, or `unknown`. `severity` is `low`, `moderate`, or `high` and is omitted for `unknown`. `ruleStatus` after the switch is `ai-assisted` or `system-coverage`.
+Shape, enums, and nullability for `POST /api/v1/analyses` are in the Analysis endpoint section. Short form: response `outcome` is `noFindings`, `findings`, or `unknown`; `completeness` and `coverage.status` are `complete` or `incomplete`. A finding `outcome` is `caution`, `conflict`, `allergen`, or `unknown`. `severity` is `low`, `moderate`, or `high` and is omitted for `unknown`. `ruleStatus` is `ai-assisted` or `system-coverage`.
 
 `docs/fixtures/analyses/supported_finding.json` and `docs/fixtures/analyses/incomplete_unknown.json` are exact `200` bodies. Decode the file itself. IDs, URLs, and finding IDs in those files are fictional and fixed for the fixture.
 
