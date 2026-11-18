@@ -25,7 +25,7 @@ from Backend.ai_normalization import (
 from Backend.ingredient_catalog import ReferenceIndex, build_catalog, parse_cosing_csv, resolve_ingredient_texts
 from Backend.ingredient_persistence import FakeFirestore
 
-from test_analysis_engine_input import ANALYSIS_BRANCH_FILE, CAUTION_REFERENCE, ENGINE, _load_analysis_engine
+from test_analysis_engine_input import CAUTION_REFERENCE, ENGINE
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -286,8 +286,6 @@ class MatchIngredientsTests(unittest.TestCase):
             model=model, prompt_version="ingredient-matching-v2",
         )
         self.assertEqual(envelope["providerStatus"], "ok")
-        if ENGINE is None:
-            self.skipTest(f"{ANALYSIS_BRANCH_FILE} not available")
         products, _, has_unresolved, unresolved = ENGINE._validate_inputs(
             envelope, {"period": "am", "recordedAllergies": {"status": "known", "ingredientIDs": []}},
             canonical_records(APPROVED), [CAUTION_REFERENCE],
@@ -518,9 +516,7 @@ class LiveAINormalizationTests(unittest.TestCase):
             [product], catalog_version=APPROVED["version"], provider_status=status,
             model=model, prompt_version="ingredient-matching-v2",
         )
-        engine = ENGINE or _load_analysis_engine()
-        if engine is None:
-            self.fail(f"{ANALYSIS_BRANCH_FILE} not available")
+        engine = ENGINE
         products, _, has_unresolved, unresolved = engine._validate_inputs(
             envelope, {"period": "am", "recordedAllergies": {"status": "known", "ingredientIDs": []}},
             canonical_records(APPROVED), [CAUTION_REFERENCE],
