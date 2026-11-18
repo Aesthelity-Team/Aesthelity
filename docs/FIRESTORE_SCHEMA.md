@@ -15,6 +15,11 @@ ID are verified (see FIRESTORE_SETUP.md).
 | Document path | Purpose | Status |
 |---|---|---|
 | products/{productId} | Shared curated product catalog | Implemented |
+| ingredientAliasCatalogs/active | Hand-approved alias catalog used by AN-02 analysis | Implemented |
+| ingredients/{ingredientId} | Full canonical ingredient catalog (EU CosIng inventory + approved entries + unresolved masters from #98) | Implemented; CosIng import + #98 encounter merges |
+| ingredientAmbiguousTerms/{termKey} | Names that map to two or more canonical IDs | Implemented with the import |
+| ingredientCatalogs/reference | Version, source, and counts of the last full import | Implemented with the import |
+| productIngredients/{productId} | Ordered product ingredient lists from #98 resolve (`persist: true`) | Implemented; manual docs scoped by `ownerUID` (#108) |
 | users/{uid} | Personal skin profile | Proposed |
 | users/{uid}/products/{productId} | User-added products | Proposed |
 | users/{uid}/routines/{routineId} | Ordered AM/PM routines | Proposed |
@@ -51,6 +56,126 @@ Only authorized catalog-management operations should change them.
 Imports use existing stable document IDs. Repeating an import replaces
 the same records without generating duplicate IDs. Imports do not delete
 records absent from the source dataset.
+
+## Approved ingredient aliases: ingredientAliasCatalogs/active
+
+This shared document is the current reviewed alias catalog used by the app and
+backend. Its document ID is `active`; increment `version` whenever a reviewed
+name, alias, class, or ambiguous term changes. The backend reads it for every
+analysis request and serves it through `GET /api/v1/ingredient-aliases`, so a
+valid update is available on the next request.
+
+| Field | Type | Requirement |
+|---|---|---|
+| version | integer | Required; non-negative content version |
+| reviewStatus | string | Required; must be `approved` to be served |
+| ingredients | array of maps | Required; `id`, `name`, `aliases`, `classes`, and optional reviewed references |
+| ambiguousTerms | array of maps | Required; terms, at least two known `candidateIDs`, and a note |
+| updatedAt | Firestore timestamp | Required; written by the seed/update operation |
+| updatedBy | string | Required; authorized editor's team identity |
+
+The `ingredients` and `ambiguousTerms` fields use the same shape as
+`Aesthelity/Aesthelity/Resources/SampleData/ingredient-aliases.json`. Exact
+names must not map to multiple canonical IDs or conflict with an ambiguous
+term. Unreviewed names stay out of `aliases`. The app retains the original
+ingredient text and only writes `ingredientID` for a confirmed match; uncertain,
+ambiguous, and unmatched rows remain ineligible for analysis.
+
+If the document is missing or Firestore cannot be read, the app and backend
+use the bundled approved catalog and report `catalogSource` as
+`bundled-fallback`. The seed command is dry-run by default. Use `--apply` for
+the initial write; replacing an existing active catalog also requires
+`--replace` and an authorized `INGREDIENT_ALIAS_EDITOR` identity.
+
+## Full ingredient catalog: ingredients/{ingredientId}
+
+The complete EU CosIng ingredient inventory, imported by
+`Backend/import_ingredient_catalog.py` from the committed snapshot
+`Backend/data/cosing_ingredients.json.gz` (source, retrieval date, and license
+are stored inside the snapshot). It sits underneath the approved alias catalog;
+it never edits `ingredientAliasCatalogs/active`.
+
+IDs are deterministic. An ingredient that is already in the approved catalog
+(same name, an approved alias, or exactly one approved name among its CosIng
+synonyms) keeps its approved ID, name, aliases, and classes. Every other INCI
+name gets a slug of the INCI name (`centella-asiatica-extract`). If two names
+produce the same slug, the lowest CosIng reference number keeps the plain slug
+and the others get an 8-character hash suffix; slugs longer than 100
+characters are shortened the same way. Rows with the same INCI name are merged
+into one ingredient with several sources.
+
+| Field | Type | Requirement |
+|---|---|---|
+| id | string | Required; matches document ID |
+| canonicalName | string | Required; approved name, otherwise the CosIng INCI name |
+| inciNames | array of strings | CosIng INCI names merged into this ingredient |
+| aliases | array of strings | Approved aliases first, then CosIng INCI-USA, INN, and Ph. Eur. names this ingredient owns |
+| aliasKeys | array of strings | Lowercase exact-match keys owned by this ingredient (queried with `array-contains`) |
+| classes | array of strings | Approved AN-02 classes; empty for reference-tier ingredients |
+| tier | string | `approved` or `reference` |
+| casNumbers, ecNumbers | array of strings | From CosIng; may be empty |
+| functions | array of strings | CosIng cosmetic functions |
+| description | string | CosIng chemical/botanical description |
+| restrictions | array of strings | CosIng annex references, such as `III/71` |
+| sources | array of maps | `source`, CosIng `refNo`, and detail `url` |
+| references | array of maps | Optional; reviewed references copied from the approved catalog |
+| catalogVersion | string | `cosing-YYYY-MM-DD` from the snapshot |
+| updatedAt, updatedBy | timestamp, string | Written by the import |
+
+Lookup priority, highest first: approved names and aliases, approved ambiguous
+terms, CosIng INCI names, then CosIng synonyms. A synonym shared by 2 to 10
+ingredients becomes an `ingredientAmbiguousTerms/{termKey}` document
+(`term`, `termKey`, `candidateIDs`, `note`, `source`); one shared by more is
+dropped. A bare CAS number resolves only when exactly one ingredient has it.
+
+Resolution never guesses. The backend's
+`POST /api/v1/ingredients/resolve` returns `confirmed` only for
+approved-catalog IDs. A reference-tier match is returned as `uncertain` with a
+`suggestedID`, so under PD-03 the product stays out of analysis until that
+ingredient is approved into `ingredientAliasCatalogs/active`. Unknown text is
+`unmatched`, and the original text is always kept.
+
+`ingredientCatalogs/reference` is written last and records `version`,
+`source`, `sourceUrl`, `retrievedOn`, `license`, `ingredientCount`,
+`ambiguousTermCount`, and the import `stats`.
+
+### #98 encounter fields on ingredients/{ingredientId}
+
+When `POST /api/v1/ingredients/resolve` runs with `persist: true`, master
+records are merged (never wiping CosIng fields):
+
+| Field | Type | Requirement |
+|---|---|---|
+| resolutionStatus | string | `identified` or `unresolved` |
+| encounteredInProducts | boolean | `true` when seen via product matching |
+| observedTexts | array of strings | Original label spellings (ArrayUnion) |
+| bestGuess, explanation | string or null | Unresolved / tentative only |
+| status | string | On unresolved docs: `tentative` or `unknown` |
+| tier | string | `approved`, `reference`, or `unresolved` |
+
+Unresolved document IDs are `unresolved-<sha256(name_key(originalText))[:16]>`.
+Identical normalized original text shares one unresolved ID. Tentative best
+guesses never merge into an identified master record.
+
+## Product ingredient lists: productIngredients/{productId}
+
+Written by #98 when `persist` is true. Separate from curated `products/` so
+manual entries are not forced through catalog provenance fields.
+
+| Field | Type | Requirement |
+|---|---|---|
+| productID | string | Matches document ID |
+| sourceType | string | `manual` or `catalog` |
+| ownerUID | string or null | Required for `manual` (= authenticated Firebase UID); null for catalog |
+| coverage | string | `complete`, `partial`, or `unknown` |
+| status | string | Matching run `ok` or `failed` |
+| submittedIngredients | array of strings | Exact submitted list, original order |
+| ingredients | array of maps | Ordered rows: `index`, `originalText`, match fields, `masterIngredientID`, `masterRef` |
+| promptVersion, model, providerStatus | string or null | AI metadata when AI ran |
+| updatedAt, updatedBy | timestamp, string | Server-controlled |
+
+Manual reads must enforce `ownerUID ==` authenticated UID (same isolation as
+#108 private data). See `Backend/README.md` → Ingredient resolution (#98).
 
 ## Proposed profile: users/{uid}
 

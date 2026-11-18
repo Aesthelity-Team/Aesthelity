@@ -2,6 +2,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import unittest
 from pathlib import Path
 
 
@@ -10,7 +11,7 @@ SOURCE = ROOT / "Aesthelity/Aesthelity/Resources/DemoData"
 IMPORTER = ROOT / "tests/backend/test_invalid_catalog.py"
 
 
-def check_invalid_import(case_name, change_product):
+def check_invalid_import(case_name, change_product, *, verbose=True):
     with tempfile.TemporaryDirectory() as temporary_directory:
         test_directory = Path(temporary_directory)
 
@@ -50,16 +51,33 @@ def check_invalid_import(case_name, change_product):
                 f"{output}"
             )
 
-        print(f"PASS: {case_name}")
-        print(output.strip())
+        if verbose:
+            print(f"PASS: {case_name}")
+            print(output.strip())
 
 
-check_invalid_import(
-    "Missing required name",
-    lambda product: product.pop("name"),
-)
+class InvalidImportTests(unittest.TestCase):
+    def test_missing_required_name_rejected_before_write(self):
+        check_invalid_import(
+            "Missing required name",
+            lambda product: product.pop("name"),
+            verbose=False,
+        )
 
-check_invalid_import(
-    "Invalid category",
-    lambda product: product.update(category="invalid_category"),
-)
+    def test_invalid_category_rejected_before_write(self):
+        check_invalid_import(
+            "Invalid category",
+            lambda product: product.update(category="invalid_category"),
+            verbose=False,
+        )
+
+
+if __name__ == "__main__":
+    check_invalid_import(
+        "Missing required name",
+        lambda product: product.pop("name"),
+    )
+    check_invalid_import(
+        "Invalid category",
+        lambda product: product.update(category="invalid_category"),
+    )

@@ -121,7 +121,7 @@ enum BackendAnalysisAPIError: LocalizedError {
         case .missingProduct(let productID):
             return "Product \(productID) was not returned by the Firestore catalog API."
         case .catalogVersionMismatch(let expected, let received):
-            return "The app alias catalog is version \(expected), but the API returned version \(received). Update both from the same alias file."
+            return "The app used alias catalog version \(expected), but the API analyzed version \(received). Reload the shared catalog and try again."
         case .authenticationRequired:
             return "Please sign in to analyze this routine."
         case .authenticationTokenUnavailable:
@@ -131,9 +131,9 @@ enum BackendAnalysisAPIError: LocalizedError {
 }
 
 struct BackendAnalysisAPI {
-    private let session: URLSession
-    private let decoder = JSONDecoder()
-    private let encoder = JSONEncoder()
+    let session: URLSession
+    let decoder = JSONDecoder()
+    let encoder = JSONEncoder()
 
     init(session: URLSession = .shared) {
         self.session = session
@@ -158,7 +158,7 @@ struct BackendAnalysisAPI {
             return product
         }
 
-        let aliasCatalog = try IngredientAliasCatalog.loadBundled()
+        let aliasCatalog = try await IngredientAliasCatalogService(session: session).loadCatalog()
         let normalizer = IngredientNormalizer(catalog: aliasCatalog)
         let normalizedProducts = selectedProducts.map(normalizer.normalizeCatalogProduct)
         let payload = AnalysisRequestPayload(
@@ -205,7 +205,7 @@ struct BackendAnalysisAPI {
         return LiveAnalysisResult(response: result, productNames: names)
     }
 
-    private func baseURL() throws -> URL {
+    func baseURL() throws -> URL {
         let configured = Bundle.main.object(forInfoDictionaryKey: "AesthelityAPIBaseURL") as? String
             ?? "http://127.0.0.1:8765"
         guard let url = URL(string: configured), url.scheme != nil, url.host != nil else {
@@ -214,7 +214,7 @@ struct BackendAnalysisAPI {
         return url
     }
 
-    private func requireSuccess(_ response: URLResponse, data: Data) throws {
+    func requireSuccess(_ response: URLResponse, data: Data) throws {
         guard let http = response as? HTTPURLResponse else {
             throw BackendAnalysisAPIError.invalidResponse
         }
