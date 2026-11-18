@@ -123,14 +123,17 @@ and retry case and the save/relaunch case. Its overall UI result was still red:
 - `AesthelityUITestsLaunchTests.testLaunch` failed to terminate the application.
   The job also logged simulator connection timeouts/service-hub errors.
 
-The separate test-maintenance correction prepared locally makes the four routine tests use the existing
-isolated profile fixture and explicit Explore route, asserting Home before
-opening My Routines. This does not change application behavior or bypass any
-authentication assertions: those four tests exercise routine layout only.
-The independent opt-in live #29 acceptance suite uses real sign-in.
+The separate test-maintenance correction makes the four routine tests use the
+existing isolated profile fixture and explicit Explore route, asserting Home
+before opening My Routines. It does not change application behavior or bypass
+authentication assertions: those four tests exercise routine layout only. The
+independent opt-in live #29 acceptance suite uses real sign-in. Validation passed
+on iPhone 17e / iOS 27: all four affected routine UI tests passed serially.
 
-Local validation of this helper correction is in progress. Do not treat the
-overall GitHub UI job as passing or assume its termination error is resolved.
+Result bundle: `/private/tmp/aesthelity-pr112-routines-fixed.xcresult`; log:
+`/private/tmp/aesthelity-pr112-routines-fixed.log`. The overall GitHub UI job
+remains red until a new run finishes; do not assume its independent launch and
+query timeouts are resolved.
 
 ### Mia's persisted matching-failure finding
 
