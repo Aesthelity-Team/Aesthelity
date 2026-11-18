@@ -348,7 +348,10 @@ def _reference_matches_routine(reference: Mapping[str, Any], context: Mapping[st
         return False
     if criteria.get("recordedAllergyRequired"):
         allergies = context.get("recordedAllergies", {})
-        if allergies.get("status") != "known" or not (set(allergies.get("ingredientIDs", [])) & ingredient_ids):
+        reference_ingredients = ingredient_ids.intersection(reference["canonicalIngredientIDs"])
+        if allergies.get("status") != "known" or not reference_ingredients.intersection(
+            allergies.get("ingredientIDs", [])
+        ):
             return False
     for expected in criteria.get("formulations", []):
         if not isinstance(expected, Mapping):
