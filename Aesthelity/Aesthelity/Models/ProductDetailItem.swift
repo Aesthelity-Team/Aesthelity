@@ -37,6 +37,7 @@ public struct ProductDetailItem: Identifiable, Equatable {
     public var ingredientListStatus: IngredientListStatus
     public var ingredientGuidance: String?
     public var spf: Int?
+    public var routineSnapshot: RoutineProductSnapshot? = nil
     public var catalogId: String?
     
     public var ingredientsUnavailable: Bool {
@@ -171,5 +172,6 @@ public struct ProductDetailItem: Identifiable, Equatable {
             spf: demoProduct.spf,
             catalogId: demoProduct.id
         )
+        routineSnapshot = RoutineProductSnapshot(demoProduct)
     }
 }

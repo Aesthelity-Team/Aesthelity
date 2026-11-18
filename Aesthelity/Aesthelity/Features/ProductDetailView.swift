@@ -770,7 +770,8 @@ public struct ProductDetailView: View {
                 title: product.title,
                 subtitle: "\(product.brand) · \(product.category.rawValue)",
                 period: period,
-                productId: product.id
+                productId: product.id,
+                product: product.routineSnapshot
             )
             withAnimation {
                 routineToastMessage = "Added \(product.title) to \(routineName)!"

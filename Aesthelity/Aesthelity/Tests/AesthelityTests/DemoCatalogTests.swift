@@ -14,6 +14,59 @@ struct DemoCatalogTests {
         catalog = try DemoCatalog.load()
     }
 
+    @MainActor
+    @Test func liveCatalogReplacesBundledDataAndRetainsLastLoadOnFailure() async throws {
+        let live = DemoProduct(id: "live-product", name: "Live Product", brand: "Test",
+                               category: .moisturizer, subtype: "cream", ingredients: ["Water"],
+                               ingredientListStatus: .partial, isFictional: false)
+        var shouldFail = false
+        let store = ProductCatalogStore {
+            if shouldFail { throw URLError(.notConnectedToInternet) }
+            return [live]
+        }
+        await store.load()
+        #expect(store.products == [live])
+        #expect(store.message == nil)
+        shouldFail = true
+        await store.load()
+        #expect(store.products == [live])
+        #expect(store.message?.contains("last loaded") == true)
+        let snapshot = RoutineProductSnapshot(live)
+        #expect(snapshot.provenance == "Catalog product")
+        #expect(snapshot.listStatus == "partial")
+        #expect(snapshot.ingredientNames == ["Water"])
+        let stored = try JSONDecoder().decode(RoutineProductSnapshot.self, from: JSONEncoder().encode(snapshot))
+        #expect(stored == snapshot)
+    }
+
+    @MainActor
+    @Test func liveProductDetailsAndRoutineSaveRetainIngredientCoverage() throws {
+        let live = DemoProduct(id: "live-partial", name: "Live Partial", brand: "Test",
+                               category: .cleanser, subtype: "gel", ingredients: ["Water"],
+                               ingredientListStatus: .partial, isFictional: false)
+        let details = ProductDatabase.shared.detail(forDemoProduct: live)
+        let snapshot = try #require(details.routineSnapshot)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = RoutineStore(fileURL: url)
+        let routine = try store.addProduct(title: live.name, subtitle: live.brand,
+                                          period: .am, productId: details.id, product: snapshot)
+        let saved = try #require(RoutineStore(fileURL: url).routines.first)
+        #expect(saved.id == routine.id)
+        #expect(saved.steps.first?.product == snapshot)
+        #expect(saved.steps.first?.product?.listStatus == "partial")
+        #expect(LayeringGuidance.evaluate(saved.steps, period: .am).isIncomplete)
+    }
+
+    @MainActor
+    @Test func firstCatalogFailureExplicitlyLabelsFictionalFallback() async {
+        let store = ProductCatalogStore { throw URLError(.cannotConnectToHost) }
+        await store.load()
+        #expect(store.products == nil)
+        #expect(store.message?.contains("bundled fictional") == true)
+        #expect(!store.isLoading)
+    }
+
     @Test func loadsBundledDemoData() {
         #expect(catalog.products.count == 17)
         #expect(catalog.profiles.count == 2)
