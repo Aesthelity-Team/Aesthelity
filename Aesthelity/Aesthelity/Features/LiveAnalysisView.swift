@@ -141,20 +141,14 @@ struct LiveAnalysisView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             if response.hasIncompleteAssessment {
-                Text(AnalysisResponsePayload.incompleteTitle)
-                    .font(.headline)
-                if response.findings.isEmpty {
-                    Text("Some information needed for the assessment was unavailable.")
-                        .font(.subheadline)
-                }
+                AnalysisIncompleteCard(coverage: response.coverage)
             }
 
             if response.showsNoFindings {
                 findingCard(
-                    title: response.displayLabel ?? "No findings",
-                    category: "No rule matched",
-                    severity: nil,
-                    explanation: "No approved rule matched these demo products. This is not a safety guarantee."
+                    title: AnalysisResponsePayload.noFindingsTitle,
+                    category: "Routine check",
+                    explanation: AnalysisResponsePayload.noFindingsExplanation
                 )
             }
 
@@ -162,10 +156,8 @@ struct LiveAnalysisView: View {
                 findingCard(
                     title: finding.outcomeTitle,
                     category: finding.categoryID,
-                    severity: finding.severityLabel,
                     explanation: finding.explanation,
                     products: finding.productIDs.map { live.productNames[$0] ?? $0 }.joined(separator: " · "),
-                    reason: finding.reason,
                     finding: finding
                 )
             }
@@ -190,10 +182,8 @@ struct LiveAnalysisView: View {
     private func findingCard(
         title: String,
         category: String,
-        severity: String?,
         explanation: String,
         products: String? = nil,
-        reason: String? = nil,
         finding: AnalysisFindingPayload? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -202,10 +192,8 @@ struct LiveAnalysisView: View {
                     .font(.system(size: 15, weight: .bold))
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
-                if let severity {
-                    Text(severity.capitalized)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.Semantic.inkBrand)
+                if let finding {
+                    AnalysisFindingBadge(finding: finding)
                 }
             }
             Text(category.replacingOccurrences(of: "-", with: " ").capitalized)
@@ -216,10 +204,7 @@ struct LiveAnalysisView: View {
                 .foregroundStyle(AppTheme.Semantic.inkSecondary)
                 .fixedSize(horizontal: false, vertical: true)
             if let products, !products.isEmpty {
-                detailRow("Affected products", value: products)
-            }
-            if let reason, !reason.isEmpty {
-                detailRow("Why this finding was generated", value: reason)
+                detailRow(finding?.productIDs.count == 1 ? "Affected product" : "Affected products", value: products)
             }
             if let finding {
                 AnalysisFindingDetails(finding: finding)

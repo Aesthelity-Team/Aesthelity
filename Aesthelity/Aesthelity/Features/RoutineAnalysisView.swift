@@ -186,25 +186,31 @@ private struct PersonalAnalysisResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(result.hasIncompleteAssessment ? AnalysisResponsePayload.incompleteTitle : "Assessment")
-                .font(.headline)
-            if result.hasIncompleteAssessment && result.findings.isEmpty {
-                Text("Some information needed for the assessment was unavailable.")
+            if result.hasIncompleteAssessment {
+                AnalysisIncompleteCard(coverage: result.coverage)
+            } else {
+                Text("Assessment").font(.headline)
             }
             if result.showsNoFindings {
-                Text(result.displayLabel ?? "No findings under the current rules")
-                Text("No rule matched the available data. This is not a safety guarantee.")
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(AnalysisResponsePayload.noFindingsTitle).font(.headline)
+                    Text(AnalysisResponsePayload.noFindingsExplanation)
+                }
+                .padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
             ForEach(Array(result.findings.enumerated()), id: \.offset) { _, finding in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(finding.outcomeTitle).font(.headline)
-                    if let severity = finding.severityLabel {
-                        Text(severity).font(.subheadline)
+                    HStack {
+                        Text(finding.outcomeTitle).font(.headline)
+                        Spacer()
+                        AnalysisFindingBadge(finding: finding)
                     }
-                    Text(finding.productIDs.map { names[$0] ?? "Product" }.joined(separator: " · "))
-                        .font(.subheadline)
+                    if !finding.productIDs.isEmpty {
+                        let label = finding.productIDs.count == 1 ? "Affected product" : "Affected products"
+                        let products = finding.productIDs.map { names[$0] ?? "Product" }.joined(separator: " · ")
+                        Text("\(label): \(products)").font(.subheadline)
+                    }
                     Text(finding.explanation)
-                    Text(finding.reason).font(.caption).foregroundStyle(.secondary)
                     AnalysisFindingDetails(finding: finding)
                 }
                 .padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
@@ -218,10 +224,58 @@ private struct PersonalAnalysisResultView: View {
 }
 
 
+struct AnalysisIncompleteCard: View {
+    let coverage: AnalysisCoveragePayload?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label(AnalysisResponsePayload.incompleteTitle, systemImage: "exclamationmark.triangle")
+                .font(.headline)
+            Text("Some information needed for the assessment was unavailable.")
+                .font(.subheadline)
+            if let count = coverage?.unknownIngredientCount, count > 0 {
+                Text(count == 1 ? "1 unverified ingredient" : "\(count) unverified ingredients")
+                    .font(.caption)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct AnalysisFindingBadge: View {
+    let finding: AnalysisFindingPayload
+
+    private var tint: Color {
+        if !finding.isSupported { return .orange }
+        switch finding.severity {
+        case .known(.high): return .red
+        case .known(.moderate): return .orange
+        case .known(.low): return .blue
+        default: return AppTheme.Semantic.inkBrand
+        }
+    }
+
+    var body: some View {
+        if let label = finding.isSupported ? finding.severityLabel : "Unknown" {
+            Text(label)
+                .font(.caption2.weight(.semibold))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .foregroundStyle(AppTheme.Semantic.inkPrimary)
+                .background(tint.opacity(0.18), in: Capsule())
+        }
+    }
+}
+
 struct AnalysisFindingDetails: View {
     let finding: AnalysisFindingPayload
 
     var body: some View {
+        if let reason = finding.plainLanguageReason, !reason.isEmpty {
+            Text(reason).font(.caption).foregroundStyle(.secondary)
+        }
         if !finding.ingredientLabel.isEmpty {
             Text("Affected ingredients: " + finding.ingredientLabel)
                 .font(.caption)

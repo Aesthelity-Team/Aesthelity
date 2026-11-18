@@ -104,6 +104,8 @@ struct AnalysisResponsePayload: Codable {
         outcome == .known(.noFindings) && findings.isEmpty && !hasIncompleteAssessment
     }
 
+    static let noFindingsTitle = "No recorded conflicts"
+    static let noFindingsExplanation = "The available evidence did not identify a conflict in this routine. This is not a safety guarantee."
     static let incompleteTitle = "We couldn’t fully check this routine"
 }
 
@@ -167,6 +169,36 @@ struct AnalysisFindingPayload: Codable {
         guard let severity else { return nil }
         guard case .known(let value) = severity else { return "Unknown severity" }
         return value.rawValue.capitalized
+    }
+
+    var plainLanguageReason: String? {
+        if isSupported {
+            // AI responses put reference-processing details in reason. The card already has the explanation and evidence.
+            return ruleStatus == .known(.aiAssisted) ? nil : reason
+        }
+
+        switch reasonCode ?? reason {
+        case "allergy-status-unknown":
+            return "We don’t know which allergies are recorded for this routine."
+        case "analysis-incomplete":
+            return "Some information or references needed to check this routine were unavailable."
+        case "partial-list":
+            return "The product’s ingredient list is incomplete."
+        case "unavailable-list":
+            return "The product’s ingredient list is unavailable."
+        case "empty-ingredient-list":
+            return "No ingredients are listed for this product."
+        case "normalization-uncertain":
+            return "We couldn’t confirm which ingredient this label refers to."
+        case "normalization-unknown", "canonical-name-not-found":
+            return "We couldn’t match this ingredient to a verified record."
+        case "canonical-name-ambiguous":
+            return "This ingredient name matches more than one record."
+        case "allergy-id-not-in-canonical-records":
+            return "We couldn’t match a recorded allergy to a verified ingredient."
+        default:
+            return nil
+        }
     }
 
     var ingredientLabel: String {
