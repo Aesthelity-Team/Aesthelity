@@ -230,15 +230,75 @@ struct ManualProductSavingTests {
         #expect(result.error == nil && !result.shouldDismiss)
     }
 
-    @Test func failedMatchingResponseDoesNotReplaceReviewedMatches() async {
+    @Test func failedMatchingWithoutPersistenceReceiptKeepsReviewedCopy() async {
         let reviewed = product()
         var stored: ManualProduct?
         let result = await ManualProductSaving.save(reviewed, coverage: "complete", persist: {
-            response(reviewed, status: "failed")
+            response(reviewed, rows: [row(1, "mystery"), row(0, "Aqua")],
+                     coverage: "unknown", status: "failed", path: nil)
         }, writeLocal: { stored = $0 })
         #expect(stored == reviewed)
         #expect(result.coverage == "complete")
         #expect(result.note != nil && !result.shouldDismiss)
+    }
+
+    @Test func failedMatchingWithValidReceiptSavesAndReloadsPersistedUnresolvedRows() async throws {
+        let reviewed = product()
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let file = directory.appendingPathComponent("products.json")
+        let store = ManualProductStore(fileURL: file)
+        let result = await ManualProductSaving.save(reviewed, coverage: "complete", persist: {
+            response(reviewed, rows: [row(1, "mystery"), row(0, "Aqua")],
+                     coverage: "unknown", status: "failed")
+        }, writeLocal: { try store.save($0) })
+        let saved = try #require(ManualProductStore(fileURL: file).products.first)
+        #expect(saved == result.product)
+        #expect(saved.id == reviewed.id && saved.rawIngredientList == reviewed.rawIngredientList)
+        #expect(saved.name == reviewed.name && saved.brand == reviewed.brand && saved.category == reviewed.category)
+        #expect(saved.ingredients.map(\.originalText) == ["Aqua", "mystery"])
+        #expect(saved.ingredients.allSatisfy { $0.mapping == .unmatched && $0.ingredientID == nil })
+        #expect(result.coverage == "unknown")
+        #expect(result.note?.contains("Ingredient matching failed") == true)
+        #expect(result.note?.contains("on this device and to the cloud") == true)
+        #expect(result.note?.contains("could not be confirmed") == false)
+        #expect(result.error == nil && !result.shouldDismiss)
+    }
+
+    @Test(arguments: ["wrong-receipt", "missing-row", "wrong-text", "wrong-coverage", "confirmed-row"])
+    func failedMatchingStillRequiresValidPersistenceAndUnresolvedRows(_ problem: String) async {
+        let reviewed = product()
+        var rows = [row(0, "Aqua"), row(1, "mystery")]
+        switch problem {
+        case "missing-row": rows.removeLast()
+        case "wrong-text": rows[0] = row(0, "Changed")
+        case "confirmed-row": rows[0] = row(0, "Aqua", mapping: "confirmed", id: "water")
+        default: break
+        }
+        let payload = response(reviewed, rows: rows,
+            coverage: problem == "wrong-coverage" ? "complete" : (problem == "confirmed-row" ? "partial" : "unknown"),
+            status: "failed", path: problem == "wrong-receipt" ? "productIngredients/other" : "correct")
+        var stored: ManualProduct?
+        let result = await ManualProductSaving.save(reviewed, coverage: "complete", persist: { payload }, writeLocal: { stored = $0 })
+        #expect(stored == reviewed && result.coverage == "complete")
+        #expect(result.note?.contains("Cloud save could not be confirmed") == true)
+    }
+
+    @Test func deviceFailureAfterPersistedMatchingFailureRetainsUnresolvedRowsForRetry() async {
+        let reviewed = product()
+        let payload = response(reviewed, rows: [row(0, "Aqua"), row(1, "mystery")],
+                               coverage: "unknown", status: "failed")
+        let result = await ManualProductSaving.save(reviewed, coverage: "complete", persist: { payload },
+                                                    writeLocal: { _ in throw WriteFailure() })
+        #expect(result.product.ingredients.allSatisfy { $0.mapping == .unmatched })
+        #expect(result.coverage == "unknown")
+        #expect(result.error?.contains("Ingredient matching failed") == true)
+        #expect(result.error?.contains("saved to the cloud") == true && !result.shouldDismiss)
+        var retried: ManualProduct?
+        let retry = await ManualProductSaving.save(result.product, coverage: result.coverage,
+            persist: { payload }, writeLocal: { retried = $0 })
+        #expect(retried == result.product && retry.coverage == "unknown")
+        #expect(retry.note?.contains("Ingredient matching failed") == true && !retry.shouldDismiss)
     }
 
     @Test(arguments: ["missing-row", "duplicate-index", "negative-index", "wrong-text", "wrong-path",

@@ -15,23 +15,29 @@ Review calls ingredient resolution without persistence. Signed-in Save calls it 
 | Signed out | Save the reviewed copy locally | Dismiss after the local write succeeds |
 | Valid cloud success, unchanged matches/coverage | Save the returned ordered matches locally | Dismiss after the local write succeeds |
 | Valid cloud success, changed matches or coverage | Save and display the returned matches/coverage | Keep the form open and explain that the latest saved matches changed since Review |
-| Cloud transport, matching, or response validation failure | Save the reviewed copy locally; preserve its coverage | Keep the form open; say that the device copy uses reviewed matches and cloud save could not be confirmed; offer Save again |
+| Matching failed, but a valid persistence receipt and unresolved rows were returned | Save and display the persisted unresolved rows with unknown coverage | Keep the form open; explain that storage succeeded but ingredient matching failed; offer Save again |
+| Cloud transport/persistence failure, missing receipt, or response validation failure | Save the reviewed copy locally; preserve its coverage | Keep the form open; say that the device copy uses reviewed matches and cloud save could not be confirmed; offer Save again |
 | Local write fails after cloud success | Retain the latest cloud matches/coverage in the form | Say the cloud write succeeded but the device write failed; keep entries available for retry |
 | Local write fails without confirmed cloud success | Retain reviewed entries | Report local failure and, for a signed-in attempt, unconfirmed cloud save |
 | Cloud operation is cancelled | Do not start the local write; retain entries | Report cancellation and unconfirmed cloud save |
 
-Cloud and device writes are not an atomic transaction. A transport failure can occur after a server write, and a matching-failed payload can still contain a receipt for stored unresolved rows. The client therefore says **unconfirmed**, rather than promising the cloud record was unchanged. Repeating Save uses the same product ID; no automatic retry occurs.
+Cloud and device writes are not an atomic transaction. A transport failure can occur after a server write, so missing/invalid receipts leave the cloud state **unconfirmed**, rather than promising it was unchanged. A matching-failed payload with a valid receipt is different: persistence is confirmed and its unresolved rows replace the earlier Review matches locally. Repeating Save uses the same product ID; no automatic retry occurs.
 
 ## Successful response validation
 
 Before replacing the Review product, require:
 
-- Contract version 1, `status: ok`, and no failure code.
+- Contract version 1 and recognized status. `status: ok` requires no failure code; `status: failed` may carry a provider failure code but must contain no confirmed matches.
 - A persistence receipt whose `productPath` is exactly `productIngredients/<submitted UUID>`.
 - Exactly one result per submitted ingredient; indexes are precisely `0..<count`, without duplicates or gaps. Transport array order can differ; rows are sorted by index.
 - Original text at each index matches the submitted text exactly, including repeated ingredients.
 - Recognized mapping values. A confirmed mapping must retain a valid confirmed ingredient ID after conversion.
 - Coverage agrees with the converted confirmed rows: none confirmed means unknown, all confirmed means complete, otherwise partial.
+
+Matching failure is reported separately from storage failure. A valid persisted
+failure stays visible even when its rows/coverage already match the device. If
+the device write fails after that response, retain the persisted unresolved rows
+for retry and report both the matching failure and the device-write failure.
 
 Tentative results without a catalog ID remain unresolved with their best-guess warning; they are not promoted to confirmed. Product ID, name, brand, category, source, schema version and raw label are retained by copying the reviewed product and replacing only its ingredient rows. Coverage is display state derived from the response; this change adds no persisted ManualProduct schema field.
 
@@ -48,7 +54,8 @@ Tests exercise the production coordinator and include:
 - Different Review/Save matches and coverage, out-of-order response rows, real local save/reload, retained metadata and raw label.
 - Unchanged success and signed-out local saving.
 - Tentative results without canonical IDs, repeated ingredient text and order.
-- Cloud request failure, failed matching payload, cancellation, device write failure, cloud success followed by device failure, and a successful retry.
+- Cloud request failure, failed matching without a receipt, failed matching with a valid receipt (real file save/reload), cancellation, device write failure, cloud success followed by device failure, and successful retries.
+- Persisted matching failure with invalid receipt, missing/altered rows, inconsistent coverage or contradictory confirmed rows; these retain reviewed local data with unconfirmed-cloud messaging.
 - Missing rows, duplicate/negative indexes, altered text, wrong/missing receipt, inconsistent coverage, wrong contract version, unknown mapping and invalid confirmed IDs.
 
 Existing resolver request/decoding tests run alongside these cases. Tests use temporary device files and injected responses; they do not call a live model or Firestore.
@@ -98,3 +105,48 @@ The second local run used `test-without-building` against the artifacts compiled
 This fixes the local Save/response divergence. Hosted HTTPS/Firebase acceptance, cross-account/session lifecycle work, the separate #115/#112 API conflicts, and the existing CI UI failures remain separate integration work. A passing injected-response test does not establish live model accuracy or deployed persistence acceptance.
 
 PR: https://github.com/Aesthelity-Team/Aesthelity/pull/112
+
+## Latest CI follow-up (November 17, Pacific)
+
+On pushed Save-fix head `01e83e6`, GitHub reports no conflicts and current main
+`0c916f4` is an ancestor. No approving reviews have been submitted; Mia/Belle's
+review remains required.
+
+Dataset run `44241466512` passed. iOS run `44241466506` passed build-for-testing
+and unit tests. All four `ManualProductUITests` passed, including the Save failure
+and retry case and the save/relaunch case. Its overall UI result was still red:
+
+- Four older `AesthelityUITests` failed at the same "Manage routines" assertion.
+  The downloaded result's UI hierarchy shows the account-registration screen.
+  Their helper completes profile setup but never handles the account step, so
+  it does not reach Home. The helper is unchanged from current main.
+- `AesthelityUITestsLaunchTests.testLaunch` failed to terminate the application.
+  The job also logged simulator connection timeouts/service-hub errors.
+
+The separate test-maintenance correction prepared locally makes the four routine tests use the existing
+isolated profile fixture and explicit Explore route, asserting Home before
+opening My Routines. This does not change application behavior or bypass any
+authentication assertions: those four tests exercise routine layout only.
+The independent opt-in live #29 acceptance suite uses real sign-in.
+
+Local validation of this helper correction is in progress. Do not treat the
+overall GitHub UI job as passing or assume its termination error is resolved.
+
+### Mia's persisted matching-failure finding
+
+Mia correctly identified that the initial Save fix rejected `status: failed`
+before checking the persistence receipt. The backend persists matching output
+independently of provider success and can return HTTP 200 with `status: failed`,
+unknown rows and a valid `persisted.productPath`. The old coordinator then saved
+the earlier Review matches on-device, leaving the two copies inconsistent.
+
+The follow-up validates receipt/rows/coverage independently of provider success,
+stores the returned unresolved rows locally, and explicitly reports that
+matching failed although storage succeeded. The original test mistakenly
+asserted the old behavior; it is replaced with a missing-receipt case and a
+persisted-failure regression. Focused signed iOS simulator verification passed:
+**17 tests in two suites**, including the valid persisted failure with real file
+save/reload, five malformed/contradictory failure-response cases, and local-write
+failure followed by retry. Existing Save and resolver regressions also passed.
+Result: `/private/tmp/aesthelity-save112-matching-failure.xcresult`; log:
+`/private/tmp/aesthelity-save112-matching-failure.log`.

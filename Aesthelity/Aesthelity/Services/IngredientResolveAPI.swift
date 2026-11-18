@@ -78,15 +78,16 @@ enum ManualProductSaving {
         var coverage = reviewCoverage
         var note: String?
         var cloudSaved = false
+        var matchingFailed = false
         if let persist {
             do {
                 let response = try await persist()
-                guard response.status != "failed" else {
-                    throw BackendAnalysisAPIError.invalidResponse
-                }
                 let rows = response.ingredients.sorted { $0.index < $1.index }
-                guard response.contractVersion == 1, response.status == "ok",
-                      response.failureCode == nil,
+                // Matching and persistence are independent: the backend can
+                // store unresolved rows even when its matching provider fails.
+                guard response.contractVersion == 1,
+                      response.status == "ok" || response.status == "failed",
+                      response.status == "failed" || response.failureCode == nil,
                       response.persisted?.productPath == "productIngredients/\(reviewed.id.uuidString)",
                       rows.count == reviewed.ingredients.count,
                       rows.map(\.index) == Array(reviewed.ingredients.indices),
@@ -102,13 +103,17 @@ enum ManualProductSaving {
                 guard zip(rows, ingredients).allSatisfy({ pair in
                     pair.0.mapping != "confirmed" || pair.1.mapping == .confirmed
                 }),
+                      response.status != "failed" || confirmed == 0,
                       response.coverage == expectedCoverage else {
                     throw BackendAnalysisAPIError.invalidResponse
                 }
                 product.ingredients = ingredients
                 coverage = response.coverage
                 cloudSaved = true
-                if ingredients != reviewed.ingredients || coverage != reviewCoverage {
+                matchingFailed = response.status == "failed"
+                if matchingFailed {
+                    note = "Saved the unresolved ingredient rows on this device and to the cloud. Ingredient matching failed; the saved rows and coverage are shown here. Your entries are still here; try Save again to retry matching."
+                } else if ingredients != reviewed.ingredients || coverage != reviewCoverage {
                     note = "Saved on this device and to the cloud. Matching changed since Review; the latest saved matches and coverage are shown here."
                 }
             } catch {
@@ -124,7 +129,7 @@ enum ManualProductSaving {
             return ManualProductSaveOutcome(product: product, coverage: coverage, note: note, error: nil)
         } catch {
             let message = cloudSaved
-                ? "The ingredient list was saved to the cloud, but this device could not save your product. The latest cloud matches and your entries are still here. Try Save again."
+                ? "\(matchingFailed ? "Ingredient matching failed. " : "")The ingredient list was saved to the cloud, but this device could not save your product. The latest cloud rows and your entries are still here. Try Save again."
                 : "Your product could not be saved on this device. Your entries are still here.\(persist == nil ? "" : " Cloud save could not be confirmed.") Try Save again."
             return ManualProductSaveOutcome(product: product, coverage: coverage, note: nil, error: message)
         }
