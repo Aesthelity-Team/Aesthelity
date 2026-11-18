@@ -17,8 +17,43 @@ struct LayeringGuidanceTests {
         #expect(!result.isIncomplete)
         #expect(result.steps.map(\.name) == ["Wash", "Serum", "Cream", "SPF"])
         #expect(result.steps.map(\.id) == inputs.reversed().map(\.id))
-        #expect(result.steps.allSatisfy { !$0.explanation.isEmpty })
+        #expect(result.steps.first?.explanation == "Cleansing comes before leave-on products.")
+        #expect(result.steps.allSatisfy { !$0.explanation.contains("Order unknown") })
         #expect(inputs.first?.title == "SPF")
+    }
+
+    @Test func uncertainPMRoutineUsesUnknownCopyForEveryRow() {
+        let inputs = [step("SPF", .sunscreen), step("Wash", .cleanser)]
+        let result = LayeringGuidance.evaluate(inputs, period: .pm)
+        #expect(result.isIncomplete)
+        #expect(result.steps.map(\.id) == inputs.map(\.id))
+        #expect(result.steps.map(\.name) == ["SPF", "Wash"])
+        #expect(result.steps.allSatisfy {
+            $0.explanation == "Order unknown. Product type, ingredient coverage, or directions are insufficient for a suggestion."
+        })
+    }
+
+    @Test(arguments: ["cleanser_gel", "obf-legacy-live"])
+    func legacyCatalogProvenanceRecognizesBundledFictionalIDs(_ id: String) throws {
+        let product = DemoProduct(id: id, name: "Saved product", brand: "Fixture",
+                                  category: .cleanser, subtype: "gel", ingredients: ["Water"])
+        var body = try #require(JSONSerialization.jsonObject(
+            with: JSONEncoder().encode(RoutineProductSnapshot(product))
+        ) as? [String: Any])
+        body.removeValue(forKey: "category")
+        body.removeValue(forKey: "isFictional")
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let legacy = try JSONDecoder().decode(RoutineProductSnapshot.self, from: data)
+        #expect(legacy.isFictional == nil)
+        #expect(legacy.provenance == (id == "cleanser_gel" ? "Fictional demo catalog" : "Catalog product"))
+        #expect(LayeringGuidance.evaluate([legacy.step], period: .am).isIncomplete)
+    }
+
+    @Test func explicitLiveMetadataTakesPriorityOverLegacyFictionalLookup() {
+        let product = DemoProduct(id: "cleanser_gel", name: "Live product", brand: "Fixture",
+                                  category: .cleanser, subtype: "gel", ingredients: ["Water"],
+                                  isFictional: false)
+        #expect(RoutineProductSnapshot(product).provenance == "Catalog product")
     }
 
     @Test func multipleTreatmentsRetainRelativeOrderWithCaution() {
@@ -34,7 +69,7 @@ struct LayeringGuidanceTests {
         let result = LayeringGuidance.evaluate(inputs, period: .am)
         #expect(result.isIncomplete)
         #expect(result.steps.map(\.id) == inputs.map(\.id))
-        #expect(result.steps.last?.explanation.contains("Order unknown") == true)
+        #expect(result.steps.allSatisfy { $0.explanation.hasPrefix("Order unknown.") })
     }
 
     @Test(arguments: [DemoProductCategory.toner, .mist, .mask])

@@ -11,7 +11,8 @@ struct LayeringGuidance {
     let isIncomplete: Bool
     let cautions: [String]
 
-    static let sourceURL = URL(string: "https://www.aad.org/public/everyday-care/skin-care-basics/care/apply-skin-care-certain-order")!
+    static let sourceURL = URL(string: "https://www.aad.org/public/everyday-care/skin-care-basics/care/apply-skin-care-certain-order")
+    private static let unknownOrderExplanation = "Order unknown. Product type, ingredient coverage, or directions are insufficient for a suggestion."
     static let disclaimer = "General guidance only. Follow product directions and your clinician’s advice. Application order does not establish compatibility or guarantee safety."
 
     private enum Stage: Int {
@@ -62,7 +63,9 @@ struct LayeringGuidance {
         return Self(
             steps: ordered.map { _, step, stage in
                 Step(id: step.id, name: step.title,
-                     explanation: stage?.explanation ?? "Order unknown. Product type, ingredient coverage, or directions are insufficient for a suggestion.")
+                     explanation: incomplete
+                        ? unknownOrderExplanation
+                        : stage?.explanation ?? unknownOrderExplanation)
             },
             isIncomplete: incomplete,
             cautions: cautions

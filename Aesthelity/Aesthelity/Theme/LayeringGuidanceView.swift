@@ -22,8 +22,10 @@ struct LayeringGuidanceView: View {
                 Text(caution).font(.caption)
             }
             Text(LayeringGuidance.disclaimer).font(.caption)
-            Link("Source · American Academy of Dermatology", destination: LayeringGuidance.sourceURL)
-                .font(.caption)
+            if let sourceURL = LayeringGuidance.sourceURL {
+                Link("Source · American Academy of Dermatology", destination: sourceURL)
+                    .font(.caption)
+            }
         }
         .foregroundStyle(Constants.semanticInkPrimary)
         .padding(14)
