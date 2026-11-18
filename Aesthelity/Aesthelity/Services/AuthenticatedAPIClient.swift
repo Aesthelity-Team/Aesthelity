@@ -34,9 +34,23 @@ struct AuthenticatedAPIClient {
          transport: @escaping Transport = { request in
              try await PrivateAPISession.session.data(for: request, delegate: NoAPIRedirects())
          }) throws {
-        guard baseURL.scheme?.lowercased() == "https", baseURL.host != nil,
-              baseURL.user == nil, baseURL.password == nil,
-              baseURL.query == nil, baseURL.fragment == nil else {
+        let scheme = baseURL.scheme?.lowercased()
+        let host = baseURL.host?.lowercased()
+        let isHTTPS = scheme == "https"
+
+        #if DEBUG
+        let isLocalHTTP = scheme == "http"
+            && ["127.0.0.1", "localhost", "::1", "[::1]"].contains(host ?? "")
+        #else
+        let isLocalHTTP = false
+        #endif
+
+        guard (isHTTPS || isLocalHTTP),
+              host != nil,
+              baseURL.user == nil,
+              baseURL.password == nil,
+              baseURL.query == nil,
+              baseURL.fragment == nil else {
             throw APIClientError.configuration
         }
         self.baseURL = baseURL

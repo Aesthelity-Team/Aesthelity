@@ -188,11 +188,7 @@ private struct PersonalAnalysisResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if result.hasIncompleteAssessment {
-                AnalysisIncompleteCard(coverage: result.coverage)
-            } else {
-                Text("Assessment").font(.headline)
-            }
+            AnalysisCoverageCard(response: result)
             if result.showsNoFindings {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(AnalysisResponsePayload.noFindingsTitle).font(.headline)

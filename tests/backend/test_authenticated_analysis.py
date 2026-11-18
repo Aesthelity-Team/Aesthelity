@@ -88,7 +88,6 @@ VALID_CAUTION_PAYLOAD = {
 # Test helpers
 # ---------------------------------------------------------------------------
 
-
 def _make_server(demo_mode: bool = False) -> AnalysisHTTPServer:
     """Spin up an AnalysisHTTPServer on a random loopback port.
 
@@ -227,40 +226,23 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
     # Happy-path: authenticated requests return correct analysis results
     # ------------------------------------------------------------------
 
-    def test_valid_token_no_findings_returns_200_with_correct_contract(self):
-        """
-        STEP 2a — Happy path, no findings.
-
-        A signed-in user sends a valid routine that has approved-reference coverage
-        and no conflicts. The server should return 200 with contractVersion=1,
-        ruleVersion, period matching the request, and outcome="noFindings".
-        """
-        payload = {
-            "contractVersion": 1,
-            "period": "am",
-            "recordedAllergies": {"status": "known", "ingredientIDs": []},
-            "products": [
-                {
-                    "productID": "serum_hydrating",
-                    "listStatus": "complete",
-                    "catalogVersion": 3,
-                    "ingredients": [
-                        {"originalText": "Retinol", "mapping": "confirmed", "ingredientID": "retinol"},
-                        {"originalText": "Water", "mapping": "confirmed", "ingredientID": "water"},
-                    ],
-                }
-            ],
-        }
-        status, body = _request(self.server, "POST", body=payload)
+    def test_valid_token_without_relevant_references_fails_closed(self):
+        """A routine with no relevant approved references returns unknown."""
+        status, body = _request(self.server, "POST", body=VALID_NORMAL_PAYLOAD)
 
         self.assertEqual(status, 200)
         self.assertEqual(body["contractVersion"], 1)
-        self.assertEqual(body["ruleVersion"], "ai-analysis-v1")
+        self.assertIn("ruleVersion", body)
         self.assertEqual(body["period"], "am")
-        self.assertEqual(body["outcome"], "noFindings")
-        self.assertEqual(body["completeness"], "complete")
         self.assertEqual(body["productIDs"], ["serum_hydrating"])
-        self.assertEqual(body["findings"], [])
+        self.assertEqual(body["outcome"], "unknown")
+        self.assertEqual(body["completeness"], "incomplete")
+        self.assertEqual(body["findings"][0]["outcome"], "unknown")
+        self.assertEqual(
+            body["findings"][0]["ruleID"],
+            "coverage.ai-analysis-unavailable",
+        )
+        self.assertEqual(body["coverage"]["status"], "incomplete")
         self.assertIn("limitations", body)
 
     def test_valid_token_caution_routine_returns_200_with_findings(self):
@@ -485,6 +467,7 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         }
         status, body = _request(self.server, "POST", body=payload)
         self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "empty-products")
 
     def test_duplicate_product_ids_returns_400(self):
         """Duplicate productIDs in a single request must be rejected."""
@@ -502,6 +485,7 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
         }
         status, body = _request(self.server, "POST", body=payload)
         self.assertEqual(status, 400)
+        self.assertEqual(body["error"]["code"], "duplicate-product-id")
 
     # ------------------------------------------------------------------
     # Demo-mode bypass is NOT available for the analysis endpoint itself
@@ -574,10 +558,12 @@ class AuthenticatedAnalysisEndpointTests(unittest.TestCase):
             status, body = _request(self.server, "POST", body=VALID_NORMAL_PAYLOAD)
             self.assertEqual(status, 500)
             self.assertEqual(body["error"]["code"], "INTERNAL_ERROR")
-            self.assertEqual(body["error"]["message"], "The analysis could not be completed.")
+            self.assertEqual(
+                body["error"]["message"],
+                "The analysis could not be completed.",
+            )
             self.assertNotIn("internal crash detail", json.dumps(body))
             self.assertIn("requestID", body["error"])
-
     def test_production_auth_verifies_with_check_revoked_true(self):
         """
         When token_verifier is not injected (production configuration), the

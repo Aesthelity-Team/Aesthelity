@@ -43,6 +43,7 @@
 			membershipExceptions = (
 				Info.plist,
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/AnalysisCoverageTests.swift,
 				Tests/AesthelityTests/AnalysisFindingsTests.swift,
 				Tests/AesthelityTests/Fixtures/incomplete_unknown.json,
 				Tests/AesthelityTests/Fixtures/supported_finding.json,
@@ -73,6 +74,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/AnalysisCoverageTests.swift,
 				Tests/AesthelityTests/AnalysisFindingsTests.swift,
 				Tests/AesthelityTests/Fixtures/incomplete_unknown.json,
 				Tests/AesthelityTests/Fixtures/supported_finding.json,

@@ -616,25 +616,38 @@ public struct LabeledButton: View {
 // MARK: - Analysis results
 
 
-struct AnalysisIncompleteCard: View {
-    let coverage: AnalysisCoveragePayload?
+struct AnalysisCoverageCard: View {
+    let response: AnalysisResponsePayload
+
+    private var isComplete: Bool { !response.hasIncompleteAssessment }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Label(AnalysisResponsePayload.incompleteTitle, systemImage: "exclamationmark.triangle")
-                .font(.headline)
-            Text("Some information needed for the assessment was unavailable.")
-                .font(.subheadline)
-            if let count = coverage?.unknownIngredientCount, count > 0 {
-                Text(count == 1 ? "1 unverified ingredient" : "\(count) unverified ingredients")
+            Label(
+                isComplete ? "Complete Data Coverage" : "Limited Data Coverage",
+                systemImage: isComplete ? "checkmark.shield" : "exclamationmark.triangle"
+            )
+            .font(.headline)
+
+            if !isComplete {
+                Text(AnalysisResponsePayload.incompleteTitle)
+                    .font(.subheadline.weight(.semibold))
+                Text("Some information needed for the assessment was unavailable or could not be verified.")
+                    .font(.subheadline)
+                if let count = response.coverage?.unknownIngredientCount, count > 0 {
+                    Text(count == 1 ? "1 unverified ingredient" : "\(count) unverified ingredients")
+                        .font(.caption)
+                }
+                Text("Unverified ingredients are marked as unknown and cannot be evaluated as safe.")
                     .font(.caption)
             }
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .foregroundStyle(AppTheme.Semantic.inkPrimary)
-        .background(.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+        .background((isComplete ? Color.green : Color.orange).opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
         .background(AppTheme.Semantic.surfaceBase, in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityIdentifier("coverage-card")
     }
 }
 

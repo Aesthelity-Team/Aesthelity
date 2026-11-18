@@ -87,10 +87,20 @@ struct AnalysisResponsePayload: Codable {
     let limitations: [String]
     let displayLabel: String?
     var coverage: AnalysisCoveragePayload? = nil
+    let summary: String?
 
     fileprivate enum CodingKeys: String, CodingKey {
         case contractVersion, ruleVersion, period, activeCatalogVersion, outcome
-        case completeness, productIDs, findings, limitations, displayLabel, coverage
+        case completeness, productIDs, findings, limitations, displayLabel, coverage, summary
+    }
+
+    var hasCompleteCoverage: Bool {
+        coverage.map { $0.status == .known(.complete) }
+            ?? (completeness == .known(.complete))
+    }
+
+    var isLimitedCoverage: Bool {
+        !hasCompleteCoverage
     }
 
     var hasIncompleteAssessment: Bool {
@@ -132,10 +142,11 @@ extension AnalysisResponsePayload {
             )
         }
         displayLabel = try values.decodeIfPresent(String.self, forKey: .displayLabel)
+        summary = try values.decodeIfPresent(String.self, forKey: .summary)
     }
 }
 
-struct AnalysisFindingPayload: Codable {
+struct AnalysisFindingPayload: Codable, Equatable {
     let ruleID: String
     let ruleStatus: AnalysisValue<AnalysisRuleStatus>
     let outcome: AnalysisValue<AnalysisFindingOutcome>
@@ -147,6 +158,7 @@ struct AnalysisFindingPayload: Codable {
     let explanation: String
     let reason: String
     let limitations: [String]
+
     let findingID: String?
     let evidence: [AnalysisEvidencePayload]?
     let reasonCode: String?
@@ -157,6 +169,10 @@ struct AnalysisFindingPayload: Codable {
         case ruleID, ruleStatus, outcome, categoryID, severity, productIDs, ingredientIDs
         case matchedClassIDs, explanation, reason, limitations, findingID, evidence
         case reasonCode, originalText, rowIndex
+    }
+
+    var isUnknownOrCoverageGap: Bool {
+        outcome == .known(.unknown) || categoryID == "coverage-gap"
     }
 
     var isSupported: Bool {
@@ -257,7 +273,7 @@ struct AnalysisCoveragePayload: Codable {
     }
 }
 
-struct AnalysisEvidencePayload: Codable {
+struct AnalysisEvidencePayload: Codable, Equatable {
     let referenceID: String
     let referenceVersion: Int
     let source: Source
@@ -267,7 +283,7 @@ struct AnalysisEvidencePayload: Codable {
         case referenceID, referenceVersion, source, claim
     }
 
-    struct Source: Codable {
+    struct Source: Codable, Equatable {
         let title: String
         let publisher: String
         let url: String
@@ -289,6 +305,7 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
     case noFindingAM
     case allergyMatch
     case partialProduct
+    case unavailableProduct
 
     var id: String { rawValue }
 
@@ -298,13 +315,14 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
         case .noFindingAM: return "No findings · AM"
         case .allergyMatch: return "Recorded allergy"
         case .partialProduct: return "Partial ingredient list"
+        case .unavailableProduct: return "Unavailable ingredient list"
         }
     }
 
     var period: String {
         switch self {
         case .noFindingAM: return "am"
-        case .cautionPM, .allergyMatch, .partialProduct: return "pm"
+        case .cautionPM, .allergyMatch, .partialProduct, .unavailableProduct: return "pm"
         }
     }
 
@@ -314,6 +332,7 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
         case .noFindingAM: return ["cleanser_gel", "serum_vitamin_c", "moisturizer_gel", "sunscreen_mineral"]
         case .allergyMatch: return ["mist_fragranced"]
         case .partialProduct: return ["mask_partial"]
+        case .unavailableProduct: return ["sunscreen_unknown"]
         }
     }
 
@@ -331,6 +350,8 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
             return "Demo profile records limonene as an allergy; this is not your saved profile."
         case .partialProduct:
             return "Uses the Firestore mask_partial record. Its ingredient list is explicitly partial."
+        case .unavailableProduct:
+            return "Uses the Firestore sunscreen_unknown record. Its ingredient list is completely unavailable."
         }
     }
 }

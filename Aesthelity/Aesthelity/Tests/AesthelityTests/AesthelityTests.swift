@@ -1638,6 +1638,7 @@ struct AuthenticatedAPIClientTests {
         }, transport: { request in
             requests += 1
             #expect(request.url?.path == "/api/v1/analyses")
+            #expect(request.timeoutInterval == 30)
             #expect(request.httpMethod == "POST")
             #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token-\(requests)")
             #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
@@ -1690,9 +1691,21 @@ struct AuthenticatedAPIClientTests {
         }
     }
 
+    @Test(arguments: ["127.0.0.1", "localhost", "[::1]"])
+    func loopbackHTTPIsRestrictedToDebugDemos(host: String) throws {
+        let loopback = try #require(URL(string: "http://\(host):8765"))
+        #if DEBUG
+        _ = try AuthenticatedAPIClient(baseURL: loopback, token: { "token" })
+        #else
+        #expect(throws: APIClientError.configuration) {
+            try AuthenticatedAPIClient(baseURL: loopback, token: { "token" })
+        }
+        #endif
+    }
+
     @Test func rejectsInsecureConfigurationAndPreservesCancellation() async throws {
         #expect(throws: APIClientError.configuration) {
-            try AuthenticatedAPIClient(baseURL: URL(string: "http://127.0.0.1:8765")!, token: { "token" })
+            try AuthenticatedAPIClient(baseURL: URL(string: "http://api.example.com")!, token: { "token" })
         }
         let client = try AuthenticatedAPIClient(baseURL: url, token: { "token" }, transport: { _ in throw URLError(.cancelled) })
         await #expect(throws: CancellationError.self) {
@@ -1877,8 +1890,20 @@ struct AccountDataAPITests {
         let normalizer = try IngredientNormalizer(catalog: .loadBundled())
         let step = RoutineStepItem(stepNumber: 1, title: "Unknown product", subtitle: "", state: .incomplete)
         let payload = PersonalAnalysisInput.make(steps: [step], period: .am, normalizer: normalizer)
-        let response = AnalysisResponsePayload(contractVersion: 1, ruleVersion: "AN-02-v1", period: "am", activeCatalogVersion: normalizer.catalogVersion,
-                                               outcome: .known(.noFindings), completeness: .known(.incomplete), productIDs: [step.id.uuidString], findings: [], limitations: ["Missing ingredient list"], displayLabel: nil)
+        let response = AnalysisResponsePayload(
+            contractVersion: 1,
+            ruleVersion: "AN-02-v1",
+            period: "am",
+            activeCatalogVersion: normalizer.catalogVersion,
+            outcome: .known(.noFindings),
+            completeness: .known(.incomplete),
+            productIDs: [step.id.uuidString],
+            findings: [],
+            limitations: ["Missing ingredient list"],
+            displayLabel: nil,
+            coverage: nil,
+            summary: nil
+        )
         let routineID = UUID()
         let saved = SavedPersonalAnalysis(schemaVersion: 1, routineID: routineID, request: payload, response: response,
                                           productNames: [step.id.uuidString: step.title], savedAt: Date())

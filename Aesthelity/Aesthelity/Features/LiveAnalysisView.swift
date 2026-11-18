@@ -121,7 +121,7 @@ struct LiveAnalysisView: View {
     @ViewBuilder
     private func resultSection(_ live: LiveAnalysisResult) -> some View {
         let response = live.response
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("API result")
                     .font(.system(size: 18, weight: .bold))
@@ -136,14 +136,12 @@ struct LiveAnalysisView: View {
                     .clipShape(Capsule())
             }
 
+            AnalysisCoverageCard(response: response)
+
             Text("Products: " + response.productIDs.map { live.productNames[$0] ?? $0 }.joined(separator: " · "))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(AppTheme.Semantic.inkBrand)
                 .fixedSize(horizontal: false, vertical: true)
-
-            if response.hasIncompleteAssessment {
-                AnalysisIncompleteCard(coverage: response.coverage)
-            }
 
             if response.showsNoFindings {
                 findingCard(
@@ -166,6 +164,10 @@ struct LiveAnalysisView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Rule version \(response.ruleVersion) · Ingredient catalog v\(response.activeCatalogVersion)")
                     .font(.system(size: 11, weight: .medium))
+                if let summary = response.summary {
+                    Text(summary)
+                        .font(.system(size: 11))
+                }
                 ForEach(Array((response.limitations + (response.coverage?.limitations ?? [])).enumerated()), id: \.offset) { _, limitation in
                     Text(limitation)
                         .font(.system(size: 11))

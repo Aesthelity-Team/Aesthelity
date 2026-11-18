@@ -337,9 +337,13 @@ The document ID must equal `referenceID`. The backend loads only records with
 | `updatedBy` | string | Required; authorized editor's team identity |
 
 Canonical ingredient records remain owned by the shared ingredient catalog
-and normalization work. The analysis backend uses those records and should
-not create a competing canonical catalog here.
+and normalization work. The analysis backend passes those records to the AI
+module; it should not create a second, competing canonical catalog here.
 
 ## Analysis record access
 
-The backend loader reads the approved contract and references from Firestore each time it is called, so an authorized update is available on the next read. The existing analysis endpoint still uses the bundled evaluator. AI analysis integration will call this loader behind a feature flag after the AI engine and ingredient normalization work are available. The app client must not write these shared records. Team edits use authorized administrative access; do not expose a public endpoint for changing approved contracts or references.
+The API reads the approved contract and approved analysis references from
+Firestore for each analysis request, so an authorized update is available on
+the next request. The app client must not write these shared records. Team
+edits use authorized administrative access; do not expose a public endpoint
+for changing approved contracts or references.

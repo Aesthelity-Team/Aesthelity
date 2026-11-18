@@ -4,14 +4,34 @@ import Foundation
 /// Separate from the token-free loopback demo configuration. An empty value
 /// deliberately leaves account operations unavailable until HTTPS is deployed.
 enum ProtectedAPIConfiguration {
-    @MainActor static func baseURL(bundle: Bundle = .main) throws -> URL {
-        guard let value = bundle.object(forInfoDictionaryKey: "AesthelityProtectedAPIBaseURL") as? String,
-              !value.isEmpty, let url = URL(string: value),
-              url.scheme?.lowercased() == "https", url.host != nil,
-              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
-            throw APIClientError.configuration
-        }
-        return url
+@MainActor static func baseURL(bundle: Bundle = .main) throws -> URL {
+    guard let value = bundle.object(forInfoDictionaryKey: "AesthelityProtectedAPIBaseURL") as? String,
+          !value.isEmpty,
+          let url = URL(string: value) else {
+        throw APIClientError.configuration
+    }
+
+    let scheme = url.scheme?.lowercased()
+    let host = url.host?.lowercased()
+    let isHTTPS = scheme == "https"
+
+    #if DEBUG
+    let isLocalHTTP = scheme == "http"
+        && ["127.0.0.1", "localhost", "::1", "[::1]"].contains(host ?? "")
+    #else
+    let isLocalHTTP = false
+    #endif
+
+    guard (isHTTPS || isLocalHTTP),
+          host != nil,
+          url.user == nil,
+          url.password == nil,
+          url.query == nil,
+          url.fragment == nil else {
+        throw APIClientError.configuration
+    }
+
+    return url
     }
 }
 
