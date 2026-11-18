@@ -1638,6 +1638,7 @@ struct AuthenticatedAPIClientTests {
         }, transport: { request in
             requests += 1
             #expect(request.url?.path == "/api/v1/analyses")
+            #expect(request.timeoutInterval == 30)
             #expect(request.httpMethod == "POST")
             #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer token-\(requests)")
             #expect(request.value(forHTTPHeaderField: "Content-Type") == "application/json")
