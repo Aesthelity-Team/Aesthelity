@@ -326,6 +326,15 @@ def _context_for(
     }
 
 
+def _recorded_allergy_matches(
+    reference: Mapping[str, Any], context: Mapping[str, Any], ingredient_ids: set[str],
+) -> set[str]:
+    allergies = context.get("recordedAllergies", {})
+    if allergies.get("status") != "known":
+        return set()
+    return ingredient_ids.intersection(reference["canonicalIngredientIDs"], allergies.get("ingredientIDs", []))
+
+
 def _reference_matches_routine(reference: Mapping[str, Any], context: Mapping[str, Any]) -> bool:
     criteria = reference["matchCriteria"]
     products = context["products"]
@@ -346,10 +355,8 @@ def _reference_matches_routine(reference: Mapping[str, Any], context: Mapping[st
     expected_coapplication = criteria.get("coapplication")
     if expected_coapplication and context.get("coapplication", "unknown") != expected_coapplication:
         return False
-    if criteria.get("recordedAllergyRequired"):
-        allergies = context.get("recordedAllergies", {})
-        if allergies.get("status") != "known" or not (set(allergies.get("ingredientIDs", [])) & ingredient_ids):
-            return False
+    if criteria.get("recordedAllergyRequired") and not _recorded_allergy_matches(reference, context, ingredient_ids):
+        return False
     for expected in criteria.get("formulations", []):
         if not isinstance(expected, Mapping):
             return False
@@ -436,8 +443,17 @@ def _validate_model_output(value: Any, context: dict[str, Any]) -> list[dict[str
         categories = {ref["categoryID"] for ref in source_refs}
         if len(severities) != 1 or len(categories) != 1:
             raise AIAnalysisProviderError("conflicting_reference_metadata")
-        permitted_ids = {ingredient_id for ref in source_refs for ingredient_id in ref["canonicalIngredientIDs"]}
-        permitted_classes = {class_id for ref in source_refs for class_id in ref["canonicalIngredientClasses"]}
+        permitted_ids = set()
+        permitted_classes = set()
+        for ref in source_refs:
+            if ref["matchCriteria"].get("recordedAllergyRequired"):
+                matched_ids = _recorded_allergy_matches(ref, context, set(ingredient_ids))
+                if not matched_ids:
+                    raise AIAnalysisProviderError("unsupported_ingredient_link")
+                permitted_ids.update(matched_ids)
+            else:
+                permitted_ids.update(ref["canonicalIngredientIDs"])
+                permitted_classes.update(ref["canonicalIngredientClasses"])
         input_classes = {
             row["ingredientID"]: set(row["classes"])
             for product in context["products"] for row in product["ingredients"]

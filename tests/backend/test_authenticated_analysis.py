@@ -23,6 +23,8 @@ ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
 from Backend.analysis_api import AnalysisHTTPServer, _public_analysis_body  # noqa: E402
+from Backend.seed_analysis_references import CONTRACT  # noqa: E402
+from Backend.seed_demo_references import REFERENCES_V1_1  # noqa: E402
 from analysis_engine.product_input import load_alias_catalog  # noqa: E402
 
 CATALOG_PATH = (
@@ -674,6 +676,63 @@ class AIAnalysisEndpointTests(unittest.TestCase):
         self.assertTrue(finding["evidence"][0]["source"]["url"].startswith("https://"))
         self.assertEqual(set(body["coverage"]), set(fixture["coverage"]))
         self.assertEqual(body["coverage"]["status"], "complete")
+
+    def test_linalool_reference_requires_exact_recorded_allergy(self) -> None:
+        reference = next(ref for ref in REFERENCES_V1_1 if ref["referenceID"] == "allergy.recorded-linalool")
+        product_id = "manual-demo-serum"
+
+        def generate(context):
+            self.assertEqual([ref["referenceID"] for ref in context["approvedReferences"]], [reference["referenceID"]])
+            if "linalool" not in context["recordedAllergies"].get("ingredientIDs", []):
+                return {"assessment": "no_findings", "findings": []}
+            return {
+                "assessment": "findings",
+                "findings": [{
+                    "referenceIDs": [reference["referenceID"]],
+                    "outcome": "allergen",
+                    "productIDs": [product_id],
+                    "ingredientIDs": ["linalool"],
+                    "explanation": "This product lists linalool, which is recorded as an allergy.",
+                    "reason": "The confirmed ingredient matches the recorded allergy.",
+                }],
+            }
+
+        scenarios = [
+            (["Linalool"], {"status": "known", "ingredientIDs": ["linalool"]}, "findings", "complete"),
+            (["Linalool", "Limonene"], {"status": "known", "ingredientIDs": ["limonene"]}, "noFindings", "complete"),
+            (["Linalool"], {"status": "unknown"}, "unknown", "incomplete"),
+        ]
+        # Isolate the linalool reference. The bundled limonene reference has its own matching rule.
+        with patch("Backend.analysis_api.load_approved_analysis_records", return_value=(CONTRACT, [reference])):
+            with patch.object(self.server.analysis_provider, "generate", side_effect=generate):
+                for labels, allergies, outcome, completeness in scenarios:
+                    with self.subTest(allergies=allergies):
+                        status, body = _request(self.server, "POST", body={
+                            "contractVersion": 1,
+                            "period": "pm",
+                            "recordedAllergies": allergies,
+                            "products": [{
+                                "productID": product_id,
+                                "listStatus": "complete",
+                                "catalogVersion": 3,
+                                "ingredients": [
+                                    {"originalText": label, "mapping": "confirmed", "ingredientID": label.lower()}
+                                    for label in labels
+                                ],
+                            }],
+                        })
+                        self.assertEqual(status, 200)
+                        self.assertEqual(body["outcome"], outcome)
+                        self.assertEqual(body["completeness"], completeness)
+                        if outcome == "findings":
+                            self.assertEqual(len(body["findings"]), 1)
+                            finding = body["findings"][0]
+                            self.assertEqual(finding["outcome"], "allergen")
+                            self.assertEqual(finding["severity"], "high")
+                            self.assertEqual(finding["ingredientIDs"], ["linalool"])
+                            self.assertEqual(finding["evidence"][0]["source"], reference["source"])
+                        else:
+                            self.assertNotIn("allergen", [item["outcome"] for item in body["findings"]])
 
     def test_complete_input_with_no_model_finding(self) -> None:
         self.server.analysis_provider = _NoFindingsProvider()
