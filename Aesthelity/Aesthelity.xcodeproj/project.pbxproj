@@ -42,6 +42,7 @@
 			membershipExceptions = (
 				Info.plist,
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/AnalysisCoverageTests.swift,
 				Tests/AesthelityTests/AuthModelAndValidationTests.swift,
 				Tests/AesthelityTests/AuthServiceAndKeychainTests.swift,
 				Tests/AesthelityTests/CloudSyncAndCatalogSafetyTests.swift,
@@ -67,6 +68,7 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Tests/AesthelityTests/AesthelityTests.swift,
+				Tests/AesthelityTests/AnalysisCoverageTests.swift,
 				Tests/AesthelityTests/AuthModelAndValidationTests.swift,
 				Tests/AesthelityTests/AuthServiceAndKeychainTests.swift,
 				Tests/AesthelityTests/CloudSyncAndCatalogSafetyTests.swift,

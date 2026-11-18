@@ -121,19 +121,16 @@ struct LiveAnalysisView: View {
     @ViewBuilder
     private func resultSection(_ live: LiveAnalysisResult) -> some View {
         let response = live.response
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 14) {
             HStack {
                 Text("API result")
                     .font(.system(size: 18, weight: .bold))
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
-                Text(response.completeness == "complete" ? "Complete input" : "Incomplete input")
-                    .font(.system(size: 11, weight: .semibold))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(response.completeness == "complete" ? Color.green.opacity(0.12) : Color.orange.opacity(0.16))
-                    .clipShape(Capsule())
+                coverageBadge(isComplete: response.hasCompleteCoverage)
             }
+
+            coverageCard(response: response)
 
             Text("Products: " + response.productIDs.map { live.productNames[$0] ?? $0 }.joined(separator: " · "))
                 .font(.system(size: 13, weight: .medium))
@@ -142,22 +139,18 @@ struct LiveAnalysisView: View {
 
             if response.findings.isEmpty {
                 findingCard(
-                    title: response.displayLabel ?? "No findings",
-                    category: "No rule matched",
+                    title: response.displayLabel ?? "No recorded concerns",
+                    category: "Routine check",
                     severity: nil,
-                    explanation: response.completeness == "complete"
-                        ? "No approved v1 rule matched these demo products. This is not a safety guarantee."
-                        : "No approved rule matched the confirmed data, but the assessment is incomplete. Do not treat it as safe."
+                    explanation: response.hasCompleteCoverage
+                        ? "No ingredient interactions or cautions were identified for these verified products. This is not a medical diagnosis or a safety guarantee."
+                        : "No known conflicts were found in the checked data, but the ingredient information is incomplete. Do not treat this routine as safe."
                 )
             } else {
                 ForEach(Array(response.findings.enumerated()), id: \.offset) { _, finding in
                     findingCard(
-                        title: finding.outcome.capitalized,
-                        category: finding.categoryID,
-                        severity: finding.severity,
-                        explanation: finding.explanation,
-                        products: finding.productIDs.map { live.productNames[$0] ?? $0 }.joined(separator: " · "),
-                        reason: finding.reason
+                        finding: finding,
+                        productNames: live.productNames
                     )
                 }
             }
@@ -165,6 +158,10 @@ struct LiveAnalysisView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Rule version \(response.ruleVersion) · Ingredient catalog v\(response.activeCatalogVersion)")
                     .font(.system(size: 11, weight: .medium))
+                if let summary = response.summary {
+                    Text(summary)
+                        .font(.system(size: 11))
+                }
                 ForEach(response.limitations, id: \.self) { limitation in
                     Text(limitation)
                         .font(.system(size: 11))
@@ -179,12 +176,210 @@ struct LiveAnalysisView: View {
         .accessibilityIdentifier("backend-analysis-result")
     }
 
+    private func coverageBadge(isComplete: Bool) -> some View {
+        HStack(spacing: 4) {
+            Image(systemName: isComplete ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                .font(.system(size: 11))
+            Text(isComplete ? "Complete coverage" : "Limited coverage")
+                .font(.system(size: 11, weight: .semibold))
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(isComplete ? Color.green.opacity(0.12) : Color.orange.opacity(0.16))
+        .foregroundStyle(isComplete ? Color.green : Color.orange)
+        .clipShape(Capsule())
+        .accessibilityIdentifier(isComplete ? "coverage-badge-complete" : "coverage-badge-limited")
+    }
+
+    private func coverageCard(response: AnalysisResponsePayload) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                Image(systemName: response.hasCompleteCoverage ? "shield.checkmark.fill" : "shield.slash.fill")
+                    .font(.system(size: 14))
+                    .foregroundStyle(response.hasCompleteCoverage ? Color.green : Color.orange)
+                Text(response.hasCompleteCoverage ? "Complete Data Coverage" : "Limited Data Coverage")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(AppTheme.Semantic.inkPrimary)
+            }
+
+            if response.hasCompleteCoverage {
+                Text("All required product and ingredient information is verified and complete. Findings reflect full routine coverage.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("One or more products have incomplete, unverified, or unavailable ingredient data. Analysis results are limited.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let count = response.coverage?.unknownIngredientCount, count > 0 {
+                    Text("\(count) unverified or unknown ingredient\(count == 1 ? "" : "s") identified.")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.orange)
+                }
+
+                HStack(alignment: .top, spacing: 6) {
+                    Image(systemName: "exclamationmark.shield.fill")
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.orange)
+                    Text("Unverified ingredients are marked as unknown and cannot be evaluated as safe.")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(Color.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(.top, 2)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(response.hasCompleteCoverage ? Color.green.opacity(0.06) : Color.orange.opacity(0.08))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(response.hasCompleteCoverage ? Color.green.opacity(0.2) : Color.orange.opacity(0.3), lineWidth: 1)
+        )
+        .accessibilityIdentifier("coverage-card")
+    }
+
+    private func severityBadge(severity: String) -> some View {
+        let normalized = severity.lowercased()
+        let color: Color = {
+            switch normalized {
+            case "high":
+                return Color.red
+            case "moderate":
+                return Color.orange
+            case "low":
+                return Color.blue
+            default:
+                return AppTheme.Semantic.inkBrand
+            }
+        }()
+
+        return Text(severity.capitalized)
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(color.opacity(0.14))
+            .foregroundStyle(color)
+            .clipShape(Capsule())
+            .accessibilityIdentifier("severity-badge-\(normalized)")
+    }
+
+    private var unknownBadge: some View {
+        Text("Unknown")
+            .font(.system(size: 11, weight: .semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Color.orange.opacity(0.16))
+            .foregroundStyle(Color.orange)
+            .clipShape(Capsule())
+            .accessibilityIdentifier("severity-badge-unknown")
+    }
+
+    private func findingCard(
+        finding: AnalysisFindingPayload,
+        productNames: [String: String]
+    ) -> some View {
+        let isUnknown = finding.isUnknownOrCoverageGap
+        let title: String = {
+            if isUnknown {
+                return "Unknown / Coverage Gap"
+            }
+            return finding.outcome.capitalized
+        }()
+
+        let productsText = finding.productIDs.map { productNames[$0] ?? $0 }.joined(separator: " · ")
+        let ingredientText: String? = {
+            if let original = finding.originalText, !original.isEmpty {
+                return original
+            }
+            if !finding.ingredientIDs.isEmpty {
+                return finding.ingredientIDs.joined(separator: ", ")
+            }
+            return nil
+        }()
+
+        let friendlyReason: String = {
+            switch finding.reason {
+            case "partial-list":
+                return "The product's ingredient list is incomplete."
+            case "unavailable-list":
+                return "The product's ingredient list is unavailable."
+            case "empty-ingredient-list":
+                return "No ingredients are listed for this product."
+            case "normalization-uncertain":
+                return "Ingredient could not be definitively matched against catalog."
+            case "normalization-unknown":
+                return "Ingredient is unrecognized and unverified in the catalog."
+            case "canonical-name-not-found":
+                return "Ingredient is not present in the verified database."
+            case "canonical-name-ambiguous":
+                return "Ingredient name matches multiple substances."
+            default:
+                return finding.reason
+            }
+        }()
+
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(AppTheme.Semantic.inkPrimary)
+                Spacer()
+                if let severity = finding.severity {
+                    severityBadge(severity: severity)
+                } else if isUnknown {
+                    unknownBadge
+                }
+            }
+
+            Text(finding.categoryID.replacingOccurrences(of: "-", with: " ").capitalized)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(AppTheme.Semantic.inkBrand)
+
+            Text(finding.explanation)
+                .font(.system(size: 14))
+                .foregroundStyle(AppTheme.Semantic.inkSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !productsText.isEmpty {
+                detailRow(finding.productIDs.count == 1 ? "Affected product" : "Affected products", value: productsText)
+            }
+
+            if let ingredientText, !ingredientText.isEmpty {
+                detailRow("Affected ingredient", value: ingredientText)
+            }
+
+            if !friendlyReason.isEmpty {
+                detailRow("Why this finding was generated", value: friendlyReason)
+            }
+
+            if isUnknown {
+                HStack(spacing: 5) {
+                    Image(systemName: "exclamationmark.circle.fill")
+                        .font(.system(size: 11))
+                    Text("Unknown data is not verified as safe.")
+                        .font(.system(size: 11, weight: .medium))
+                }
+                .foregroundStyle(Color.orange)
+                .padding(.top, 2)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AppTheme.Semantic.surfaceBase)
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
     private func findingCard(
         title: String,
         category: String,
         severity: String?,
         explanation: String,
         products: String? = nil,
+        ingredients: String? = nil,
         reason: String? = nil
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -194,9 +389,7 @@ struct LiveAnalysisView: View {
                     .foregroundStyle(AppTheme.Semantic.inkPrimary)
                 Spacer()
                 if let severity {
-                    Text(severity.capitalized)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(AppTheme.Semantic.inkBrand)
+                    severityBadge(severity: severity)
                 }
             }
             Text(category.replacingOccurrences(of: "-", with: " ").capitalized)
@@ -208,6 +401,9 @@ struct LiveAnalysisView: View {
                 .fixedSize(horizontal: false, vertical: true)
             if let products, !products.isEmpty {
                 detailRow("Affected products", value: products)
+            }
+            if let ingredients, !ingredients.isEmpty {
+                detailRow("Affected ingredients", value: ingredients)
             }
             if let reason, !reason.isEmpty {
                 detailRow("Why this finding was generated", value: reason)

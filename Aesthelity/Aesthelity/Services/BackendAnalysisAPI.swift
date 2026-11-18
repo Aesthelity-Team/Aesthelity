@@ -18,6 +18,17 @@ struct AnalysisRequestPayload: Encodable {
     let products: [NormalizedProductIngredients]
 }
 
+struct AnalysisCoveragePayload: Decodable {
+    let status: String
+    let unknownIngredientCount: Int
+    let missingReferenceCount: Int
+    let limitations: [String]
+
+    var isComplete: Bool {
+        status == "complete"
+    }
+}
+
 struct AnalysisResponsePayload: Decodable {
     let contractVersion: Int
     let ruleVersion: String
@@ -29,6 +40,47 @@ struct AnalysisResponsePayload: Decodable {
     let findings: [AnalysisFindingPayload]
     let limitations: [String]
     let displayLabel: String?
+    let coverage: AnalysisCoveragePayload?
+    let summary: String?
+
+    init(
+        contractVersion: Int,
+        ruleVersion: String,
+        period: String,
+        activeCatalogVersion: Int,
+        outcome: String,
+        completeness: String,
+        productIDs: [String],
+        findings: [AnalysisFindingPayload],
+        limitations: [String],
+        displayLabel: String?,
+        coverage: AnalysisCoveragePayload? = nil,
+        summary: String? = nil
+    ) {
+        self.contractVersion = contractVersion
+        self.ruleVersion = ruleVersion
+        self.period = period
+        self.activeCatalogVersion = activeCatalogVersion
+        self.outcome = outcome
+        self.completeness = completeness
+        self.productIDs = productIDs
+        self.findings = findings
+        self.limitations = limitations
+        self.displayLabel = displayLabel
+        self.coverage = coverage
+        self.summary = summary
+    }
+
+    var hasCompleteCoverage: Bool {
+        if let coverage {
+            return coverage.isComplete
+        }
+        return completeness == "complete"
+    }
+
+    var isLimitedCoverage: Bool {
+        !hasCompleteCoverage
+    }
 }
 
 struct AnalysisFindingPayload: Decodable {
@@ -43,6 +95,42 @@ struct AnalysisFindingPayload: Decodable {
     let explanation: String
     let reason: String
     let limitations: [String]
+    let originalText: String?
+    let rowIndex: Int?
+
+    init(
+        ruleID: String,
+        ruleStatus: String,
+        outcome: String,
+        categoryID: String,
+        severity: String?,
+        productIDs: [String],
+        ingredientIDs: [String],
+        matchedClassIDs: [String]? = nil,
+        explanation: String,
+        reason: String,
+        limitations: [String],
+        originalText: String? = nil,
+        rowIndex: Int? = nil
+    ) {
+        self.ruleID = ruleID
+        self.ruleStatus = ruleStatus
+        self.outcome = outcome
+        self.categoryID = categoryID
+        self.severity = severity
+        self.productIDs = productIDs
+        self.ingredientIDs = ingredientIDs
+        self.matchedClassIDs = matchedClassIDs
+        self.explanation = explanation
+        self.reason = reason
+        self.limitations = limitations
+        self.originalText = originalText
+        self.rowIndex = rowIndex
+    }
+
+    var isUnknownOrCoverageGap: Bool {
+        outcome == "unknown" || categoryID == "coverage-gap" || ruleStatus == "system-coverage"
+    }
 }
 
 struct LiveAnalysisResult {
@@ -55,6 +143,7 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
     case noFindingAM
     case allergyMatch
     case partialProduct
+    case unavailableProduct
 
     var id: String { rawValue }
 
@@ -64,13 +153,14 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
         case .noFindingAM: return "No findings · AM"
         case .allergyMatch: return "Recorded allergy"
         case .partialProduct: return "Partial ingredient list"
+        case .unavailableProduct: return "Unavailable ingredients"
         }
     }
 
     var period: String {
         switch self {
         case .noFindingAM: return "am"
-        case .cautionPM, .allergyMatch, .partialProduct: return "pm"
+        case .cautionPM, .allergyMatch, .partialProduct, .unavailableProduct: return "pm"
         }
     }
 
@@ -80,6 +170,7 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
         case .noFindingAM: return ["cleanser_gel", "serum_vitamin_c", "moisturizer_gel", "sunscreen_mineral"]
         case .allergyMatch: return ["mist_fragranced"]
         case .partialProduct: return ["mask_partial"]
+        case .unavailableProduct: return ["sunscreen_unknown"]
         }
     }
 
@@ -97,6 +188,8 @@ enum AnalysisDemoScenario: String, CaseIterable, Identifiable {
             return "Demo profile records limonene as an allergy; this is not your saved profile."
         case .partialProduct:
             return "Uses the Firestore mask_partial record. Its ingredient list is explicitly partial."
+        case .unavailableProduct:
+            return "Uses a product whose ingredient list is unverified or unavailable."
         }
     }
 }
