@@ -137,7 +137,7 @@ class AIFeedbackTests(unittest.TestCase):
         self.assertEqual(request_body["model"], "test-model")
         self.assertNotIn("store", request_body)
         self.assertTrue(request_body["response_format"]["json_schema"]["strict"])
-        self.assertEqual(urlopen_mock.call_args.kwargs["timeout"], 30.0)
+        self.assertAlmostEqual(urlopen_mock.call_args.kwargs["timeout"], 20.0, places=1)
 
 
 if __name__ == "__main__":

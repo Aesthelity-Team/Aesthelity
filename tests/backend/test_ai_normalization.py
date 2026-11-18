@@ -5,6 +5,7 @@ import io
 import json
 import os
 import unittest
+from http.client import HTTPResponse
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -376,6 +377,142 @@ class ProviderTransportTests(unittest.TestCase):
         self.assertEqual(provider.fallback_model, DEFAULT_FALLBACK_MODEL)
         self.assertEqual(provider.base_url, "https://openrouter.ai/api/v1")
         self.assertTrue(provider.api_key.startswith("sk-test-"))
+
+    def test_chunked_read_stops_at_wall_clock_deadline(self):
+        clock = {"now": 1_000.0}
+
+        def monotonic():
+            return clock["now"]
+
+        class Drip(HTTPResponse):
+            def __init__(self):
+                self.fp = None
+                self.reads = 0
+                self.requested = []
+                self.status = 200
+
+            def read1(self, amt=-1):
+                self.reads += 1
+                self.requested.append(amt)
+                clock["now"] += 0.05
+                size = 1 if amt is None or amt < 0 else amt
+                return b"x" * size
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        drip = Drip()
+        provider = OpenRouterNormalizationProvider(
+            api_key="test-key",
+            model="slow-model",
+            fallback_model=None,
+            timeout=30.0,
+            deadline_seconds=0.12,
+        )
+        with patch("Backend.ai_normalization.time.monotonic", monotonic), patch(
+            "Backend.ai_normalization.urlopen", return_value=drip
+        ) as urlopen_mock:
+            with self.assertRaises(ProviderError) as caught:
+                provider.complete_messages(
+                    [{"role": "user", "content": "Fictional test"}],
+                    schema={"type": "object"},
+                    schema_name="test",
+                )
+        self.assertAlmostEqual(urlopen_mock.call_args.kwargs["timeout"], 0.12, places=3)
+        self.assertEqual(str(caught.exception), "provider_unavailable")
+        self.assertGreaterEqual(drip.reads, 2)
+        self.assertLess(drip.reads, 20)
+        self.assertTrue(drip.requested)
+        self.assertTrue(all(size is not None and size <= 65_536 for size in drip.requested))
+        self.assertLess(clock["now"], 1_000.12 + 0.2)
+
+    def test_fallback_attempt_uses_remaining_wall_clock_budget(self):
+        clock = {"now": 500.0}
+
+        def monotonic():
+            return clock["now"]
+
+        calls = []
+
+        def transport(url, payload, headers, timeout):
+            calls.append((payload["model"], timeout))
+            if payload["model"] == "primary-model":
+                clock["now"] += 0.07
+                raise ProviderError("provider_unavailable")
+            body = {
+                "choices": [{
+                    "finish_reason": "stop",
+                    "message": {"content": "{}"},
+                }]
+            }
+            return 200, json.dumps(body).encode()
+
+        provider = OpenRouterNormalizationProvider(
+            api_key="test-key",
+            model="primary-model",
+            fallback_model="fallback-model",
+            timeout=30.0,
+            deadline_seconds=0.10,
+            transport=transport,
+        )
+        with patch("Backend.ai_normalization.time.monotonic", monotonic):
+            result = provider.complete_messages(
+                [{"role": "user", "content": "Fictional test"}],
+                schema={"type": "object"},
+                schema_name="test",
+            )
+        self.assertEqual(result, {})
+        self.assertEqual([model for model, _timeout in calls], ["primary-model", "fallback-model"])
+        primary_timeout, fallback_timeout = calls[0][1], calls[1][1]
+        self.assertAlmostEqual(primary_timeout, 0.10, places=3)
+        self.assertAlmostEqual(fallback_timeout, 0.03, places=3)
+        self.assertLess(fallback_timeout, primary_timeout)
+        self.assertLess(sum(timeout for _model, timeout in calls), 30.0)
+        self.assertLess(clock["now"] - 500.0, 0.10)
+
+    def test_response_byte_cap_still_rejects_oversized_body(self):
+        class Endless(HTTPResponse):
+            def __init__(self):
+                self.fp = None
+                self.reads = 0
+                self.total = 0
+                self.status = 200
+
+            def read1(self, amt=-1):
+                self.reads += 1
+                if self.total >= 4_000_000:
+                    return b""
+                size = 1 if amt is None or amt < 0 else amt
+                self.total += size
+                return b"x" * size
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        body = Endless()
+        provider = OpenRouterNormalizationProvider(
+            api_key="test-key",
+            model="big-model",
+            fallback_model=None,
+            timeout=30.0,
+            deadline_seconds=30.0,
+        )
+        with patch("Backend.ai_normalization.urlopen", return_value=body):
+            with self.assertRaises(ProviderError) as caught:
+                provider.complete_messages(
+                    [{"role": "user", "content": "Fictional test"}],
+                    schema={"type": "object"},
+                    schema_name="test",
+                )
+        self.assertEqual(str(caught.exception), "provider_invalid_response")
+        self.assertGreater(body.total, 1_000_000)
+        self.assertLess(body.total, 4_000_000)
 
 
 class EndpointTests(unittest.TestCase):
