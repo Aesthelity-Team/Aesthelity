@@ -186,26 +186,54 @@ private struct PersonalAnalysisResultView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(result.completeness == "complete" ? "Assessment" : "Incomplete assessment").font(.headline)
-            if result.findings.isEmpty {
+            Text(result.hasIncompleteAssessment ? AnalysisResponsePayload.incompleteTitle : "Assessment")
+                .font(.headline)
+            if result.hasIncompleteAssessment && result.findings.isEmpty {
+                Text("Some information needed for the assessment was unavailable.")
+            }
+            if result.showsNoFindings {
                 Text(result.displayLabel ?? "No findings under the current rules")
                 Text("No rule matched the available data. This is not a safety guarantee.")
             }
             ForEach(Array(result.findings.enumerated()), id: \.offset) { _, finding in
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(finding.outcome.capitalized).font(.headline)
+                    Text(finding.outcomeTitle).font(.headline)
+                    if let severity = finding.severityLabel {
+                        Text(severity).font(.subheadline)
+                    }
                     Text(finding.productIDs.map { names[$0] ?? "Product" }.joined(separator: " · "))
                         .font(.subheadline)
                     Text(finding.explanation)
                     Text(finding.reason).font(.caption).foregroundStyle(.secondary)
-                    ForEach(finding.limitations, id: \.self) { Text($0).font(.caption) }
+                    AnalysisFindingDetails(finding: finding)
                 }
                 .padding().background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12))
             }
-            ForEach(result.limitations, id: \.self) { Text($0).font(.caption) }
+            ForEach(result.limitations + (result.coverage?.limitations ?? []), id: \.self) { Text($0).font(.caption) }
             Text("Rules \(result.ruleVersion) · Ingredient reference v\(result.activeCatalogVersion)")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .accessibilityIdentifier("personal-analysis-result")
+    }
+}
+
+
+struct AnalysisFindingDetails: View {
+    let finding: AnalysisFindingPayload
+
+    var body: some View {
+        if !finding.ingredientLabel.isEmpty {
+            Text("Affected ingredients: " + finding.ingredientLabel)
+                .font(.caption)
+        }
+        ForEach(Array((finding.evidence ?? []).enumerated()), id: \.offset) { _, reference in
+            VStack(alignment: .leading, spacing: 3) {
+                Text(reference.source.title).font(.caption.weight(.semibold))
+                Text(reference.source.publisher).font(.caption)
+                Text(reference.claim).font(.caption)
+            }
+            .accessibilityElement(children: .combine)
+        }
+        ForEach(finding.limitations, id: \.self) { Text($0).font(.caption) }
     }
 }

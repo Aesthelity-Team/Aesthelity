@@ -1,0 +1,89 @@
+{
+  "contractVersion": 1,
+  "ruleVersion": "ai-analysis-v1",
+  "catalogSource": "firestore",
+  "analysisVersion": "ai-analysis-v1",
+  "normalizationID": "fixture-normalization-unknown",
+  "normalization": {
+    "contractVersion": 1,
+    "promptVersion": "ingredient-resolve-v1",
+    "providerStatus": "ok",
+    "model": null,
+    "products": [
+      {
+        "productID": "fictional_partial_serum",
+        "listStatus": "partial",
+        "ingredients": [
+          {
+            "index": 0,
+            "originalText": "Mystery Extract",
+            "status": "unknown",
+            "canonicalName": null,
+            "proposedName": null,
+            "reason": "not_in_catalog"
+          }
+        ]
+      }
+    ]
+  },
+  "canonicalDataVersion": 3,
+  "referenceVersion": null,
+  "analysisProviderStatus": "ok",
+  "period": "pm",
+  "activeCatalogVersion": 3,
+  "outcome": "unknown",
+  "completeness": "incomplete",
+  "productIDs": [
+    "fictional_partial_serum"
+  ],
+  "findings": [
+    {
+      "findingID": "fixture-finding-unresolved-row",
+      "ruleID": "coverage.unresolved-input",
+      "ruleStatus": "system-coverage",
+      "outcome": "unknown",
+      "categoryID": "coverage-gap",
+      "productIDs": [
+        "fictional_partial_serum"
+      ],
+      "ingredientIDs": [],
+      "explanation": "Mystery Extract could not be checked against an approved canonical ingredient, and the list is partial.",
+      "reason": "normalization-unknown",
+      "reasonCode": "normalization-unknown",
+      "originalText": "Mystery Extract",
+      "rowIndex": 0,
+      "limitations": [
+        "Unresolved input is not treated as safe or as a confirmed ingredient."
+      ]
+    },
+    {
+      "findingID": "fixture-finding-allergy-unknown",
+      "ruleID": "coverage.allergy-input-unknown",
+      "ruleStatus": "system-coverage",
+      "outcome": "unknown",
+      "categoryID": "coverage-gap",
+      "productIDs": [
+        "fictional_partial_serum"
+      ],
+      "ingredientIDs": [],
+      "explanation": "The routine does not say whether allergies were recorded, so no allergen result is produced.",
+      "reason": "status unknown is not an empty allergy list.",
+      "reasonCode": "allergy-status-unknown",
+      "limitations": [
+        "Unknown allergy status is not a known empty allergy list."
+      ]
+    }
+  ],
+  "coverage": {
+    "status": "incomplete",
+    "unknownIngredientCount": 1,
+    "missingReferenceCount": 0,
+    "limitations": [
+      "Only currently approved reference records were considered."
+    ]
+  },
+  "limitations": [
+    "Informational only. This is not a diagnosis or a safety guarantee."
+  ],
+  "summary": "The assessment is incomplete. Review the coverage details. This is not a safety result."
+}
