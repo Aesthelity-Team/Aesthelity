@@ -8,6 +8,7 @@
 import SwiftUI
 
 public struct MyRoutinesView: View {
+    @State private var showAccountStorage = false
     @ObservedObject public var repository: RoutineRepository = .shared
     
     // State
@@ -35,6 +36,9 @@ public struct MyRoutinesView: View {
         VStack(spacing: 0) {
             // Header
             headerBar
+            Button("Routine account storage") { showAccountStorage = true }
+                .accessibilityIdentifier("routines-account-storage")
+                .padding(.vertical, 8)
             
             if let error = repository.loadError {
                 HStack(spacing: 8) {
@@ -60,6 +64,9 @@ public struct MyRoutinesView: View {
             }
         }
         .background(Color(hex: "#F7F3ED"))
+        .sheet(isPresented: $showAccountStorage) {
+            AccountDataView(scope: .routines, routines: repository)
+        }
         .onAppear {
             repository.load()
         }

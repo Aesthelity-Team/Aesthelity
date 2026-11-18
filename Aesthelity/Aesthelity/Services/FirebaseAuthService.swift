@@ -18,6 +18,8 @@ import UIKit
 public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
     public static let shared = FirebaseAuthService()
 
+    /// Invalidates protected API work even when the same UID signs in again.
+    @Published public private(set) var apiSessionRevision = UUID()
     @Published public private(set) var currentUser: UserAccount?
     @Published public private(set) var userId: String?
     @Published public private(set) var userEmail: String?
@@ -61,6 +63,7 @@ public final class FirebaseAuthService: ObservableObject, AuthServiceProtocol {
         authListenerHandle = Auth.auth().addStateDidChangeListener { [weak self] _, user in
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
+                self.apiSessionRevision = UUID()
                 if let user = user {
                     let account = UserAccount(
                         id: user.uid,

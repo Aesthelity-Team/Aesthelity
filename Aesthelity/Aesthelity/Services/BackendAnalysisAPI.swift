@@ -1,12 +1,11 @@
 import Foundation
-import FirebaseAuth
 
 struct ProductListResponse: Decodable {
     let contractVersion: Int
     let products: [DemoProduct]
 }
 
-struct RecordedAllergiesPayload: Encodable {
+struct RecordedAllergiesPayload: Codable, Equatable {
     let status: String
     let ingredientIDs: [String]?
 
@@ -21,14 +20,14 @@ struct RecordedAllergiesPayload: Encodable {
     }
 }
 
-struct AnalysisRequestPayload: Encodable {
+struct AnalysisRequestPayload: Codable, Equatable {
     let contractVersion: Int
     let period: String
     let recordedAllergies: RecordedAllergiesPayload
     let products: [NormalizedProductIngredients]
 }
 
-struct AnalysisResponsePayload: Decodable {
+struct AnalysisResponsePayload: Codable {
     let contractVersion: Int
     let ruleVersion: String
     let period: String
@@ -41,7 +40,7 @@ struct AnalysisResponsePayload: Decodable {
     let displayLabel: String?
 }
 
-struct AnalysisFindingPayload: Decodable {
+struct AnalysisFindingPayload: Codable {
     let ruleID: String
     let ruleStatus: String
     let outcome: String
@@ -183,22 +182,6 @@ struct BackendAnalysisAPI {
         analysisRequest.httpMethod = "POST"
         analysisRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
-        guard let user = Auth.auth().currentUser else {
-            throw BackendAnalysisAPIError.authenticationRequired
-        }
-
-        let idToken: String
-        do {
-            idToken = try await user.getIDToken()
-        } catch {
-            throw BackendAnalysisAPIError.authenticationTokenUnavailable
-        }
-
-        analysisRequest.setValue(
-            "Bearer \(idToken)",
-            forHTTPHeaderField: "Authorization"
-        )
-
         analysisRequest.httpBody = try encoder.encode(payload)
         let (analysisData, analysisResponse) = try await session.data(for: analysisRequest)
         try requireSuccess(analysisResponse, data: analysisData)
@@ -225,20 +208,52 @@ struct BackendAnalysisAPI {
         token: @escaping () async throws -> String = FirebaseAPITokenProvider.token
     ) async throws -> AnalysisResponsePayload {
         let client = try AuthenticatedAPIClient(baseURL: baseURL, token: token)
+        return try await analyzeAuthenticated(payload: payload, expectedCatalogVersion: expectedCatalogVersion, client: client)
+    }
+
+    /// Uses the session-bound client supplied by AccountDataAPI.
+    @MainActor
+    static func analyzeAuthenticated(
+        payload: AnalysisRequestPayload,
+        expectedCatalogVersion: Int,
+        client: AuthenticatedAPIClient
+    ) async throws -> AnalysisResponsePayload {
         let result = try await client.post(
             ["api", "v1", "analyses"], body: payload, as: AnalysisResponsePayload.self
         )
-        guard result.contractVersion == 1 else { throw APIClientError.invalidResponse }
-        guard result.activeCatalogVersion == expectedCatalogVersion else {
-            throw BackendAnalysisAPIError.catalogVersionMismatch(
-                expected: expectedCatalogVersion, received: result.activeCatalogVersion
-            )
-        }
-        guard result.period == payload.period,
-              Set(result.productIDs) == Set(payload.products.map(\.productID)) else {
-            throw APIClientError.invalidResponse
-        }
+        try AccountDataAPI.validate(result, for: payload, catalogVersion: expectedCatalogVersion)
         return result
     }
 
     func baseURL() throws -> URL {
+        let configured = Bundle.main.object(forInfoDictionaryKey: "AesthelityAPIBaseURL") as? String
+            ?? "http://127.0.0.1:8765"
+        guard let url = URL(string: configured), url.scheme == "http",
+              ["127.0.0.1", "localhost", "[::1]"].contains(url.host ?? ""),
+              url.user == nil, url.password == nil, url.query == nil, url.fragment == nil else {
+            throw BackendAnalysisAPIError.badURL
+        }
+        return url
+    }
+
+    func requireSuccess(_ response: URLResponse, data: Data) throws {
+        guard let http = response as? HTTPURLResponse else {
+            throw BackendAnalysisAPIError.invalidResponse
+        }
+        guard (200..<300).contains(http.statusCode) else {
+            let problem = try? decoder.decode(APIErrorEnvelope.self, from: data)
+            throw BackendAnalysisAPIError.server(
+                status: http.statusCode,
+                message: problem?.error.message ?? "Analysis API request failed (HTTP \(http.statusCode))."
+            )
+        }
+    }
+}
+
+private struct APIErrorEnvelope: Decodable {
+    struct Problem: Decodable {
+        let code: String
+        let message: String
+    }
+    let error: Problem
+}

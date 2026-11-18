@@ -56,6 +56,16 @@ struct SkinProfile: Codable, Equatable {
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        if decoder.userInfo[.protectedAPI] as? Bool == true {
+            let required: [CodingKeys] = [.schemaVersion, .concerns, .avoidedIngredients, .setupStatus]
+            for key in required {
+                guard container.contains(key), try !container.decodeNil(forKey: key) else {
+                    throw DecodingError.keyNotFound(key, .init(codingPath: decoder.codingPath,
+                                                             debugDescription: "Incomplete account record"))
+                }
+            }
+        }
+
         schemaVersion = try container.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         skinType = try container.decodeIfPresent(SkinType.self, forKey: .skinType)
         concerns = try container.decode(Set<Concern>.self, forKey: .concerns)

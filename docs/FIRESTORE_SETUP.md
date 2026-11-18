@@ -122,3 +122,18 @@ this device and that cloud sync is not enabled.
 
 Do not enable `CloudSyncConfiguration.isEnabled` without emulator or
 staging verification of the items above.
+
+## Explicit account transfers (#29)
+
+`CloudSyncConfiguration.isEnabled` still disables automatic Firestore client
+listeners and writes. It does not enable automatic upload during sign-in.
+Users may explicitly save/load profile and routine copies through the protected
+HTTP backend from their respective screens after HTTPS deployment is configured.
+Loading requires confirmation before replacing local data; signing out cancels
+pending transfers and clears downloaded previews/results. Existing local files
+remain on the device when signing out, as before. Signing into another account
+does not automatically upload or associate those local files with that account.
+
+These HTTP requests use backend Admin access to `ogdb` and verified Firebase
+identity. They do not depend on enabling the iOS Firestore sync path or weakening
+client security rules. See the BE-03 acceptance notes for the account-copy schema.

@@ -1,13 +1,18 @@
 import Foundation
 
+extension CodingUserInfoKey {
+    static let protectedAPI = CodingUserInfoKey(rawValue: "Aesthelity.protectedAPI")!
+}
+
 /// Errors expose safe UI copy, never raw server bodies or credentials.
 enum APIClientError: LocalizedError, Equatable {
-    case configuration, signInRequired, forbidden, server(Int), invalidResponse, unavailable
+    case configuration, signInRequired, forbidden, notFound, server(Int), invalidResponse, unavailable
 
     var errorDescription: String? {
         switch self {
         case .configuration: return "A secure backend connection has not been configured."
         case .signInRequired: return "Your session could not be verified. Please sign in again."
+        case .notFound: return "No saved account data was found."
         case .forbidden: return "You do not have access to this data."
         case .server: return "The server could not complete the request. Please try again."
         case .invalidResponse: return "The server returned an unreadable response."
@@ -42,15 +47,33 @@ struct AuthenticatedAPIClient {
     func post<Body: Encodable, Response: Decodable>(
         _ path: [String], body: Body, as: Response.Type
     ) async throws -> Response {
-        guard !path.isEmpty, path.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." && !$0.contains("/") }) else {
-            throw APIClientError.configuration
-        }
+        try await send(path, method: "POST", body: JSONEncoder().encode(body), as: Response.self)
+    }
+
+    func get<Response: Decodable>(_ path: [String], as: Response.Type) async throws -> Response {
+        try await send(path, method: "GET", body: nil, as: Response.self)
+    }
+
+    func put<Body: Encodable, Response: Decodable>(
+        _ path: [String], body: Body, as: Response.Type
+    ) async throws -> Response {
+        try await send(path, method: "PUT", body: JSONEncoder().encode(body), as: Response.self)
+    }
+
+    private func send<Response: Decodable>(
+        _ path: [String], method: String, body: Data?, as: Response.Type
+    ) async throws -> Response {
+        guard !path.isEmpty, path.allSatisfy({ segment in
+            !segment.isEmpty && segment != "." && segment != ".." &&
+            !segment.contains("/") && !segment.contains("\\") && !segment.contains("%") &&
+            !segment.unicodeScalars.contains(where: CharacterSet.controlCharacters.contains)
+        }) else { throw APIClientError.configuration }
         let url = path.reduce(baseURL) { $0.appendingPathComponent($1) }
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 30)
-        request.httpMethod = "POST"
+        request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONEncoder().encode(body)
+        request.httpBody = body
         let credential: String
         do { credential = try await token() }
         catch is CancellationError { throw CancellationError() }
@@ -72,9 +95,14 @@ struct AuthenticatedAPIClient {
         case 200..<300: break
         case 401: throw APIClientError.signInRequired
         case 403: throw APIClientError.forbidden
+        case 404: throw APIClientError.notFound
         default: throw APIClientError.server(http.statusCode)
         }
-        do { return try JSONDecoder().decode(Response.self, from: data) }
+        do {
+            let decoder = JSONDecoder()
+            decoder.userInfo[.protectedAPI] = true
+            return try decoder.decode(Response.self, from: data)
+        }
         catch { throw APIClientError.invalidResponse }
     }
 }
