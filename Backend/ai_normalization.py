@@ -15,7 +15,9 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from collections.abc import Mapping, Sequence
+from http.client import HTTPResponse, IncompleteRead
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
@@ -34,6 +36,11 @@ DEFAULT_BASE_URL = "https://openrouter.ai/api/v1"
 DEFAULT_MODEL = "nvidia/nemotron-3.5-super-vl:free"
 DEFAULT_FALLBACK_MODEL = "google/gemma-4-31b-it:free"
 DEFAULT_TIMEOUT = 30.0
+# iOS AuthenticatedAPIClient gives up at 30s. This budget leaves room for auth,
+# reference reads, and response handling, and it is shared by every model/format
+# attempt plus the chunked body read.
+PROVIDER_DEADLINE_SECONDS = 20.0
+_READ_CHUNK_BYTES = 8192
 MAX_RESPONSE_BYTES = 1_000_000
 OPENAI_HOST_MARKERS = ("api.openai.com",)
 MATCH_STATUSES = ("identified", "tentative", "unknown")
@@ -451,6 +458,7 @@ class OpenRouterNormalizationProvider:
         fallback_model: str | None = DEFAULT_FALLBACK_MODEL,
         base_url: str = DEFAULT_BASE_URL,
         timeout: float = DEFAULT_TIMEOUT,
+        deadline_seconds: float | None = None,
         transport: Any = None,
     ):
         self.api_key = api_key
@@ -458,7 +466,12 @@ class OpenRouterNormalizationProvider:
         self.fallback_model = fallback_model
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
+        if deadline_seconds is None:
+            self.deadline_seconds = min(float(timeout), PROVIDER_DEADLINE_SECONDS)
+        else:
+            self.deadline_seconds = max(0.0, float(deadline_seconds))
         self.last_model = model
+        self._default_transport = transport is None
         self._transport = transport or self._http_post
 
     @classmethod
@@ -493,7 +506,102 @@ class OpenRouterNormalizationProvider:
             headers["X-Title"] = "Aesthelity"
         return headers
 
-    def _http_post(self, url: str, payload: dict[str, Any], headers: dict[str, str], timeout: float) -> tuple[int, bytes]:
+    def _attempt_timeout(self, deadline: float) -> float:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ProviderError("provider_unavailable")
+        return min(self.timeout, remaining)
+
+    def _call_transport(
+        self,
+        url: str,
+        body: dict[str, Any],
+        deadline: float,
+    ) -> tuple[int, bytes]:
+        timeout = self._attempt_timeout(deadline)
+        headers = self._headers()
+        if self._default_transport:
+            return self._http_post(url, body, headers, timeout, deadline)
+        return self._transport(url, body, headers, timeout)
+
+    def _tighten_read_timeout(self, response: Any, deadline: float) -> None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise ProviderError("provider_unavailable")
+        fp = getattr(response, "fp", None)
+        raw = getattr(fp, "raw", None) if fp is not None else None
+        sock = getattr(raw, "_sock", None) if raw is not None else None
+        settimeout = getattr(sock, "settimeout", None)
+        fileno = getattr(sock, "fileno", None)
+        if not callable(settimeout) or not callable(fileno):
+            return
+        try:
+            descriptor = fileno()
+        except OSError:
+            return
+        if isinstance(descriptor, int):
+            try:
+                # A zero timeout is non-blocking and would not wait for a chunk.
+                settimeout(max(remaining, 0.001))
+            except OSError:
+                return
+
+    def _read_bounded(self, response: Any, deadline: float) -> bytes:
+        """Read at most MAX_RESPONSE_BYTES + 1, stopping at `deadline`.
+
+        HTTPResponse.read(n) blocks until n bytes or EOF, so a slow chunked
+        body never trips a per-socket idle timeout. read1() returns after one
+        chunk and the monotonic check applies between chunks.
+        """
+
+        parts: list[bytes] = []
+        total = 0
+        limit = MAX_RESPONSE_BYTES + 1
+        streamed = isinstance(response, HTTPResponse)
+        while total < limit:
+            if time.monotonic() >= deadline:
+                raise ProviderError("provider_unavailable")
+            self._tighten_read_timeout(response, deadline)
+            requested = min(_READ_CHUNK_BYTES, limit - total)
+            try:
+                if streamed:
+                    chunk = response.read1(requested)
+                else:
+                    chunk = response.read(requested)
+            except TimeoutError:
+                raise ProviderError("provider_unavailable") from None
+            except IncompleteRead:
+                raise ProviderError("provider_unavailable") from None
+            if not isinstance(chunk, (bytes, bytearray)):
+                raise ProviderError("provider_invalid_response")
+            if time.monotonic() >= deadline:
+                raise ProviderError("provider_unavailable")
+            if not chunk:
+                break
+            if len(chunk) > requested:
+                parts.append(bytes(chunk[: limit - total]))
+                break
+            parts.append(bytes(chunk))
+            total += len(chunk)
+            if not streamed and len(chunk) < requested:
+                break
+        return b"".join(parts)
+
+    def _http_post(
+        self,
+        url: str,
+        payload: dict[str, Any],
+        headers: dict[str, str],
+        timeout: float,
+        deadline: float | None = None,
+    ) -> tuple[int, bytes]:
+        if deadline is None:
+            budget = self.deadline_seconds
+            if timeout > 0:
+                budget = min(budget, timeout)
+            deadline = time.monotonic() + budget
+        elif time.monotonic() >= deadline:
+            raise ProviderError("provider_unavailable")
         request = Request(
             url,
             data=json.dumps(payload).encode("utf-8"),
@@ -502,12 +610,16 @@ class OpenRouterNormalizationProvider:
         )
         try:
             with urlopen(request, timeout=timeout) as response:
-                return response.status, response.read(MAX_RESPONSE_BYTES + 1)
+                return response.status, self._read_bounded(response, deadline)
+        except TimeoutError:
+            raise ProviderError("provider_unavailable") from None
         except HTTPError as error:
             if error.code == 429:
                 raise ProviderError("provider_rate_limited") from None
             if _schema_rejected(error):
                 raise ProviderError("provider_schema_unsupported") from None
+            raise ProviderError("provider_unavailable") from None
+        except URLError:
             raise ProviderError("provider_unavailable") from None
 
     def complete_messages(
@@ -528,9 +640,12 @@ class OpenRouterNormalizationProvider:
         if self.fallback_model and self.fallback_model not in models:
             models.append(self.fallback_model)
 
+        deadline = time.monotonic() + self.deadline_seconds
         last_error: ProviderError | None = None
         for selected_model in models:
             for response_format in self._formats():
+                if time.monotonic() >= deadline:
+                    raise ProviderError("provider_unavailable")
                 request_messages = [dict(message) for message in messages]
 
                 if response_format != "json_schema":
@@ -578,9 +693,7 @@ class OpenRouterNormalizationProvider:
 
                 try:
                     url = f"{self.base_url}/chat/completions"
-                    status, raw = self._transport(
-                        url, body, self._headers(), self.timeout
-                    )
+                    status, raw = self._call_transport(url, body, deadline)
                     if not 200 <= status < 300 or len(raw) > MAX_RESPONSE_BYTES:
                         raise ProviderError("provider_invalid_response")
 
@@ -618,7 +731,13 @@ class OpenRouterNormalizationProvider:
 
         raise last_error or ProviderError("provider_unavailable")
 
-    def _complete(self, texts: Sequence[str], model: str, fmt: str) -> Any:
+    def _complete(
+        self,
+        texts: Sequence[str],
+        model: str,
+        fmt: str,
+        deadline: float,
+    ) -> Any:
         system = PROMPT
         if fmt != "json_schema":
             system = PROMPT + "\nReturn only a JSON object matching this schema: " + json.dumps(SCHEMA, ensure_ascii=False)
@@ -642,7 +761,7 @@ class OpenRouterNormalizationProvider:
         elif fmt == "json_object":
             body["response_format"] = {"type": "json_object"}
         url = f"{self.base_url}/chat/completions"
-        status, raw = self._transport(url, body, self._headers(), self.timeout)
+        status, raw = self._call_transport(url, body, deadline)
         if len(raw) > MAX_RESPONSE_BYTES:
             raise ProviderError("provider_invalid_response")
         try:
@@ -669,11 +788,17 @@ class OpenRouterNormalizationProvider:
         models = [self.model]
         if self.fallback_model and self.fallback_model != self.model:
             models.append(self.fallback_model)
+        deadline = time.monotonic() + self.deadline_seconds
         last_error: ProviderError | None = None
         for model in models:
             for fmt in self._formats():
+                if time.monotonic() >= deadline:
+                    raise ProviderError("provider_unavailable")
                 try:
-                    output = validate_matching_output(self._complete(texts, model, fmt), len(texts))
+                    output = validate_matching_output(
+                        self._complete(texts, model, fmt, deadline),
+                        len(texts),
+                    )
                     self.last_model = model
                     return {"ingredients": output}
                 except ProviderError as error:
