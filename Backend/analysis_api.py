@@ -52,6 +52,20 @@ CATALOG_PATH = ROOT / "Aesthelity" / "Aesthelity" / "Resources" / "SampleData" /
 MAX_BODY_BYTES = 1_000_000
 RULE_VERSION = "AN-02-v1"
 
+
+def _valid_firestore_document_id(value: Any) -> bool:
+    if not isinstance(value, str) or not value.strip():
+        return False
+    if "/" in value or value in {".", ".."}:
+        return False
+    if value.startswith("__") and value.endswith("__"):
+        return False
+    try:
+        return len(value.encode("utf-8")) <= 1500
+    except UnicodeEncodeError:
+        return False
+
+
 PRODUCT_FIELDS = (
     "brand",
     "category",
@@ -337,8 +351,11 @@ class APIHandler(BaseHTTPRequestHandler):
             if source_type not in {"manual", "catalog"}:
                 self._send(400, _error_body("INVALID_REQUEST", "sourceType must be manual or catalog."))
                 return
-            if not isinstance(product_id, str) or not product_id.strip():
-                self._send(400, _error_body("INVALID_REQUEST", "productID is required when persist is true."))
+            if not _valid_firestore_document_id(product_id):
+                self._send(400, _error_body(
+                    "INVALID_REQUEST",
+                    "productID must be a valid Firestore document ID when persist is true.",
+                ))
                 return
             # This Firebase custom claim must be set by trusted server tooling;
             # request fields such as sourceType never grant shared write access.

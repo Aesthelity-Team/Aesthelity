@@ -473,6 +473,25 @@ class EndpointPersistTests(unittest.TestCase):
         self.assertEqual(db.docs, {})
         self.assertEqual(db.commits, 0)
 
+    def test_invalid_product_id_returns_400_without_ai_or_writes(self):
+        provider = CountingProvider()
+        db = FakeFirestore()
+        captured, db = self.post(
+            {
+                "contractVersion": 1,
+                "ingredients": ["Aqua"],
+                "persist": True,
+                "productID": "bad/id",
+                "sourceType": "manual",
+            },
+            db=db,
+            provider=provider,
+        )
+        self.assertEqual(captured["status"], 400)
+        self.assertEqual(provider.calls, 0)
+        self.assertEqual(db.docs, {})
+        self.assertEqual(db.commits, 0)
+
 
 if __name__ == "__main__":
     unittest.main()
